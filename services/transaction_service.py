@@ -260,9 +260,9 @@ class TransactionService:
                 result.append({
                     'id': txn.id,
                     'type': txn.type,
-                    'amount': txn.amount_yuan,
-                    'balance_before': txn.balance_before_yuan,
-                    'balance_after': txn.balance_after_yuan,
+                    'amount': txn.amount,  # 返回分，前端负责转换
+                    'balance_before': txn.balance_before,  # 返回分
+                    'balance_after': txn.balance_after,  # 返回分
                     'merchant_id': txn.merchant_id,
                     'related_txn_id': txn.related_txn_id,
                     'remark': txn.remark,
@@ -517,9 +517,9 @@ class TransactionService:
                 result.append({
                     'id': txn.id,
                     'type': txn.type,
-                    'amount': txn.amount_yuan,
-                    'balance_before': txn.balance_before_yuan,
-                    'balance_after': txn.balance_after_yuan,
+                    'amount': txn.amount,  # 返回分，前端负责转换
+                    'balance_before': txn.balance_before,  # 返回分
+                    'balance_after': txn.balance_after,  # 返回分
                     'participant_id': txn.participant_id,
                     'card_uid': txn.card_uid,
                     'merchant_id': txn.merchant_id,
@@ -855,9 +855,9 @@ class TransactionService:
                 result.append({
                     'id': txn.id,
                     'type': txn.type,
-                    'amount': txn.amount_yuan,
-                    'balance_before': txn.balance_before_yuan,
-                    'balance_after': txn.balance_after_yuan,
+                    'amount': txn.amount,  # 返回分，前端负责转换
+                    'balance_before': txn.balance_before,  # 返回分
+                    'balance_after': txn.balance_after,  # 返回分
                     'participant_id': txn.participant_id,
                     'card_uid': txn.card_uid,
                     'booth_id': txn.booth_id,
