@@ -11,7 +11,6 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from sqlalchemy.orm import Session
-from core.database import SessionLocal, init_database
 from core.config import load_settings
 from services.user_service import UserService
 import getpass
@@ -33,8 +32,9 @@ def create_admin():
         print("\n请确保 .env 文件存在并配置正确")
         sys.exit(1)
     
-    # 初始化数据库
+    # 初始化数据库 - 必须在加载配置后导入
     print("\n📦 初始化数据库...")
+    from core.database import init_database, SessionLocal
     init_database()
     print("✅ 数据库初始化完成")
     

@@ -5,24 +5,28 @@
 -- Password: admin123
 --
 -- Usage on server:
+--   mysql -u your_user -p nfc < create_admin.sql
+--   OR
 --   mysql -u your_user -p nfc_wallet < create_admin.sql
 --
 
 -- Insert admin user
-INSERT INTO users (username, hashed_password, role, is_active, created_at)
+INSERT INTO users (username, password_hash, role, status, created_at, updated_at)
 VALUES (
     'admin',
     '$2b$12$1k1YoueJ786gm.O139qqmuhSI.QsMPl.evIZycDYJYnV2afo7MGvK',
     'super_admin',
-    1,
+    'active',
+    NOW(),
     NOW()
 )
 ON DUPLICATE KEY UPDATE
-    hashed_password = VALUES(hashed_password),
+    password_hash = VALUES(password_hash),
     role = VALUES(role),
-    is_active = VALUES(is_active);
+    status = VALUES(status),
+    updated_at = NOW();
 
 -- Verify the user was created
-SELECT id, username, role, is_active, created_at 
+SELECT id, username, role, status, created_at 
 FROM users 
 WHERE username = 'admin';

@@ -30,12 +30,13 @@ def main():
     
     print(f"\n\n📋 SQL语句:")
     print(f"""
-INSERT INTO users (username, hashed_password, role, is_active, created_at)
+INSERT INTO users (username, password_hash, role, status, created_at, updated_at)
 VALUES (
     'admin',
     '{hashed}',
     'super_admin',
-    1,
+    'active',
+    NOW(),
     NOW()
 );
 """)

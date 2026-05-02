@@ -92,9 +92,15 @@ curl -X GET "http://localhost:8001/auth/me" \
 A: 重新运行SQL脚本或使用`generate_password_hash.py`生成新密码哈希，然后更新数据库：
 
 ```sql
-UPDATE users 
-SET hashed_password = '$2b$12$新的密码哈希' 
-WHERE username = 'admin';
+INSERT INTO users (username, password_hash, role, status, created_at, updated_at)
+VALUES (
+    'admin',
+    '$2b$12$新的密码哈希',
+    'super_admin',
+    'active',
+    NOW(),
+    NOW()
+);
 ```
 
 ### Q: 如何创建其他管理员？

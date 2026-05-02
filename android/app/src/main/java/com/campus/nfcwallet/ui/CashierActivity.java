@@ -57,7 +57,7 @@ import retrofit2.Response;
  */
 public class CashierActivity extends AppCompatActivity {
     private static final String TAG = "CashierActivity";
-    private static final String SECRET_KEY = "dev_secret_key_change_this_in_production_12345678";
+    private static final String SECRET_KEY = "your_secret_key_here_change_this_in_production";
     
     // UI Components - Header
     private TextView eventNameText;

@@ -83,9 +83,9 @@ def create_admin():
         
         user = User(
             username=username,
-            hashed_password=hashed_password,
+            password_hash=hashed_password,
             role="super_admin",
-            is_active=True
+            status="active"
         )
         
         db.add(user)
@@ -96,6 +96,7 @@ def create_admin():
         print(f"  - 用户ID: {user.id}")
         print(f"  - 用户名: {user.username}")
         print(f"  - 角色: {user.role}")
+        print(f"  - 状态: {user.status}")
         print(f"  - 创建时间: {user.created_at}")
         
     except Exception as e:
