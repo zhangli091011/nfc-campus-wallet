@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse
 import logging
 
-from app.database import get_db
-from app.config import get_settings
+from core.database import get_db
+from core.config import get_settings
 from schemas.transaction import RechargeRequest, TransactionResponse
 from services.transaction_service import TransactionService
 from core.exceptions import UserNotFoundError, InvalidTransactionError

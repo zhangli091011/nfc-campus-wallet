@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
 
-from app.database import get_db
+from core.database import get_db
 from services.user_service import UserService
 from services.participant_service import ParticipantService, ParticipantNotFoundError
 from services.account_service import AccountService

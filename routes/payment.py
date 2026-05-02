@@ -11,8 +11,8 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
 
-from app.database import get_db
-from app.config import get_settings
+from core.database import get_db
+from core.config import get_settings
 from schemas.transaction import PaymentRequest, TransactionResponse
 from services.transaction_service import TransactionService
 from core.exceptions import (

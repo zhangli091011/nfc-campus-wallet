@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import logging
 
-from app.database import get_db
+from core.database import get_db
 from services.event_service import EventService, EventNotFoundError, EventInactiveError
 from schemas.event import EventCreate, EventUpdate, EventResponse, EventListResponse
 from core.exceptions import BusinessException
