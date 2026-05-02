@@ -41,6 +41,12 @@ class Booth(Base):
     )
     name = Column(String(100), nullable=False)
     class_name = Column(String(100), nullable=False)
+    collection_participant_id = Column(
+        Integer,
+        ForeignKey('participants.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True
+    )
     status = Column(String(20), nullable=False, default='active')
     created_at = Column(
         DateTime,
@@ -52,6 +58,11 @@ class Booth(Base):
     event = relationship(
         "Event",
         back_populates="booths"
+    )
+    collection_participant = relationship(
+        "Participant",
+        foreign_keys=[collection_participant_id],
+        uselist=False
     )
     products = relationship(
         "Product",

@@ -38,6 +38,7 @@ class Participant(Base):
     class_name = Column(String(100), nullable=True)
     student_no = Column(String(50), nullable=True, index=True)
     card_uid = Column(String(32), unique=True, nullable=False, index=True)
+    participant_type = Column(String(20), nullable=False, default='person', index=True)
     status = Column(String(20), nullable=False, default='active', index=True)
     created_at = Column(
         DateTime,
@@ -68,6 +69,10 @@ class Participant(Base):
             "status IN ('active', 'inactive', 'blocked')",
             name='chk_participant_status'
         ),
+        CheckConstraint(
+            "participant_type IN ('person', 'booth_collection')",
+            name='chk_participant_type'
+        ),
     )
     
     def __repr__(self):
@@ -83,3 +88,11 @@ class Participant(Base):
     def is_blocked(self) -> bool:
         """Check if participant is blocked."""
         return self.status == 'blocked'
+    
+    def is_booth_collection_account(self) -> bool:
+        """Check if this is a booth collection account."""
+        return self.participant_type == 'booth_collection'
+    
+    def can_recharge(self) -> bool:
+        """Check if this participant can receive recharge."""
+        return self.participant_type == 'person' and self.is_active()
