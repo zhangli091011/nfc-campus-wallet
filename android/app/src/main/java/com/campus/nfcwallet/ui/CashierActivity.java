@@ -404,7 +404,7 @@ public class CashierActivity extends AppCompatActivity {
     }
     
     /**
-     * Query balance.
+     * Query balance using event mode.
      */
     private void queryBalance() {
         if (currentCardUid == null) {
@@ -412,14 +412,19 @@ public class CashierActivity extends AppCompatActivity {
             return;
         }
         
+        if (currentEvent == null) {
+            showError("活动信息未加载");
+            return;
+        }
+        
         cardLoadingProgress.setVisibility(View.VISIBLE);
         
-        long timestamp = SignatureGenerator.getCurrentTimestamp();
-        String signature = SignatureGenerator.generateBalanceSignature(
-            currentCardUid, timestamp, SECRET_KEY
+        // Use new event mode API
+        Call<BalanceResponse> call = apiService.getBalanceByEvent(
+            currentEvent.getId(),
+            currentCardUid
         );
         
-        Call<BalanceResponse> call = apiService.getBalance(currentCardUid, timestamp, signature);
         call.enqueue(new Callback<BalanceResponse>() {
             @Override
             public void onResponse(Call<BalanceResponse> call, Response<BalanceResponse> response) {

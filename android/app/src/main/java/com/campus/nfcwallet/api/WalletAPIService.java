@@ -154,7 +154,7 @@ public interface WalletAPIService {
     // ==================== Legacy Endpoints ====================
     
     /**
-     * Get user balance.
+     * Get user balance (legacy mode - deprecated).
      * 
      * GET /balance?uid={uid}&timestamp={timestamp}&signature={signature}
      * 
@@ -162,12 +162,29 @@ public interface WalletAPIService {
      * @param timestamp Request timestamp
      * @param signature Request signature
      * @return Balance response
+     * @deprecated Use getBalanceByEvent instead
      */
+    @Deprecated
     @GET("balance")
     Call<BalanceResponse> getBalance(
         @Query("uid") String uid,
         @Query("timestamp") long timestamp,
         @Query("signature") String signature
+    );
+    
+    /**
+     * Get user balance (event mode).
+     * 
+     * GET /balance?event_id={event_id}&card_uid={card_uid}
+     * 
+     * @param eventId Event ID
+     * @param cardUid Card UID
+     * @return Balance response
+     */
+    @GET("balance")
+    Call<BalanceResponse> getBalanceByEvent(
+        @Query("event_id") int eventId,
+        @Query("card_uid") String cardUid
     );
     
     /**
