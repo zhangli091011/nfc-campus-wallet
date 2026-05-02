@@ -56,6 +56,14 @@ def create_app() -> FastAPI:
         logger.error(f"Failed to load configuration: {e}")
         raise
     
+    # Initialize database (safe to call multiple times)
+    try:
+        init_database()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
+    
     # Create FastAPI app
     app = FastAPI(
         title="NFC Campus E-Wallet System",
@@ -77,9 +85,6 @@ def create_app() -> FastAPI:
     
     # Add signature verification middleware
     app.add_middleware(SignatureVerificationMiddleware)
-    
-    # Database is already initialized by start_server.py
-    # No need to check or re-initialize here
     
     # Register routes
     # Authentication routes (first, for login and user management)
