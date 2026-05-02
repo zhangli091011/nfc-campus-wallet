@@ -11,14 +11,12 @@ import {
   Switch,
   message,
   Tag,
-  Popconfirm,
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined } from '@ant-design/icons'
 import {
   getProducts,
   createProduct,
   updateProduct,
-  deleteProduct,
   type Product,
   type CreateProductRequest,
   type UpdateProductRequest,
@@ -56,13 +54,15 @@ const ProductManagement = () => {
 
   const loadEvents = async () => {
     try {
-      const data = await getEvents({ status: 'active' })
-      setEvents(data)
-      if (data.length > 0) {
-        setSelectedEventId(data[0].id)
+      const data = await getEvents()  // 移除 status 筛选
+      const eventList = data?.events || []
+      setEvents(eventList)
+      if (eventList.length > 0) {
+        setSelectedEventId(eventList[0].id)
       }
     } catch (error) {
       // 错误已处理
+      setEvents([])
     }
   }
 
@@ -70,12 +70,14 @@ const ProductManagement = () => {
     if (!selectedEventId) return
     try {
       const data = await getBooths({ event_id: selectedEventId, limit: 100 })
-      setBooths(data)
-      if (data.length > 0) {
-        setSelectedBoothId(data[0].id)
+      const boothList = Array.isArray(data) ? data : []
+      setBooths(boothList)
+      if (boothList.length > 0) {
+        setSelectedBoothId(boothList[0].id)
       }
     } catch (error) {
       // 错误已处理
+      setBooths([])
     }
   }
 
@@ -84,9 +86,10 @@ const ProductManagement = () => {
     setLoading(true)
     try {
       const data = await getProducts({ booth_id: selectedBoothId, limit: 100 })
-      setProducts(data)
+      setProducts(Array.isArray(data) ? data : [])
     } catch (error) {
       // 错误已处理
+      setProducts([])
     } finally {
       setLoading(false)
     }
@@ -110,16 +113,6 @@ const ProductManagement = () => {
       enabled: record.enabled,
     })
     setModalVisible(true)
-  }
-
-  const handleDelete = async (id: number) => {
-    try {
-      await deleteProduct(id)
-      message.success('删除成功')
-      loadProducts()
-    } catch (error) {
-      // 错误已处理
-    }
   }
 
   const handleSubmit = async () => {
@@ -202,7 +195,7 @@ const ProductManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 100,
       render: (_: any, record: Product) => (
         <Space>
           <Button
@@ -213,16 +206,6 @@ const ProductManagement = () => {
           >
             编辑
           </Button>
-          <Popconfirm
-            title="确定删除此商品吗？"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
         </Space>
       ),
     },

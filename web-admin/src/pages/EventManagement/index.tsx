@@ -8,11 +8,11 @@ import {
   Input,
   DatePicker,
   Select,
+  Switch,
   message,
   Tag,
-  Popconfirm,
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined } from '@ant-design/icons'
 import {
   getEvents,
   createEvent,
@@ -40,10 +40,12 @@ const EventManagement = () => {
   const loadEvents = async () => {
     setLoading(true)
     try {
-      const data = await getEvents({ limit: 100 })
-      setEvents(data)
+      const data = await getEvents({ limit: 100 })  // 移除 status 筛选，显示所有活动
+      const eventList = data?.events || []
+      setEvents(eventList)
     } catch (error) {
       // 错误已处理
+      setEvents([])
     } finally {
       setLoading(false)
     }
@@ -59,21 +61,12 @@ const EventManagement = () => {
     setEditingEvent(record)
     form.setFieldsValue({
       name: record.name,
-      description: record.description,
-      dateRange: [dayjs(record.start_date), dayjs(record.end_date)],
+      dateRange: [dayjs(record.start_time), dayjs(record.end_time)],
       status: record.status,
+      recharge_enabled: record.recharge_enabled,
+      consume_enabled: record.consume_enabled,
     })
     setModalVisible(true)
-  }
-
-  const handleDelete = async (id: number) => {
-    try {
-      await deleteEvent(id)
-      message.success('删除成功')
-      loadEvents()
-    } catch (error) {
-      // 错误已处理
-    }
   }
 
   const handleSubmit = async () => {
@@ -83,10 +76,19 @@ const EventManagement = () => {
 
       const data: CreateEventRequest | UpdateEventRequest = {
         name: values.name,
-        description: values.description,
-        start_date: startDate.format('YYYY-MM-DD'),
-        end_date: endDate.format('YYYY-MM-DD'),
-        ...(editingEvent && { status: values.status }),
+        start_time: startDate.format('YYYY-MM-DDTHH:mm:ss') + 'Z',
+        end_time: endDate.format('YYYY-MM-DDTHH:mm:ss') + 'Z',
+        ...(editingEvent && { 
+          status: values.status,
+          recharge_enabled: values.recharge_enabled,
+          consume_enabled: values.consume_enabled,
+        }),
+        ...(!editingEvent && {
+          status: 'draft',
+          recharge_enabled: true,
+          consume_enabled: true,
+          expire_rule: 'event_end',
+        }),
       }
 
       if (editingEvent) {
@@ -117,22 +119,16 @@ const EventManagement = () => {
       key: 'name',
     },
     {
-      title: '描述',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
+      title: '开始时间',
+      dataIndex: 'start_time',
+      key: 'start_time',
+      render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm'),
     },
     {
-      title: '开始日期',
-      dataIndex: 'start_date',
-      key: 'start_date',
-      render: (date: string) => dayjs(date).format('YYYY-MM-DD'),
-    },
-    {
-      title: '结束日期',
-      dataIndex: 'end_date',
-      key: 'end_date',
-      render: (date: string) => dayjs(date).format('YYYY-MM-DD'),
+      title: '结束时间',
+      dataIndex: 'end_time',
+      key: 'end_time',
+      render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm'),
     },
     {
       title: '状态',
@@ -140,19 +136,39 @@ const EventManagement = () => {
       key: 'status',
       render: (status: string) => {
         const colorMap: Record<string, string> = {
-          pending: 'default',
+          draft: 'default',
           active: 'success',
+          paused: 'warning',
           ended: 'error',
-          cancelled: 'warning',
         }
         const textMap: Record<string, string> = {
-          pending: '待开始',
+          draft: '草稿',
           active: '进行中',
+          paused: '已暂停',
           ended: '已结束',
-          cancelled: '已取消',
         }
         return <Tag color={colorMap[status]}>{textMap[status]}</Tag>
       },
+    },
+    {
+      title: '充值',
+      dataIndex: 'recharge_enabled',
+      key: 'recharge_enabled',
+      render: (enabled: boolean) => (
+        <Tag color={enabled ? 'success' : 'default'}>
+          {enabled ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '消费',
+      dataIndex: 'consume_enabled',
+      key: 'consume_enabled',
+      render: (enabled: boolean) => (
+        <Tag color={enabled ? 'success' : 'default'}>
+          {enabled ? '启用' : '禁用'}
+        </Tag>
+      ),
     },
     {
       title: '创建时间',
@@ -163,7 +179,7 @@ const EventManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 100,
       render: (_: any, record: Event) => (
         <Space>
           <Button
@@ -174,16 +190,6 @@ const EventManagement = () => {
           >
             编辑
           </Button>
-          <Popconfirm
-            title="确定删除此活动吗？"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
         </Space>
       ),
     },
@@ -221,31 +227,45 @@ const EventManagement = () => {
             <Input placeholder="请输入活动名称" />
           </Form.Item>
 
-          <Form.Item name="description" label="活动描述">
-            <Input.TextArea rows={3} placeholder="请输入活动描述" />
-          </Form.Item>
-
           <Form.Item
             name="dateRange"
             label="活动时间"
             rules={[{ required: true, message: '请选择活动时间' }]}
           >
-            <RangePicker style={{ width: '100%' }} />
+            <RangePicker showTime style={{ width: '100%' }} />
           </Form.Item>
 
           {editingEvent && (
-            <Form.Item
-              name="status"
-              label="状态"
-              rules={[{ required: true, message: '请选择状态' }]}
-            >
-              <Select>
-                <Select.Option value="pending">待开始</Select.Option>
-                <Select.Option value="active">进行中</Select.Option>
-                <Select.Option value="ended">已结束</Select.Option>
-                <Select.Option value="cancelled">已取消</Select.Option>
-              </Select>
-            </Form.Item>
+            <>
+              <Form.Item
+                name="status"
+                label="状态"
+                rules={[{ required: true, message: '请选择状态' }]}
+              >
+                <Select>
+                  <Select.Option value="draft">草稿</Select.Option>
+                  <Select.Option value="active">进行中</Select.Option>
+                  <Select.Option value="paused">已暂停</Select.Option>
+                  <Select.Option value="ended">已结束</Select.Option>
+                </Select>
+              </Form.Item>
+
+              <Form.Item
+                name="recharge_enabled"
+                label="充值功能"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+
+              <Form.Item
+                name="consume_enabled"
+                label="消费功能"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </>
           )}
         </Form>
       </Modal>

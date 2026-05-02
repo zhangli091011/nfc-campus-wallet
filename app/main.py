@@ -36,14 +36,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize configuration and database at module level
-# This ensures they are initialized once when the module is imported
-try:
-    load_settings()
-    init_database()
-    logger.info("Configuration and database initialized at module level")
-except Exception as e:
-    logger.warning(f"Module-level initialization skipped: {e}")
+# Database initialization is handled by start_server.py
+# Do NOT initialize here to avoid duplicate initialization
 
 
 def create_app() -> FastAPI:
@@ -84,14 +78,8 @@ def create_app() -> FastAPI:
     # Add signature verification middleware
     app.add_middleware(SignatureVerificationMiddleware)
     
-    # Ensure database is initialized (redundant check, but safe)
-    try:
-        from core.database import SessionLocal
-        if SessionLocal is None:
-            logger.warning("Database not initialized, initializing now...")
-            init_database()
-    except Exception as e:
-        logger.error(f"Database initialization check failed: {e}")
+    # Database is already initialized by start_server.py
+    # No need to check or re-initialize here
     
     # Register routes
     # Authentication routes (first, for login and user management)

@@ -43,13 +43,15 @@ const Dashboard = () => {
 
   const loadEvents = async () => {
     try {
-      const data = await getEvents({ status: 'active' })
-      setEvents(data)
-      if (data.length > 0) {
-        setSelectedEventId(data[0].id)
+      const data = await getEvents()  // 移除 status 筛选
+      const eventList = data?.events || []
+      setEvents(eventList)
+      if (eventList.length > 0) {
+        setSelectedEventId(eventList[0].id)
       }
     } catch (error) {
       // 错误已处理
+      setEvents([])
     }
   }
 
@@ -63,18 +65,28 @@ const Dashboard = () => {
         getTransactions({ event_id: selectedEventId, limit: 1000 }),
       ])
 
-      const totalAmount = transactionsData.transactions
+      const booths = Array.isArray(boothsData) ? boothsData : []
+      const participants = Array.isArray(participantsData) ? participantsData : []
+      const transactions = transactionsData?.transactions || []
+
+      const totalAmount = transactions
         .filter((t) => t.type === 'pay')
         .reduce((sum, t) => sum + t.amount, 0)
 
       setStats({
-        totalBooths: boothsData.length,
-        totalParticipants: participantsData.length,
-        totalTransactions: transactionsData.total_count,
+        totalBooths: booths.length,
+        totalParticipants: participants.length,
+        totalTransactions: transactionsData?.total_count || 0,
         totalAmount: totalAmount / 100, // 转换为元
       })
     } catch (error) {
       // 错误已处理
+      setStats({
+        totalBooths: 0,
+        totalParticipants: 0,
+        totalTransactions: 0,
+        totalAmount: 0,
+      })
     } finally {
       setLoading(false)
     }
@@ -87,9 +99,10 @@ const Dashboard = () => {
         event_id: selectedEventId,
         limit: 10,
       })
-      setRecentTransactions(data.transactions)
+      setRecentTransactions(data?.transactions || [])
     } catch (error) {
       // 错误已处理
+      setRecentTransactions([])
     }
   }
 

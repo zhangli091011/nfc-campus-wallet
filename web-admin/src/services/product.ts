@@ -52,7 +52,7 @@ export const updateProduct = (id: number, data: UpdateProductRequest) => {
   return request.patch<any, Product>(`/products/${id}`, data)
 }
 
-// 删除商品
-export const deleteProduct = (id: number) => {
-  return request.delete(`/products/${id}`)
-}
+// 删除商品 - 后端暂不支持
+// export const deleteProduct = (id: number) => {
+//   return request.delete(`/products/${id}`)
+// }

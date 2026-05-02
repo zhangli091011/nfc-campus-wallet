@@ -37,13 +37,15 @@ const TransactionHistory = () => {
 
   const loadEvents = async () => {
     try {
-      const data = await getEvents({ status: 'active' })
-      setEvents(data)
-      if (data.length > 0) {
-        setSelectedEventId(data[0].id)
+      const data = await getEvents()  // 移除 status 筛选
+      const eventList = data?.events || []
+      setEvents(eventList)
+      if (eventList.length > 0) {
+        setSelectedEventId(eventList[0].id)
       }
     } catch (error) {
       // 错误已处理
+      setEvents([])
     }
   }
 
@@ -51,9 +53,10 @@ const TransactionHistory = () => {
     if (!selectedEventId) return
     try {
       const data = await getBooths({ event_id: selectedEventId, limit: 100 })
-      setBooths(data)
+      setBooths(Array.isArray(data) ? data : [])
     } catch (error) {
       // 错误已处理
+      setBooths([])
     }
   }
 
@@ -81,8 +84,8 @@ const TransactionHistory = () => {
       }
 
       const data: TransactionListResponse = await getTransactions(params)
-      setTransactions(data.transactions)
-      setTotalCount(data.total_count)
+      setTransactions(data?.transactions || [])
+      setTotalCount(data?.total_count || 0)
     } catch (error) {
       // 错误已处理
     } finally {

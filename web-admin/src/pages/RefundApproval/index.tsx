@@ -43,13 +43,15 @@ const RefundApproval = () => {
 
   const loadEvents = async () => {
     try {
-      const data = await getEvents({ status: 'active' })
-      setEvents(data)
-      if (data.length > 0) {
-        setSelectedEventId(data[0].id)
+      const data = await getEvents()  // 移除 status 筛选
+      const eventList = data?.events || []
+      setEvents(eventList)
+      if (eventList.length > 0) {
+        setSelectedEventId(eventList[0].id)
       }
     } catch (error) {
       // 错误已处理
+      setEvents([])
     }
   }
 
@@ -65,8 +67,8 @@ const RefundApproval = () => {
       }
 
       const data: TransactionListResponse = await getTransactions(params)
-      setTransactions(data.transactions)
-      setTotalCount(data.total_count)
+      setTransactions(data?.transactions || [])
+      setTotalCount(data?.total_count || 0)
     } catch (error) {
       // 错误已处理
     } finally {

@@ -9,14 +9,12 @@ import {
   Select,
   message,
   Tag,
-  Popconfirm,
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined } from '@ant-design/icons'
 import {
   getBooths,
   createBooth,
   updateBooth,
-  deleteBooth,
   type Booth,
   type CreateBoothRequest,
   type UpdateBoothRequest,
@@ -45,13 +43,15 @@ const BoothManagement = () => {
 
   const loadEvents = async () => {
     try {
-      const data = await getEvents({ status: 'active' })
-      setEvents(data)
-      if (data.length > 0) {
-        setSelectedEventId(data[0].id)
+      const data = await getEvents()  // 移除 status 筛选
+      const eventList = data?.events || []
+      setEvents(eventList)
+      if (eventList.length > 0) {
+        setSelectedEventId(eventList[0].id)
       }
     } catch (error) {
       // 错误已处理
+      setEvents([])
     }
   }
 
@@ -60,9 +60,10 @@ const BoothManagement = () => {
     setLoading(true)
     try {
       const data = await getBooths({ event_id: selectedEventId, limit: 100 })
-      setBooths(data)
+      setBooths(Array.isArray(data) ? data : [])
     } catch (error) {
       // 错误已处理
+      setBooths([])
     } finally {
       setLoading(false)
     }
@@ -84,16 +85,6 @@ const BoothManagement = () => {
       status: record.status,
     })
     setModalVisible(true)
-  }
-
-  const handleDelete = async (id: number) => {
-    try {
-      await deleteBooth(id)
-      message.success('删除成功')
-      loadBooths()
-    } catch (error) {
-      // 错误已处理
-    }
   }
 
   const handleSubmit = async () => {
@@ -169,7 +160,7 @@ const BoothManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 100,
       render: (_: any, record: Booth) => (
         <Space>
           <Button
@@ -180,16 +171,6 @@ const BoothManagement = () => {
           >
             编辑
           </Button>
-          <Popconfirm
-            title="确定删除此摊位吗？"
-            onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
         </Space>
       ),
     },

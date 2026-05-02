@@ -46,7 +46,7 @@ export const updateBooth = (id: number, data: UpdateBoothRequest) => {
   return request.patch<any, Booth>(`/booths/${id}`, data)
 }
 
-// 删除摊位
-export const deleteBooth = (id: number) => {
-  return request.delete(`/booths/${id}`)
-}
+// 删除摊位 - 后端暂不支持
+// export const deleteBooth = (id: number) => {
+//   return request.delete(`/booths/${id}`)
+// }
