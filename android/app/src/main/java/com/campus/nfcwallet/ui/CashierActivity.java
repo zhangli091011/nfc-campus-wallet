@@ -37,7 +37,9 @@ import com.campus.nfcwallet.utils.ErrorHandler;
 import com.campus.nfcwallet.utils.SessionManager;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -377,9 +379,17 @@ public class CashierActivity extends AppCompatActivity {
                     queryBalance();
                 } else {
                     cardLoadingProgress.setVisibility(View.GONE);
-                    String error = ErrorHandler.getErrorMessage(response);
-                    participantNameText.setText("未绑定");
-                    showError(error);
+                    
+                    // Check if participant not found (404 or specific error code)
+                    if (response.code() == 400 || response.code() == 404) {
+                        // Show dialog to create new participant
+                        participantNameText.setText("未绑定");
+                        showCreateParticipantDialog(cardUid);
+                    } else {
+                        String error = ErrorHandler.getErrorMessage(response);
+                        participantNameText.setText("查询失败");
+                        showError(error);
+                    }
                 }
             }
             
@@ -749,6 +759,118 @@ public class CashierActivity extends AppCompatActivity {
         } else {
             rechargeButton.setVisibility(View.GONE);
         }
+    }
+    
+    /**
+     * Show dialog to create new participant.
+     */
+    private void showCreateParticipantDialog(String cardUid) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("新卡片");
+        builder.setMessage("卡片 " + cardUid + " 未绑定，是否创建新参与者？");
+        
+        // Create input layout
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 40, 50, 10);
+        
+        // Name input
+        final EditText nameInput = new EditText(this);
+        nameInput.setHint("姓名（必填）");
+        layout.addView(nameInput);
+        
+        // Class name input
+        final EditText classInput = new EditText(this);
+        classInput.setHint("班级（可选）");
+        layout.addView(classInput);
+        
+        // Student number input
+        final EditText studentNoInput = new EditText(this);
+        studentNoInput.setHint("学号（可选）");
+        layout.addView(studentNoInput);
+        
+        builder.setView(layout);
+        
+        builder.setPositiveButton("创建", (dialog, which) -> {
+            String name = nameInput.getText().toString().trim();
+            String className = classInput.getText().toString().trim();
+            String studentNo = studentNoInput.getText().toString().trim();
+            
+            if (name.isEmpty()) {
+                showError("姓名不能为空");
+                return;
+            }
+            
+            createParticipant(cardUid, name, className, studentNo);
+        });
+        
+        builder.setNegativeButton("取消", (dialog, which) -> {
+            dialog.dismiss();
+            // Clear card info
+            currentCardUid = null;
+            currentParticipant = null;
+            cardInfoSection.setVisibility(View.GONE);
+        });
+        
+        builder.setCancelable(false);
+        builder.show();
+    }
+    
+    /**
+     * Create new participant via API.
+     */
+    private void createParticipant(String cardUid, String name, String className, String studentNo) {
+        String authHeader = sessionManager.getAuthHeader();
+        if (authHeader == null) {
+            showError("未登录");
+            return;
+        }
+        
+        cardLoadingProgress.setVisibility(View.VISIBLE);
+        participantNameText.setText("创建中...");
+        
+        // Create request body
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("name", name);
+        requestBody.put("card_uid", cardUid);
+        requestBody.put("status", "active");
+        
+        if (!className.isEmpty()) {
+            requestBody.put("class_name", className);
+        }
+        if (!studentNo.isEmpty()) {
+            requestBody.put("student_no", studentNo);
+        }
+        
+        // Make API call
+        Call<ParticipantInfo> call = apiService.createParticipant(authHeader, requestBody);
+        call.enqueue(new Callback<ParticipantInfo>() {
+            @Override
+            public void onResponse(Call<ParticipantInfo> call, Response<ParticipantInfo> response) {
+                cardLoadingProgress.setVisibility(View.GONE);
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    currentParticipant = response.body();
+                    participantNameText.setText(currentParticipant.getName());
+                    showSuccess("参与者创建成功");
+                    
+                    // Query balance
+                    queryBalance();
+                } else {
+                    String error = ErrorHandler.getErrorMessage(response);
+                    participantNameText.setText("创建失败");
+                    showError("创建失败: " + error);
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ParticipantInfo> call, Throwable t) {
+                cardLoadingProgress.setVisibility(View.GONE);
+                Log.e(TAG, "Failed to create participant", t);
+                participantNameText.setText("创建失败");
+                showError("网络错误");
+            }
+        });
     }
     
     /**

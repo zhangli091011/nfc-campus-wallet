@@ -16,6 +16,7 @@ import com.campus.nfcwallet.models.TransactionResponse;
 import com.campus.nfcwallet.models.UserInfo;
 
 import java.util.List;
+import java.util.Map;
 
 import retrofit2.Call;
 import retrofit2.http.Body;
@@ -134,6 +135,21 @@ public interface WalletAPIService {
      */
     @GET("participants/by-card/{card_uid}")
     Call<ParticipantInfo> getParticipantByCard(@Path("card_uid") String cardUid);
+    
+    /**
+     * Create new participant.
+     * 
+     * POST /participants
+     * 
+     * @param authorization Authorization header (Bearer token)
+     * @param participantData Participant data
+     * @return Created participant information
+     */
+    @POST("participants")
+    Call<ParticipantInfo> createParticipant(
+        @Header("Authorization") String authorization,
+        @Body Map<String, Object> participantData
+    );
     
     // ==================== Legacy Endpoints ====================
     
