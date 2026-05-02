@@ -719,15 +719,26 @@ public class CashierActivity extends AppCompatActivity {
      * Execute recharge.
      */
     private void executeRecharge(double amount) {
+        if (currentEvent == null) {
+            showError("活动信息未加载");
+            return;
+        }
+        
         actionProgress.setVisibility(View.VISIBLE);
         rechargeButton.setEnabled(false);
         
-        long timestamp = SignatureGenerator.getCurrentTimestamp();
-        String signature = SignatureGenerator.generateTransactionSignature(
-            currentCardUid, amount, timestamp, SECRET_KEY
-        );
+        String remark = customRemarkInput.getText().toString().trim();
+        if (remark.isEmpty()) {
+            remark = "管理员充值";
+        }
         
-        RechargeRequest request = new RechargeRequest(currentCardUid, amount, timestamp, signature);
+        // Use event mode (no signature required)
+        RechargeRequest request = new RechargeRequest(
+            currentEvent.getId(),
+            currentCardUid,
+            amount,
+            remark
+        );
         
         Call<TransactionResponse> call = apiService.processRecharge(request);
         call.enqueue(new Callback<TransactionResponse>() {
@@ -743,6 +754,7 @@ public class CashierActivity extends AppCompatActivity {
                     
                     showSuccess(String.format("充值成功\n新余额: ¥%.2f", currentBalance));
                     customAmountInput.setText("");
+                    customRemarkInput.setText("");
                 } else {
                     String error = ErrorHandler.getErrorMessage(response);
                     showError(error);

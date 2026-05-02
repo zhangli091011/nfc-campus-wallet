@@ -105,8 +105,8 @@ class RechargeRequest(BaseModel):
     
     # Common fields
     amount: float = Field(..., description="Recharge amount in yuan", gt=0)
-    timestamp: int = Field(..., description="Request timestamp in Unix seconds")
-    signature: str = Field(..., description="Request signature for authentication")
+    timestamp: Optional[int] = Field(None, description="Request timestamp in Unix seconds (legacy mode)")
+    signature: Optional[str] = Field(None, description="Request signature for authentication (legacy mode)")
     operator_id: Optional[str] = Field(None, max_length=64, description="Optional operator ID")
     remark: Optional[str] = Field(None, max_length=255, description="Optional transaction remark")
     

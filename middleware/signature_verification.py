@@ -241,11 +241,16 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
         """
         Extract authentication parameters from request body.
         
+        Supports two modes:
+        1. Legacy mode: uid, timestamp, signature, amount
+        2. Event mode: event_id, card_uid (bypasses signature verification)
+        
         Args:
             request: HTTP request with JSON body
             
         Returns:
             Dictionary with uid, timestamp, signature, amount (optional), or None if missing
+            Returns empty dict {} for event mode (to bypass signature check)
         """
         try:
             # Read body and cache it for downstream handlers
@@ -255,6 +260,16 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
             import json
             body_data = json.loads(body.decode("utf-8"))
             
+            # Check for event mode parameters (event_id + card_uid)
+            event_id = body_data.get("event_id")
+            card_uid = body_data.get("card_uid")
+            
+            if event_id and card_uid:
+                # Event mode - bypass signature verification
+                # Return empty dict to indicate authentication should be bypassed
+                return {}
+            
+            # Legacy mode - check for signature parameters
             uid = body_data.get("uid")
             timestamp = body_data.get("timestamp")
             signature = body_data.get("signature")
