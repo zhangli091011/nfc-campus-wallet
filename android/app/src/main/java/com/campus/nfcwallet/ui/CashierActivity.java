@@ -450,7 +450,7 @@ public class CashierActivity extends AppCompatActivity {
         
         // Check if product already in cart
         for (CartItem item : cartItems) {
-            if (item.getProductId() == product.getId()) {
+            if (item.getProduct().getId() == product.getId()) {
                 item.setQuantity(item.getQuantity() + 1);
                 cartAdapter.notifyDataSetChanged();
                 updateCartTotal();
@@ -459,12 +459,7 @@ public class CashierActivity extends AppCompatActivity {
         }
         
         // Add new item to cart
-        CartItem newItem = new CartItem(
-            product.getId(),
-            product.getName(),
-            product.getPrice(),
-            1
-        );
+        CartItem newItem = new CartItem(product, 1);
         cartItems.add(newItem);
         cartAdapter.notifyDataSetChanged();
         cartSection.setVisibility(View.VISIBLE);
@@ -559,12 +554,16 @@ public class CashierActivity extends AppCompatActivity {
             return;
         }
         
+        // Make variables effectively final for lambda
+        final int finalTotalCents = totalCents;
+        final String finalRemark = remark;
+        
         // Confirm payment
         double totalYuan = totalCents / 100.0;
         new AlertDialog.Builder(this)
             .setTitle("确认支付")
             .setMessage(String.format("支付金额: ¥%.2f\n当前余额: ¥%.2f", totalYuan, currentBalance))
-            .setPositiveButton("确认", (dialog, which) -> executePayment(totalCents, remark))
+            .setPositiveButton("确认", (dialog, which) -> executePayment(finalTotalCents, finalRemark))
             .setNegativeButton("取消", null)
             .show();
     }
@@ -582,10 +581,20 @@ public class CashierActivity extends AppCompatActivity {
         actionProgress.setVisibility(View.VISIBLE);
         payButton.setEnabled(false);
         
+        // Calculate total amount in yuan
+        double totalAmount = amountCents / 100.0;
+        
+        // For cart items, we'll use the first product's ID if available
+        Integer productId = null;
+        if (!cartItems.isEmpty()) {
+            productId = cartItems.get(0).getProduct().getId();
+        }
+        
         BoothPaymentRequest request = new BoothPaymentRequest(
+            currentBooth.getEventId(),
             currentCardUid,
-            amountCents,
-            cartItems.isEmpty() ? null : cartItems,
+            totalAmount,
+            productId,
             remark.isEmpty() ? null : remark
         );
         

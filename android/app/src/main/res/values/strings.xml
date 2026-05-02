@@ -28,7 +28,7 @@
     <string name="recharge_button">充值</string>
     <string name="clear_button">清空</string>
     <string name="confirm_payment_title">确认支付</string>
-    <string name="confirm_payment_message">支付金额: ¥%.2f\n当前余额: ¥%.2f</string>
+    <string name="confirm_payment_message" formatted="false">支付金额: ¥%.2f\n当前余额: ¥%.2f</string>
     <string name="confirm_recharge_title">确认充值</string>
     <string name="confirm_recharge_message">充值金额: ¥%.2f</string>
     <string name="confirm_button">确认</string>
@@ -53,6 +53,8 @@
     <string name="nfc_disabled">请在设置中启用 NFC</string>
     <string name="invalid_amount">请输入有效金额</string>
     <string name="amount_too_large">金额超过限制</string>
+    <string name="error_network">网络错误</string>
+    <string name="error_unknown">未知错误</string>
     <string name="network_error">网络错误</string>
     <string name="unknown_error">未知错误</string>
     

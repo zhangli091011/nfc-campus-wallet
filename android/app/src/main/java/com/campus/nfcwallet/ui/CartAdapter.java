@@ -81,10 +81,10 @@ public class CartAdapter extends RecyclerView.Adapter<CartAdapter.CartViewHolder
         public void bind(CartItem item, 
                         OnCartItemChangeListener changeListener,
                         OnCartItemRemoveListener removeListener) {
-            nameText.setText(item.getProductName());
-            priceText.setText(String.format("¥%.2f", item.getPrice() / 100.0));
+            nameText.setText(item.getProduct().getName());
+            priceText.setText(String.format("¥%.2f", item.getProduct().getPriceInYuan()));
             quantityText.setText(String.valueOf(item.getQuantity()));
-            totalText.setText(String.format("¥%.2f", item.getTotalPrice() / 100.0));
+            totalText.setText(String.format("¥%.2f", item.getTotalPrice()));
             
             decreaseButton.setOnClickListener(v -> {
                 if (changeListener != null) {

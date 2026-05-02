@@ -27,8 +27,8 @@ public class ErrorHandler {
                 Gson gson = new Gson();
                 ErrorResponse errorResponse = gson.fromJson(errorJson, ErrorResponse.class);
                 
-                if (errorResponse != null && errorResponse.getDetail() != null) {
-                    return errorResponse.getDetail();
+                if (errorResponse != null && errorResponse.getMessage() != null) {
+                    return errorResponse.getMessage();
                 }
             }
         } catch (Exception e) {
