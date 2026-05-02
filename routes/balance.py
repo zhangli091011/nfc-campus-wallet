@@ -120,17 +120,27 @@ async def get_balance(
             
             return {"balance": balance_yuan}
         
-        # 传统模式
+        # 传统模式（向后兼容）
         else:
-            # 创建用户服务实例
-            user_service = UserService(db)
+            # 通过 uid (card_uid) 查找参与者
+            participant_service = ParticipantService(db)
+            participant = participant_service.get_participant_by_card(uid)
             
-            # 获取余额（元）
-            balance_yuan = user_service.get_balance_yuan(uid)
+            # 获取参与者的默认账户余额（假设event_id=1或最新活动）
+            # 注意：传统模式没有event_id，这里需要决定查询哪个活动的余额
+            # 方案1：查询所有活动的总余额
+            # 方案2：查询最新活动的余额
+            # 方案3：返回错误，要求使用活动模式
             
-            logger.info(f"Balance query successful (legacy mode): uid={uid}, balance={balance_yuan} yuan")
-            
-            return {"balance": balance_yuan}
+            # 这里使用方案3：要求使用活动模式
+            logger.warning(f"Legacy balance query attempted: uid={uid}")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "DEPRECATED_ENDPOINT",
+                    "message": "Legacy balance query is deprecated. Please use event mode with event_id and card_uid parameters."
+                }
+            )
     
     except EventNotFoundError as e:
         logger.warning(f"Balance query failed: {str(e)}")
