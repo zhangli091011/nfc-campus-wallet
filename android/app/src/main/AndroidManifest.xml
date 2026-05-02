@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- NFC Permission -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature
+        android:name="android.hardware.nfc"
+        android:required="true" />
+
+    <!-- Internet Permission for API calls -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NFCCampusWallet"
+        android:usesCleartextTraffic="true"
+        tools:targetApi="31">
+        
+        <!-- Login Activity (Launcher) -->
+        <activity
+            android:name=".ui.LoginActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        
+        <!-- Booth Selection Activity -->
+        <activity
+            android:name=".ui.BoothSelectionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        
+        <!-- Cashier Activity -->
+        <activity
+            android:name=".ui.CashierActivity"
+            android:exported="false"
+            android:screenOrientation="portrait">
+            <!-- NFC Intent Filter -->
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+            </intent-filter>
+            
+            <meta-data
+                android:name="android.nfc.action.TECH_DISCOVERED"
+                android:resource="@xml/nfc_tech_filter" />
+        </activity>
+        
+        <!-- Main Activity (Legacy) -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        
+        <!-- Transaction History Activity -->
+        <activity
+            android:name=".ui.TransactionHistoryActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.CashierActivity"
+            android:screenOrientation="portrait" />
+    </application>
+
+</manifest>

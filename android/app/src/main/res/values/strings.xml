@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NFC Campus Wallet</string>
+    
+    <!-- Login Activity -->
+    <string name="login_title">收银端登录</string>
+    <string name="username_hint">用户名</string>
+    <string name="password_hint">密码</string>
+    <string name="login_button">登录</string>
+    <string name="error_username_required">请输入用户名</string>
+    <string name="error_password_required">请输入密码</string>
+    
+    <!-- Cashier Activity -->
+    <string name="event_name_label">活动:</string>
+    <string name="booth_name_label">摊位:</string>
+    <string name="cashier_name_label">收银员:</string>
+    <string name="card_uid_label">卡号:</string>
+    <string name="participant_name_label">参与者:</string>
+    <string name="balance_label">余额:</string>
+    <string name="products_title">商品</string>
+    <string name="cart_title">购物车</string>
+    <string name="cart_total">合计: ¥%.2f</string>
+    <string name="custom_amount_title">自定义金额</string>
+    <string name="amount_hint">金额 (元)</string>
+    <string name="remark_hint">备注 (可选)</string>
+    <string name="query_balance_button">查询余额</string>
+    <string name="pay_button">扣款</string>
+    <string name="recharge_button">充值</string>
+    <string name="clear_button">清空</string>
+    <string name="confirm_payment_title">确认支付</string>
+    <string name="confirm_payment_message">支付金额: ¥%.2f\n当前余额: ¥%.2f</string>
+    <string name="confirm_recharge_title">确认充值</string>
+    <string name="confirm_recharge_message">充值金额: ¥%.2f</string>
+    <string name="confirm_button">确认</string>
+    <string name="cancel_button">取消</string>
+    
+    <!-- Main Activity (Legacy) -->
+    <string name="tap_card_prompt">Tap NFC Card to Begin</string>
+    <string name="uid_label">Card UID:</string>
+    <string name="view_history_button">View History</string>
+    
+    <!-- Status Messages -->
+    <string name="reading_card">Reading card…</string>
+    <string name="processing">Processing…</string>
+    <string name="payment_success">支付成功</string>
+    <string name="recharge_success">充值成功</string>
+    <string name="new_balance">新余额: ¥%.2f</string>
+    <string name="querying_participant">查询参与者信息...</string>
+    <string name="querying_balance">查询余额...</string>
+    
+    <!-- Error Messages - General -->
+    <string name="nfc_not_supported">设备不支持 NFC</string>
+    <string name="nfc_disabled">请在设置中启用 NFC</string>
+    <string name="invalid_amount">请输入有效金额</string>
+    <string name="amount_too_large">金额超过限制</string>
+    <string name="network_error">网络错误</string>
+    <string name="unknown_error">未知错误</string>
+    
+    <!-- Error Messages - Authentication -->
+    <string name="error_invalid_credentials">用户名或密码错误</string>
+    <string name="error_token_expired">登录已过期，请重新登录</string>
+    <string name="error_token_invalid">登录状态无效</string>
+    <string name="error_auth_required">需要登录</string>
+    
+    <!-- Error Messages - Authorization -->
+    <string name="error_permission_denied">权限不足</string>
+    <string name="error_booth_access_denied">无权访问此摊位</string>
+    <string name="error_role_not_allowed">角色权限不足</string>
+    
+    <!-- Error Messages - Validation -->
+    <string name="error_insufficient_funds">余额不足</string>
+    <string name="error_event_inactive">活动未开启</string>
+    <string name="error_booth_inactive">摊位未开启</string>
+    <string name="error_product_disabled">商品不可用</string>
+    <string name="error_insufficient_stock">库存不足</string>
+    <string name="error_user_blocked">用户已被禁用</string>
+    <string name="error_participant_blocked">参与者已被禁用</string>
+    
+    <!-- Error Messages - Not Found -->
+    <string name="error_booth_not_found">摊位不存在</string>
+    <string name="error_product_not_found">商品不存在</string>
+    <string name="error_participant_not_found">参与者不存在或卡未绑定</string>
+    <string name="error_event_not_found">活动不存在</string>
+    <string name="user_not_found">用户不存在</string>
+    
+    <!-- Error Messages - Signature -->
+    <string name="error_signature_failed">签名验证失败</string>
+    <string name="error_timestamp_expired">请求已过期</string>
+    
+    <!-- Transaction History -->
+    <string name="transaction_history_title">Transaction History</string>
+    <string name="no_transactions">No transactions found</string>
+    <string name="transaction_type_payment">Payment</string>
+    <string name="transaction_type_recharge">Recharge</string>
+    <string name="transaction_amount">Amount: ¥%.2f</string>
+    <string name="transaction_balance_after">Balance After: ¥%.2f</string>
+</resources>

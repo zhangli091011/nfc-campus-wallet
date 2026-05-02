@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据看板 - NFC校园钱包</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filters select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .stat-card .unit {
+            font-size: 14px;
+            color: #999;
+            margin-left: 5px;
+        }
+
+        .chart-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .chart-section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 数据看板</h1>
+            <div class="filters">
+                <label>活动：</label>
+                <select id="eventFilter">
+                    <option value="">全部活动</option>
+                </select>
+                <button class="btn" onclick="loadDashboard()">刷新</button>
+                <button class="btn btn-secondary" onclick="window.location.href='booth-report.html'">摊位报表</button>
+                <button class="btn btn-secondary" onclick="window.location.href='product-leaderboard.html'">商品排行</button>
+                <button class="btn btn-secondary" onclick="window.location.href='audit-logs.html'">异常清单</button>
+                <button class="btn btn-secondary" onclick="window.location.href='export.html'">导出数据</button>
+            </div>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="loading" class="loading">加载中...</div>
+
+        <div id="content" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>总发放额度</h3>
+                    <div class="value" id="totalIssued">0<span class="unit">元</span></div>
+                </div>
+                <div class="stat-card">
+                    <h3>总充值额</h3>
+                    <div class="value" id="totalRecharged">0<span class="unit">元</span></div>
+                </div>
+                <div class="stat-card">
+                    <h3>总消费额</h3>
+                    <div class="value" id="totalConsumed">0<span class="unit">元</span></div>
+                </div>
+                <div class="stat-card">
+                    <h3>总退款额</h3>
+                    <div class="value" id="totalRefunded">0<span class="unit">元</span></div>
+                </div>
+                <div class="stat-card">
+                    <h3>净消费额</h3>
+                    <div class="value" id="netConsumed">0<span class="unit">元</span></div>
+                </div>
+                <div class="stat-card">
+                    <h3>总交易笔数</h3>
+                    <div class="value" id="totalTransactions">0<span class="unit">笔</span></div>
+                </div>
+                <div class="stat-card">
+                    <h3>参与者数量</h3>
+                    <div class="value" id="participantCount">0<span class="unit">人</span></div>
+                </div>
+                <div class="stat-card">
+                    <h3>摊位数量</h3>
+                    <div class="value" id="boothCount">0<span class="unit">个</span></div>
+                </div>
+            </div>
+
+            <div class="chart-section">
+                <h2>营业额 TOP 10</h2>
+                <div id="revenueLeaderboard"></div>
+            </div>
+
+            <div class="chart-section">
+                <h2>利润 TOP 10</h2>
+                <div id="profitLeaderboard"></div>
+            </div>
+
+            <div class="chart-section">
+                <h2>利润率 TOP 10</h2>
+                <div id="roiLeaderboard"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        let authToken = localStorage.getItem('authToken');
+
+        async function fetchAPI(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...options,
+                headers
+            });
+
+            if (response.status === 401) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        }
+
+        async function loadEvents() {
+            try {
+                const data = await fetchAPI('/events');
+                const select = document.getElementById('eventFilter');
+                
+                data.events.forEach(event => {
+                    const option = document.createElement('option');
+                    option.value = event.id;
+                    option.textContent = event.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load events:', error);
+            }
+        }
+
+        async function loadDashboard() {
+            const eventId = document.getElementById('eventFilter').value;
+            const queryParam = eventId ? `?event_id=${eventId}` : '';
+
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('content').style.display = 'none';
+                document.getElementById('error').style.display = 'none';
+
+                // 加载总览统计
+                const summary = await fetchAPI(`/reports/summary${queryParam}`);
+                
+                document.getElementById('totalIssued').innerHTML = `${summary.total_issued.toFixed(2)}<span class="unit">元</span>`;
+                document.getElementById('totalRecharged').innerHTML = `${summary.total_recharged.toFixed(2)}<span class="unit">元</span>`;
+                document.getElementById('totalConsumed').innerHTML = `${summary.total_consumed.toFixed(2)}<span class="unit">元</span>`;
+                document.getElementById('totalRefunded').innerHTML = `${summary.total_refunded.toFixed(2)}<span class="unit">元</span>`;
+                document.getElementById('netConsumed').innerHTML = `${summary.net_consumed.toFixed(2)}<span class="unit">元</span>`;
+                document.getElementById('totalTransactions').innerHTML = `${summary.total_transactions}<span class="unit">笔</span>`;
+                document.getElementById('participantCount').innerHTML = `${summary.participant_count}<span class="unit">人</span>`;
+                document.getElementById('boothCount').innerHTML = `${summary.booth_count}<span class="unit">个</span>`;
+
+                // 加载排行榜
+                const revenueLeaderboard = await fetchAPI(`/leaderboard/revenue${queryParam}&limit=10`);
+                renderLeaderboard('revenueLeaderboard', revenueLeaderboard);
+
+                const profitLeaderboard = await fetchAPI(`/leaderboard/profit${queryParam}&limit=10`);
+                renderLeaderboard('profitLeaderboard', profitLeaderboard);
+
+                const roiLeaderboard = await fetchAPI(`/leaderboard/roi${queryParam}&limit=10`);
+                renderLeaderboard('roiLeaderboard', roiLeaderboard);
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = '加载失败：' + error.message;
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        function renderLeaderboard(elementId, data) {
+            const container = document.getElementById(elementId);
+            
+            if (data.leaderboard.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暂无数据</p>';
+                return;
+            }
+
+            let html = '<table style="width: 100%; border-collapse: collapse;">';
+            html += '<thead><tr style="background: #f5f7fa; border-bottom: 2px solid #ddd;">';
+            html += '<th style="padding: 10px; text-align: left;">排名</th>';
+            html += '<th style="padding: 10px; text-align: left;">摊位名称</th>';
+            html += '<th style="padding: 10px; text-align: left;">班级</th>';
+            html += '<th style="padding: 10px; text-align: right;">' + data.metric + '</th>';
+            html += '</tr></thead><tbody>';
+
+            data.leaderboard.forEach(item => {
+                html += '<tr style="border-bottom: 1px solid #eee;">';
+                html += `<td style="padding: 10px;">${item.rank}</td>`;
+                html += `<td style="padding: 10px;">${item.booth_name}</td>`;
+                html += `<td style="padding: 10px;">${item.class_name}</td>`;
+                html += `<td style="padding: 10px; text-align: right; font-weight: bold;">${item.value.toFixed(2)}</td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // 初始化
+        loadEvents();
+        loadDashboard();
+    </script>
+</body>
+</html>

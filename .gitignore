@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+*.env
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Android
+android/.gradle/
+android/.idea/
+android/local.properties
+android/build/
+android/app/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Logs
+*.log
+logs/
+
+# Backups
+backups/
+back_备份/
+*.zip
+*.tar.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Temporary files
+*.tmp
+*.bak
+*.swp

@@ -1,0 +1,154 @@
+"""
+Main application entry point for NFC Campus E-Wallet System.
+
+This module initializes the FastAPI application, loads configuration,
+and sets up routes and middleware.
+"""
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import logging
+
+# 更新导入路径 - 使用 core 模块
+from core.config import load_settings, get_settings
+from core.database import init_database
+from middleware import SignatureVerificationMiddleware
+from middleware.request_logging import RequestLoggingMiddleware
+
+# 路由导入
+from routes.balance import router as balance_router
+from routes.payment import router as payment_router
+from routes.recharge import router as recharge_router
+from routes.transactions import router as transactions_router
+from routes.leaderboard import router as leaderboard_router
+from routes.reports import router as reports_router
+from routes.events import router as events_router
+from routes.participants import router as participants_router
+from routes.booths import router as booths_router
+from routes.products import router as products_router
+from routes.auth import router as auth_router
+from routes.users import router as users_router
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+def create_app() -> FastAPI:
+    """
+    Create and configure the FastAPI application.
+    
+    Returns:
+        FastAPI: Configured application instance
+    """
+    # Load configuration
+    try:
+        load_settings()
+        settings = get_settings()
+        logger.info("Configuration loaded successfully")
+    except ValueError as e:
+        logger.error(f"Failed to load configuration: {e}")
+        raise
+    
+    # Create FastAPI app
+    app = FastAPI(
+        title="NFC Campus E-Wallet System",
+        description="Backend API for cashless campus transactions using NFC cards",
+        version="1.0.0"
+    )
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Configure appropriately for production
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Add request logging middleware (first, to log all requests)
+    app.add_middleware(RequestLoggingMiddleware)
+    
+    # Add signature verification middleware
+    app.add_middleware(SignatureVerificationMiddleware)
+    
+    # Initialize database
+    init_database()
+    
+    # Register routes
+    # Authentication routes (first, for login and user management)
+    app.include_router(auth_router, tags=["authentication"])
+    app.include_router(users_router, tags=["users"])
+    
+    # Booth management system
+    app.include_router(booths_router, tags=["booths"])
+    app.include_router(products_router, tags=["products"])
+    
+    # Event and participant management
+    app.include_router(events_router, tags=["events"])
+    app.include_router(participants_router, tags=["participants"])
+    
+    # Transaction endpoints
+    app.include_router(balance_router, tags=["balance"])
+    app.include_router(payment_router, tags=["payment"])
+    app.include_router(recharge_router, tags=["recharge"])
+    app.include_router(transactions_router, tags=["transactions"])
+    app.include_router(leaderboard_router, tags=["leaderboard"])
+    app.include_router(reports_router, tags=["reports"])
+    
+    # Event close and cash reconciliation
+    from routes.event_close import router as event_close_router
+    from routes.cash_reconciliation import router as cash_reconciliation_router
+    from routes.exports import router as exports_router
+    
+    app.include_router(event_close_router, tags=["events"])
+    app.include_router(cash_reconciliation_router, tags=["cash-reconciliation"])
+    app.include_router(exports_router, tags=["exports"])
+    
+    # Health check endpoint
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "healthy", "service": "nfc-campus-wallet"}
+    
+    logger.info(f"Application initialized on {settings.server_host}:{settings.server_port}")
+    
+    return app
+
+
+# Create app instance (lazy initialization for testing)
+app = None
+
+
+def get_app() -> FastAPI:
+    """Get or create the application instance."""
+    global app
+    if app is None:
+        app = create_app()
+    return app
+
+
+# Initialize app for production use
+try:
+    app = create_app()
+except ValueError:
+    # Allow import without configuration for testing
+    pass
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    if app is None:
+        app = create_app()
+    
+    settings = get_settings()
+    uvicorn.run(
+        "app.main:app",
+        host=settings.server_host,
+        port=settings.server_port,
+        reload=True
+    )
