@@ -560,9 +560,9 @@ public class CashierActivity extends AppCompatActivity {
         String remark = "";
         
         if (!cartItems.isEmpty()) {
-            // Cart mode
+            // Cart mode - use getTotalPriceInCents() to get price in cents
             for (CartItem item : cartItems) {
-                totalCents += item.getTotalPrice();
+                totalCents += item.getTotalPriceInCents();
             }
         } else {
             // Custom amount mode
