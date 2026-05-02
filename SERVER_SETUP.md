@@ -169,3 +169,64 @@ A: 检查：
 5. 配置Android收银终端
 
 详见 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+
+## 6. 服务器管理
+
+### 重启API服务
+
+如果遇到"Database not initialized"错误，重启服务：
+
+```bash
+# 如果使用systemd服务
+sudo systemctl restart nfc-wallet
+
+# 如果手动运行
+# 先停止当前进程（Ctrl+C或kill）
+# 然后重新启动
+cd ~/nfc-campus-wallet
+source .venv/bin/activate
+python start_server.py
+```
+
+### 设置为系统服务（推荐）
+
+```bash
+# 1. 复制服务文件
+sudo cp nfc-wallet.service /etc/systemd/system/
+
+# 2. 创建日志目录
+sudo mkdir -p /var/log/nfc-wallet
+sudo chown ubuntu:ubuntu /var/log/nfc-wallet
+
+# 3. 重新加载systemd
+sudo systemctl daemon-reload
+
+# 4. 启用并启动服务
+sudo systemctl enable nfc-wallet
+sudo systemctl start nfc-wallet
+
+# 5. 查看状态
+sudo systemctl status nfc-wallet
+
+# 6. 查看日志
+sudo journalctl -u nfc-wallet -f
+```
+
+### 常用服务命令
+
+```bash
+# 启动服务
+sudo systemctl start nfc-wallet
+
+# 停止服务
+sudo systemctl stop nfc-wallet
+
+# 重启服务
+sudo systemctl restart nfc-wallet
+
+# 查看状态
+sudo systemctl status nfc-wallet
+
+# 查看日志
+sudo journalctl -u nfc-wallet -n 100 --no-pager
+```

@@ -1,0 +1,23 @@
+[Unit]
+Description=NFC Campus Wallet API Service
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/nfc-campus-wallet
+Environment="PATH=/home/ubuntu/nfc-campus-wallet/.venv/bin"
+ExecStart=/home/ubuntu/nfc-campus-wallet/.venv/bin/python start_server.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/nfc-wallet/access.log
+StandardError=append:/var/log/nfc-wallet/error.log
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
