@@ -75,7 +75,7 @@ async def login(
         
         logger.info(
             f"User logged in successfully: username='{credentials.username}', "
-            f"role='{result['user'].role}'"
+            f"role='{result['user']['role']}'"
         )
         
         return TokenResponse(
