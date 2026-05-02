@@ -94,9 +94,20 @@ class Event(Base):
     def is_active(self) -> bool:
         """Check if event is currently active."""
         now = datetime.now(timezone.utc)
+        
+        # Ensure start_time and end_time are timezone-aware
+        start_time = self.start_time
+        end_time = self.end_time
+        
+        # If times are naive, assume they are in UTC
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=timezone.utc)
+        if end_time.tzinfo is None:
+            end_time = end_time.replace(tzinfo=timezone.utc)
+        
         return (
             self.status == 'active' and
-            self.start_time <= now <= self.end_time
+            start_time <= now <= end_time
         )
     
     def can_recharge(self) -> bool:
@@ -110,4 +121,15 @@ class Event(Base):
     def is_within_time_range(self) -> bool:
         """Check if current time is within event time range."""
         now = datetime.now(timezone.utc)
-        return self.start_time <= now <= self.end_time
+        
+        # Ensure start_time and end_time are timezone-aware
+        start_time = self.start_time
+        end_time = self.end_time
+        
+        # If times are naive, assume they are in UTC
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=timezone.utc)
+        if end_time.tzinfo is None:
+            end_time = end_time.replace(tzinfo=timezone.utc)
+        
+        return start_time <= now <= end_time
