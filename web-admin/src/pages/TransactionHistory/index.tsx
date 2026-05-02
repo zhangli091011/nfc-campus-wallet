@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Table, Space, Select, DatePicker, Button, Tag, Input } from 'antd'
+import { Table, Space, Select, DatePicker, Button, Tag } from 'antd'
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   getTransactions,

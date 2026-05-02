@@ -11,7 +11,7 @@ import {
   Tag,
   Popconfirm,
 } from 'antd'
-import { PlusOutlined, EditOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import {
   getUsers,
   createUser,

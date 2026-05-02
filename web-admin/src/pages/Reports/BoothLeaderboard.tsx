@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Select, Radio, message, Tag, Row, Col } from 'antd';
+import { Card, Table, Select, Radio, message, Tag } from 'antd';
 import { TrophyOutlined, CrownOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -107,7 +107,7 @@ const BoothLeaderboard: React.FC = () => {
       key: 'value',
       width: 200,
       align: 'right',
-      render: (value: number, record) => {
+      render: (value: number) => {
         let display = '';
         let color = '#1890ff';
         

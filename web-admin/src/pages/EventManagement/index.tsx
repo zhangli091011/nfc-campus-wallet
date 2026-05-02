@@ -17,7 +17,7 @@ import {
   getEvents,
   createEvent,
   updateEvent,
-  deleteEvent,
+  // deleteEvent,
   type Event,
   type CreateEventRequest,
   type UpdateEventRequest,

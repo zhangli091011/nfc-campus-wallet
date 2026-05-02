@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, Row, Col, Statistic, Table, Select, DatePicker, Space } from 'antd'
+import { Card, Row, Col, Statistic, Table, Select, Space } from 'antd'
 import {
   UserOutlined,
   ShopOutlined,
@@ -14,7 +14,7 @@ import type { Event } from '@/services/event'
 import type { Transaction } from '@/services/transaction'
 import dayjs from 'dayjs'
 
-const { RangePicker } = DatePicker
+// const { RangePicker } = DatePicker
 
 const Dashboard = () => {
   const [events, setEvents] = useState<Event[]>([])

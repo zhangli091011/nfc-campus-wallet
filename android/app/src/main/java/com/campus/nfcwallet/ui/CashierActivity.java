@@ -605,8 +605,8 @@ public class CashierActivity extends AppCompatActivity {
             productId = cartItems.get(0).getProduct().getId();
         }
         
+        // Create request without event_id - backend will use active event
         BoothPaymentRequest request = new BoothPaymentRequest(
-            currentBooth.getEventId(),
             currentCardUid,
             totalAmount,
             productId,

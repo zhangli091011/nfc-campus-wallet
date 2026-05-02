@@ -32,7 +32,7 @@ router = APIRouter()
 
 class BoothPaymentRequest(BaseModel):
     """摊位支付请求模型"""
-    event_id: int = Field(..., description="活动ID")
+    event_id: Optional[int] = Field(None, description="活动ID（可选，默认使用当前激活的活动）")
     card_uid: str = Field(..., description="NFC卡片UID")
     amount: float = Field(..., description="支付金额（元）", gt=0)
     product_id: Optional[int] = Field(None, description="商品ID（可选）")
@@ -41,7 +41,6 @@ class BoothPaymentRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "event_id": 1,
                 "card_uid": "A1B2C3D4",
                 "amount": 25.00,
                 "product_id": 5,
@@ -60,10 +59,12 @@ async def create_booth(
     """
     创建新摊位。
     
+    如果未指定 event_id，则自动使用当前激活的活动。
+    
     需要 event_admin 或 super_admin 角色。
     
     Request Body:
-        - event_id: 活动ID（必填）
+        - event_id: 活动ID（可选，默认为当前激活的活动）
         - name: 摊位名称（必填，1-100字符）
         - class_name: 班级名称（必填，1-100字符）
     
@@ -71,7 +72,7 @@ async def create_booth(
         BoothResponse: 创建的摊位信息
         
     Error Responses:
-        400: 验证错误（如活动不存在）
+        400: 验证错误（如活动不存在或没有激活的活动）
         401: 未认证
         403: 权限不足
         500: 内部服务器错误
@@ -79,7 +80,6 @@ async def create_booth(
     Example:
         POST /booths
         {
-            "event_id": 1,
             "name": "美食摊",
             "class_name": "高一(1)班"
         }
@@ -90,10 +90,30 @@ async def create_booth(
         - Requirement 8.6: Require authentication for booth management endpoints
     """
     try:
+        # 如果未指定 event_id，使用当前激活的活动
+        event_id = booth_data.event_id
+        if event_id is None:
+            from services.event_service import EventService
+            event_service = EventService(db)
+            active_event = event_service.get_active_event()
+            
+            if active_event is None:
+                logger.warning("No active event found and no event_id specified for booth creation")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "NO_ACTIVE_EVENT",
+                        "message": "No active event found. Please specify event_id or activate an event."
+                    }
+                )
+            
+            event_id = active_event.id
+            logger.info(f"Using active event for booth creation: id={event_id}, name='{active_event.name}'")
+        
         booth_service = BoothService(db)
         
         booth = booth_service.create_booth(
-            event_id=booth_data.event_id,
+            event_id=event_id,
             name=booth_data.name,
             class_name=booth_data.class_name
         )
@@ -141,7 +161,7 @@ async def create_booth(
 
 @router.get("/booths", response_model=List[BoothResponse])
 async def list_booths(
-    event_id: Optional[int] = Query(None, description="Filter by event ID"),
+    event_id: Optional[int] = Query(None, description="Filter by event ID (defaults to active event if not specified)"),
     status: Optional[str] = Query(None, description="Filter by booth status (active/inactive/closed)"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of booths to return"),
     offset: int = Query(0, ge=0, description="Number of booths to skip"),
@@ -152,10 +172,12 @@ async def list_booths(
     """
     获取摊位列表，支持活动和状态过滤。
     
+    如果未指定 event_id，则自动使用当前激活的活动。
+    
     需要 event_admin 或 super_admin 角色。
     
     Query Parameters:
-        - event_id: 活动ID过滤（可选）
+        - event_id: 活动ID过滤（可选，默认为当前激活的活动）
         - status: 摊位状态过滤（可选）
         - limit: 返回记录数限制（默认100，最大1000）
         - offset: 偏移量（默认0）
@@ -164,18 +186,38 @@ async def list_booths(
         List[BoothResponse]: 摊位列表
         
     Error Responses:
+        400: 没有激活的活动且未指定 event_id
         401: 未认证
         403: 权限不足
         500: 内部服务器错误
     
     Example:
-        GET /booths?event_id=1&status=active&limit=10&offset=0
+        GET /booths?status=active&limit=10&offset=0
     
     Validates Requirements:
         - Requirement 8.2: GET /booths returns list of booths with optional filtering
         - Requirement 8.6: Require authentication for booth management endpoints
     """
     try:
+        # 如果未指定 event_id，使用当前激活的活动
+        if event_id is None:
+            from services.event_service import EventService
+            event_service = EventService(db)
+            active_event = event_service.get_active_event()
+            
+            if active_event is None:
+                logger.warning("No active event found and no event_id specified")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "NO_ACTIVE_EVENT",
+                        "message": "No active event found. Please specify event_id or activate an event."
+                    }
+                )
+            
+            event_id = active_event.id
+            logger.info(f"Using active event: id={event_id}, name='{active_event.name}'")
+        
         booth_service = BoothService(db)
         
         booths = booth_service.list_booths(
@@ -422,11 +464,31 @@ async def process_booth_payment(
                 detail=f"Access denied. Role '{current_user.role}' cannot process payment transactions"
             )
         
+        # 如果未指定 event_id，使用当前激活的活动
+        event_id = payment_request.event_id
+        if event_id is None:
+            from services.event_service import EventService
+            event_service = EventService(db)
+            active_event = event_service.get_active_event()
+            
+            if active_event is None:
+                logger.warning("No active event found and no event_id specified for booth payment")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "NO_ACTIVE_EVENT",
+                        "message": "No active event found. Please specify event_id or activate an event."
+                    }
+                )
+            
+            event_id = active_event.id
+            logger.info(f"Using active event for booth payment: id={event_id}, name='{active_event.name}'")
+        
         # 处理摊位支付
         transaction_service = TransactionService(db)
         
         result = transaction_service.process_booth_payment(
-            event_id=payment_request.event_id,
+            event_id=event_id,
             card_uid=payment_request.card_uid,
             booth_id=booth_id,
             amount_yuan=payment_request.amount,
@@ -436,7 +498,7 @@ async def process_booth_payment(
         )
         
         logger.info(
-            f"Booth payment successful: booth_id={booth_id}, event_id={payment_request.event_id}, "
+            f"Booth payment successful: booth_id={booth_id}, event_id={event_id}, "
             f"card_uid={payment_request.card_uid}, amount={payment_request.amount} yuan, "
             f"product_id={payment_request.product_id}, operator={current_user.username}, "
             f"txn_id={result.transaction_id}"
@@ -451,7 +513,7 @@ async def process_booth_payment(
             new_balance=result.new_balance_yuan,
             transaction_id=result.transaction_id,
             balance_before=result.balance_before_yuan,
-            event_id=transaction.event_id if transaction else payment_request.event_id,
+            event_id=transaction.event_id if transaction else event_id,
             participant_id=transaction.participant_id if transaction else None,
             booth_id=booth_id,
             product_id=payment_request.product_id,

@@ -67,6 +67,9 @@ class EventService:
         """
         创建新活动。
         
+        如果创建的活动状态为 'active'，会自动将其他所有活动状态设置为 'paused'，
+        确保同一时间只有一个活动处于激活状态。
+        
         Args:
             name: 活动名称
             start_time: 开始时间
@@ -80,6 +83,10 @@ class EventService:
             Event: 新创建的活动对象
         """
         try:
+            # 如果新活动状态为 active，暂停所有其他活动
+            if status == 'active':
+                self._pause_all_active_events()
+            
             event = Event(
                 name=name,
                 start_time=start_time,
@@ -94,7 +101,7 @@ class EventService:
             self.db.commit()
             self.db.refresh(event)
             
-            logger.info(f"Event created: id={event.id}, name='{name}'")
+            logger.info(f"Event created: id={event.id}, name='{name}', status='{status}'")
             return event
             
         except IntegrityError as e:
@@ -164,6 +171,9 @@ class EventService:
         """
         更新活动信息。
         
+        如果将活动状态更新为 'active'，会自动将其他所有活动状态设置为 'paused'，
+        确保同一时间只有一个活动处于激活状态。
+        
         Args:
             event_id: 活动ID
             **kwargs: 要更新的字段
@@ -176,6 +186,10 @@ class EventService:
         """
         event = self.get_event(event_id)
         
+        # 如果要将活动状态更新为 active，暂停所有其他活动
+        if 'status' in kwargs and kwargs['status'] == 'active':
+            self._pause_all_active_events(exclude_event_id=event_id)
+        
         for key, value in kwargs.items():
             if value is not None and hasattr(event, key):
                 setattr(event, key, value)
@@ -184,7 +198,7 @@ class EventService:
             self.db.commit()
             self.db.refresh(event)
             
-            logger.info(f"Event updated: id={event_id}")
+            logger.info(f"Event updated: id={event_id}, updated_fields={list(kwargs.keys())}")
             return event
             
         except IntegrityError as e:
@@ -243,3 +257,41 @@ class EventService:
                 raise EventInactiveError(event_id, "consumption is disabled")
         
         return event
+    
+    def get_active_event(self) -> Optional[Event]:
+        """
+        获取当前激活的活动。
+        
+        Returns:
+            Event: 当前激活的活动对象，如果没有则返回 None
+        """
+        event = self.db.query(Event).filter(Event.status == 'active').first()
+        
+        if event:
+            logger.info(f"Active event found: id={event.id}, name='{event.name}'")
+        else:
+            logger.info("No active event found")
+        
+        return event
+    
+    def _pause_all_active_events(self, exclude_event_id: Optional[int] = None):
+        """
+        将所有激活的活动状态设置为 'paused'。
+        
+        Args:
+            exclude_event_id: 要排除的活动ID（可选）
+        """
+        query = self.db.query(Event).filter(Event.status == 'active')
+        
+        if exclude_event_id is not None:
+            query = query.filter(Event.id != exclude_event_id)
+        
+        active_events = query.all()
+        
+        if active_events:
+            for event in active_events:
+                event.status = 'paused'
+                logger.info(f"Event paused: id={event.id}, name='{event.name}'")
+            
+            self.db.commit()
+            logger.info(f"Paused {len(active_events)} active event(s)")

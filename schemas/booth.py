@@ -19,7 +19,7 @@ class BoothStatus(str, Enum):
 
 class BoothCreate(BaseModel):
     """Schema for creating a new booth."""
-    event_id: int = Field(..., description="Event ID the booth belongs to")
+    event_id: Optional[int] = Field(None, description="Event ID the booth belongs to (defaults to active event if not specified)")
     name: str = Field(..., min_length=1, max_length=100, description="Booth name")
     class_name: str = Field(..., min_length=1, max_length=100, description="Class or team name operating the booth")
     

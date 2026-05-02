@@ -10,7 +10,7 @@ import {
   Input,
   message,
 } from 'antd'
-import { CheckOutlined, CloseOutlined } from '@ant-design/icons'
+import { CheckOutlined } from '@ant-design/icons'
 import {
   getTransactions,
   refund,

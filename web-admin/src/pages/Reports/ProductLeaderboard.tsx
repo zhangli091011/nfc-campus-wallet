@@ -101,7 +101,7 @@ const ProductLeaderboard: React.FC = () => {
       key: 'value',
       width: 150,
       align: 'right',
-      render: (value: number, record) => {
+      render: (value: number) => {
         let display = '';
         let color = '#1890ff';
         

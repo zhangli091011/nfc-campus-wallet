@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Select, Form, message, Space, Divider, List } from 'antd';
+import { Card, Button, Select, Form, message, Divider, List } from 'antd';
 import { DownloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { exportReportExcel, downloadExcel } from '../../services/report';
 import { getEvents, Event } from '../../services/event';

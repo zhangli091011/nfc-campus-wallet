@@ -362,8 +362,7 @@ security = HTTPBearer()
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(None)  # Will be overridden by FastAPI dependency injection
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> Any:
     """
     FastAPI dependency for JWT authentication.
@@ -388,7 +387,6 @@ def get_current_user(
     
     Args:
         credentials: HTTPAuthorizationCredentials from Authorization header
-        db: SQLAlchemy database session (injected by FastAPI)
         
     Returns:
         User object from database
@@ -409,9 +407,8 @@ def get_current_user(
     from core.database import get_db
     from models.user import User
     
-    # Get database session if not provided (for dependency injection)
-    if db is None:
-        db = next(get_db())
+    # Get database session
+    db = next(get_db())
     
     # Extract token from credentials
     token = credentials.credentials
@@ -571,8 +568,7 @@ class RoleChecker:
 
 def validate_booth_ownership(
     booth_id: int,
-    current_user: Any = Depends(get_current_user),
-    db: Session = Depends(None)
+    current_user: Any = Depends(get_current_user)
 ) -> None:
     """
     FastAPI dependency for booth ownership validation.
@@ -602,7 +598,6 @@ def validate_booth_ownership(
     Args:
         booth_id: The booth ID to validate access for (from path parameter)
         current_user: User object from get_current_user dependency (auto-injected)
-        db: SQLAlchemy database session (injected by FastAPI)
         
     Returns:
         None (dependency succeeds silently if access is allowed)
@@ -622,9 +617,8 @@ def validate_booth_ownership(
     from core.database import get_db
     from models.booth import Booth
     
-    # Get database session if not provided (for dependency injection)
-    if db is None:
-        db = next(get_db())
+    # Get database session
+    db = next(get_db())
     
     # Admins (super_admin and event_admin) can access all booths
     if current_user.role in ('super_admin', 'event_admin'):
