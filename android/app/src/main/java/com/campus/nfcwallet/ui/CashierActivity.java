@@ -795,7 +795,7 @@ public class CashierActivity extends AppCompatActivity {
      * Update recharge button visibility based on user permissions.
      */
     private void updateRechargeButtonVisibility() {
-        if (currentUser != null && "admin".equals(currentUser.getRole())) {
+        if (currentUser != null && currentUser.canRecharge()) {
             rechargeButton.setVisibility(View.VISIBLE);
         } else {
             rechargeButton.setVisibility(View.GONE);
