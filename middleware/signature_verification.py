@@ -264,9 +264,12 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
             event_id = body_data.get("event_id")
             card_uid = body_data.get("card_uid")
             
+            logger.debug(f"Body data: event_id={event_id}, card_uid={card_uid}, keys={list(body_data.keys())}")
+            
             if event_id and card_uid:
                 # Event mode - bypass signature verification
                 # Return empty dict to indicate authentication should be bypassed
+                logger.info(f"Event mode detected in body: event_id={event_id}, card_uid={card_uid}")
                 return {}
             
             # Legacy mode - check for signature parameters
@@ -276,6 +279,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
             amount = body_data.get("amount")
             
             if not all([uid, timestamp, signature]):
+                logger.debug(f"Legacy mode parameters incomplete: uid={uid}, timestamp={timestamp}, signature={signature}")
                 return None
             
             # Ensure timestamp is integer
