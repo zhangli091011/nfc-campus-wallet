@@ -73,6 +73,12 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
             else:  # POST, PUT, etc.
                 auth_params = await self._extract_from_body(request)
             
+            # Check if event mode (empty dict means bypass signature verification)
+            if auth_params == {}:
+                # Event mode - bypass signature verification
+                logger.info(f"Event mode request - bypassing signature verification: {request.url.path}")
+                return await call_next(request)
+            
             # Verify request authentication
             if auth_params:
                 verify_request(
@@ -190,14 +196,29 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
         """
         Extract authentication parameters from query string.
         
+        Supports two modes:
+        1. Legacy mode: uid, timestamp, signature
+        2. Event mode: event_id, card_uid (bypasses signature verification)
+        
         Args:
             request: HTTP request with query parameters
             
         Returns:
             Dictionary with uid, timestamp, signature, or None if missing
+            Returns empty dict {} for event mode (to bypass signature check)
         """
         query_params = request.query_params
         
+        # Check for event mode parameters (event_id + card_uid)
+        event_id = query_params.get("event_id")
+        card_uid = query_params.get("card_uid")
+        
+        if event_id and card_uid:
+            # Event mode - bypass signature verification
+            # Return empty dict to indicate authentication should be bypassed
+            return {}
+        
+        # Legacy mode - check for signature parameters
         uid = query_params.get("uid")
         timestamp_str = query_params.get("timestamp")
         signature = query_params.get("signature")

@@ -27,8 +27,8 @@ async def get_balance(
     uid: Optional[str] = Query(None, description="User's unique identifier from NFC card (legacy mode)"),
     event_id: Optional[int] = Query(None, description="Event ID (event mode)"),
     card_uid: Optional[str] = Query(None, description="NFC card UID (event mode)"),
-    timestamp: int = Query(..., description="Request timestamp in Unix seconds"),
-    signature: str = Query(..., description="Request signature for authentication"),
+    timestamp: Optional[int] = Query(None, description="Request timestamp in Unix seconds (legacy mode)"),
+    signature: Optional[str] = Query(None, description="Request signature for authentication (legacy mode)"),
     db: Session = Depends(get_db)
 ):
     """
