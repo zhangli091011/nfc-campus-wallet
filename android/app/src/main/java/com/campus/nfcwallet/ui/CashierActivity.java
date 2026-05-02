@@ -541,7 +541,7 @@ public class CashierActivity extends AppCompatActivity {
     private void updateCartTotal() {
         int totalCents = 0;
         for (CartItem item : cartItems) {
-            totalCents += item.getTotalPrice();
+            totalCents += item.getTotalPriceInCents();
         }
         cartTotalText.setText(String.format("合计: ¥%.2f", totalCents / 100.0));
     }
@@ -587,8 +587,9 @@ public class CashierActivity extends AppCompatActivity {
             return;
         }
         
-        // Check balance
-        if (totalCents > currentBalance * 100) {
+        // Check balance (currentBalance is already in yuan from API)
+        double totalYuan = totalCents / 100.0;
+        if (totalYuan > currentBalance) {
             showError("余额不足");
             return;
         }
@@ -596,12 +597,12 @@ public class CashierActivity extends AppCompatActivity {
         // Make variables effectively final for lambda
         final int finalTotalCents = totalCents;
         final String finalRemark = remark;
+        final double finalTotalYuan = totalYuan;
         
         // Confirm payment
-        double totalYuan = totalCents / 100.0;
         new AlertDialog.Builder(this)
             .setTitle("确认支付")
-            .setMessage(String.format("支付金额: ¥%.2f\n当前余额: ¥%.2f", totalYuan, currentBalance))
+            .setMessage(String.format("支付金额: ¥%.2f\n当前余额: ¥%.2f", finalTotalYuan, currentBalance))
             .setPositiveButton("确认", (dialog, which) -> executePayment(finalTotalCents, finalRemark))
             .setNegativeButton("取消", null)
             .show();
