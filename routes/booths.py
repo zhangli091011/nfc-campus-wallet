@@ -173,6 +173,7 @@ async def list_booths(
     获取摊位列表，支持活动和状态过滤。
     
     如果未指定 event_id，则自动使用当前激活的活动。
+    如果没有激活的活动，则返回所有摊位。
     
     需要 event_admin 或 super_admin 角色。
     
@@ -186,7 +187,6 @@ async def list_booths(
         List[BoothResponse]: 摊位列表
         
     Error Responses:
-        400: 没有激活的活动且未指定 event_id
         401: 未认证
         403: 权限不足
         500: 内部服务器错误
@@ -199,24 +199,17 @@ async def list_booths(
         - Requirement 8.6: Require authentication for booth management endpoints
     """
     try:
-        # 如果未指定 event_id，使用当前激活的活动
+        # 如果未指定 event_id，尝试使用当前激活的活动
         if event_id is None:
             from services.event_service import EventService
             event_service = EventService(db)
             active_event = event_service.get_active_event()
             
-            if active_event is None:
-                logger.warning("No active event found and no event_id specified")
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "error_code": "NO_ACTIVE_EVENT",
-                        "message": "No active event found. Please specify event_id or activate an event."
-                    }
-                )
-            
-            event_id = active_event.id
-            logger.info(f"Using active event: id={event_id}, name='{active_event.name}'")
+            if active_event is not None:
+                event_id = active_event.id
+                logger.info(f"Using active event: id={event_id}, name='{active_event.name}'")
+            else:
+                logger.info("No active event found, returning all booths")
         
         booth_service = BoothService(db)
         

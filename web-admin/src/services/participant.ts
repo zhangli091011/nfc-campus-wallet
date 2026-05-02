@@ -2,23 +2,19 @@ import request from '@/utils/request'
 
 export interface Participant {
   id: number
-  event_id: number
   card_uid: string
   name: string
   student_id?: string
   class_name?: string
-  balance: number // 单位：分
   status: 'active' | 'inactive' | 'blocked'
   created_at: string
 }
 
 export interface CreateParticipantRequest {
-  event_id: number
   card_uid: string
   name: string
   student_id?: string
   class_name?: string
-  initial_balance?: number
 }
 
 export interface UpdateParticipantRequest {

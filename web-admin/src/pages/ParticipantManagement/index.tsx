@@ -39,13 +39,8 @@ const ParticipantManagement = () => {
 
   useEffect(() => {
     loadEvents()
+    loadParticipants() // 直接加载所有参与者
   }, [])
-
-  useEffect(() => {
-    if (selectedEventId) {
-      loadParticipants()
-    }
-  }, [selectedEventId])
 
   const loadEvents = async () => {
     try {
@@ -62,11 +57,17 @@ const ParticipantManagement = () => {
   }
 
   const loadParticipants = async () => {
-    if (!selectedEventId) return
     setLoading(true)
     try {
-      const data = await getParticipants({ event_id: selectedEventId, limit: 100 })
-      setParticipants(Array.isArray(data) ? data : [])
+      const data = await getParticipants({ limit: 1000 })
+      // 处理返回的数据格式
+      if (Array.isArray(data)) {
+        setParticipants(data)
+      } else if (data && typeof data === 'object' && 'participants' in data) {
+        setParticipants((data as any).participants || [])
+      } else {
+        setParticipants([])
+      }
     } catch (error) {
       // 错误已处理
       setParticipants([])
@@ -78,14 +79,13 @@ const ParticipantManagement = () => {
   const handleAdd = () => {
     setEditingParticipant(null)
     form.resetFields()
-    form.setFieldsValue({ event_id: selectedEventId, status: 'active' })
+    form.setFieldsValue({ status: 'active' })
     setModalVisible(true)
   }
 
   const handleEdit = (record: Participant) => {
     setEditingParticipant(record)
     form.setFieldsValue({
-      event_id: record.event_id,
       card_uid: record.card_uid,
       name: record.name,
       student_id: record.student_id,
@@ -116,14 +116,10 @@ const ParticipantManagement = () => {
         message.success('更新成功')
       } else {
         const data: CreateParticipantRequest = {
-          event_id: values.event_id,
           card_uid: values.card_uid,
           name: values.name,
           student_id: values.student_id,
           class_name: values.class_name,
-          initial_balance: values.initial_balance
-            ? Math.round(values.initial_balance * 100)
-            : 0,
         }
         await createParticipant(data)
         message.success('创建成功')
@@ -137,11 +133,11 @@ const ParticipantManagement = () => {
   }
 
   const handleRechargeSubmit = async () => {
-    if (!rechargingParticipant) return
+    if (!rechargingParticipant || !selectedEventId) return
     try {
       const values = await rechargeForm.validateFields()
       const data: RechargeRequest = {
-        event_id: rechargingParticipant.event_id,
+        event_id: selectedEventId,
         card_uid: rechargingParticipant.card_uid,
         amount: values.amount,
         remark: values.remark,
@@ -183,12 +179,6 @@ const ParticipantManagement = () => {
       key: 'class_name',
     },
     {
-      title: '余额',
-      dataIndex: 'balance',
-      key: 'balance',
-      render: (balance: number) => `¥${(balance / 100).toFixed(2)}`,
-    },
-    {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
@@ -218,14 +208,16 @@ const ParticipantManagement = () => {
       width: 180,
       render: (_: any, record: Participant) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<DollarOutlined />}
-            onClick={() => handleRecharge(record)}
-          >
-            充值
-          </Button>
+          {selectedEventId && (
+            <Button
+              type="link"
+              size="small"
+              icon={<DollarOutlined />}
+              onClick={() => handleRecharge(record)}
+            >
+              充值
+            </Button>
+          )}
           <Button
             type="link"
             size="small"
@@ -244,10 +236,11 @@ const ParticipantManagement = () => {
       <Space style={{ marginBottom: 16 }}>
         <Select
           style={{ width: 200 }}
-          placeholder="选择活动"
+          placeholder="选择活动（充值用）"
           value={selectedEventId}
           onChange={setSelectedEventId}
           options={events.map((e) => ({ label: e.name, value: e.id }))}
+          allowClear
         />
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
           新建参与者
@@ -271,20 +264,6 @@ const ParticipantManagement = () => {
       >
         <Form form={form} layout="vertical">
           <Form.Item
-            name="event_id"
-            label="所属活动"
-            rules={[{ required: true, message: '请选择所属活动' }]}
-          >
-            <Select disabled={!!editingParticipant}>
-              {events.map((e) => (
-                <Select.Option key={e.id} value={e.id}>
-                  {e.name}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
             name="card_uid"
             label="卡号"
             rules={[{ required: true, message: '请输入卡号' }]}
@@ -307,17 +286,6 @@ const ParticipantManagement = () => {
           <Form.Item name="class_name" label="班级">
             <Input placeholder="请输入班级" />
           </Form.Item>
-
-          {!editingParticipant && (
-            <Form.Item name="initial_balance" label="初始余额（元）">
-              <InputNumber
-                min={0}
-                precision={2}
-                style={{ width: '100%' }}
-                placeholder="请输入初始余额"
-              />
-            </Form.Item>
-          )}
 
           {editingParticipant && (
             <Form.Item
@@ -347,12 +315,6 @@ const ParticipantManagement = () => {
             <div>
               <p>姓名：{rechargingParticipant?.name}</p>
               <p>卡号：{rechargingParticipant?.card_uid}</p>
-              <p>
-                当前余额：¥
-                {rechargingParticipant
-                  ? (rechargingParticipant.balance / 100).toFixed(2)
-                  : '0.00'}
-              </p>
             </div>
           </Form.Item>
 

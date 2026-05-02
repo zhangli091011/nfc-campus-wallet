@@ -71,13 +71,50 @@ public class BoothSelectionActivity extends AppCompatActivity {
     }
     
     private void loadBooths() {
-        // For now, we'll need to get booth list from user's assigned booths
-        // This is a simplified version - you may need to add an API endpoint
-        // to get booths for current user
+        String authHeader = sessionManager.getAuthHeader();
+        if (authHeader == null) {
+            navigateToLogin();
+            return;
+        }
         
-        // Temporary: Navigate directly to cashier with booth_id from intent or default
-        int boothId = getIntent().getIntExtra("booth_id", 1);
-        navigateToCashier(boothId);
+        progressBar.setVisibility(View.VISIBLE);
+        errorText.setVisibility(View.GONE);
+        
+        // Load all active booths
+        Call<List<BoothInfo>> call = apiService.getBooths(authHeader, "active");
+        call.enqueue(new Callback<List<BoothInfo>>() {
+            @Override
+            public void onResponse(Call<List<BoothInfo>> call, Response<List<BoothInfo>> response) {
+                progressBar.setVisibility(View.GONE);
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    booths.clear();
+                    booths.addAll(response.body());
+                    adapter.notifyDataSetChanged();
+                    
+                    if (booths.isEmpty()) {
+                        errorText.setText("没有可用的摊位");
+                        errorText.setVisibility(View.VISIBLE);
+                    } else if (booths.size() == 1) {
+                        // If only one booth, go directly to it
+                        navigateToCashier(booths.get(0).getId());
+                    }
+                } else {
+                    String error = ErrorHandler.getErrorMessage(response);
+                    errorText.setText("加载摊位失败: " + error);
+                    errorText.setVisibility(View.VISIBLE);
+                    Log.e(TAG, "Failed to load booths: " + error);
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<List<BoothInfo>> call, Throwable t) {
+                progressBar.setVisibility(View.GONE);
+                errorText.setText("网络错误");
+                errorText.setVisibility(View.VISIBLE);
+                Log.e(TAG, "Failed to load booths", t);
+            }
+        });
     }
     
     private void onBoothSelected(BoothInfo booth) {

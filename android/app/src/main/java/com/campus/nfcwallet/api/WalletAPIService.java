@@ -73,6 +73,21 @@ public interface WalletAPIService {
     // ==================== Booths ====================
     
     /**
+     * Get list of booths.
+     * 
+     * GET /booths?status={status}
+     * 
+     * @param authorization Authorization header (Bearer token)
+     * @param status Filter by booth status (optional)
+     * @return List of booths
+     */
+    @GET("booths")
+    Call<List<BoothInfo>> getBooths(
+        @Header("Authorization") String authorization,
+        @Query("status") String status
+    );
+    
+    /**
      * Get booth details.
      * 
      * GET /booths/{booth_id}

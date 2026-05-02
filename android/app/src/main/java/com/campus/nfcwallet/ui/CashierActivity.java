@@ -257,12 +257,16 @@ public class CashierActivity extends AppCompatActivity {
         int boothId = getIntent().getIntExtra("booth_id", 0);
         if (boothId == 0) {
             showError("未指定摊位");
+            Log.e(TAG, "No booth_id provided in intent");
             return;
         }
+        
+        Log.d(TAG, "Loading booth info for booth_id: " + boothId);
         
         String authHeader = sessionManager.getAuthHeader();
         if (authHeader == null) {
             showError("未登录");
+            Log.e(TAG, "No auth header available");
             return;
         }
         
@@ -274,6 +278,7 @@ public class CashierActivity extends AppCompatActivity {
                 if (response.isSuccessful() && response.body() != null) {
                     currentBooth = response.body();
                     boothNameText.setText(currentBooth.getName());
+                    Log.d(TAG, "Booth info loaded: " + currentBooth.getName() + ", event_id: " + currentBooth.getEventId());
                     
                     // Load event info
                     loadEventInfo(currentBooth.getEventId());
@@ -282,14 +287,15 @@ public class CashierActivity extends AppCompatActivity {
                     loadProducts(boothId);
                 } else {
                     String error = ErrorHandler.getErrorMessage(response);
-                    showError(error);
+                    Log.e(TAG, "Failed to load booth info: " + error);
+                    showError("摊位信息加载失败: " + error);
                 }
             }
             
             @Override
             public void onFailure(Call<BoothInfo> call, Throwable t) {
                 Log.e(TAG, "Failed to load booth info", t);
-                showError("加载摊位信息失败");
+                showError("摊位信息加载失败: 网络错误");
             }
         });
     }
@@ -298,6 +304,8 @@ public class CashierActivity extends AppCompatActivity {
      * Load event info.
      */
     private void loadEventInfo(int eventId) {
+        Log.d(TAG, "Loading event info for event_id: " + eventId);
+        
         Call<EventInfo> call = apiService.getEvent(eventId);
         call.enqueue(new Callback<EventInfo>() {
             @Override
@@ -305,12 +313,20 @@ public class CashierActivity extends AppCompatActivity {
                 if (response.isSuccessful() && response.body() != null) {
                     currentEvent = response.body();
                     eventNameText.setText(currentEvent.getName());
+                    Log.d(TAG, "Event info loaded: " + currentEvent.getName());
+                } else {
+                    String error = ErrorHandler.getErrorMessage(response);
+                    Log.e(TAG, "Failed to load event info: " + error);
+                    showError("活动信息加载失败: " + error);
+                    eventNameText.setText("活动信息加载失败");
                 }
             }
             
             @Override
             public void onFailure(Call<EventInfo> call, Throwable t) {
                 Log.e(TAG, "Failed to load event info", t);
+                showError("活动信息加载失败: 网络错误");
+                eventNameText.setText("活动信息加载失败");
             }
         });
     }
@@ -413,7 +429,15 @@ public class CashierActivity extends AppCompatActivity {
         }
         
         if (currentEvent == null) {
-            showError("活动信息未加载");
+            // Event info not loaded yet, wait and retry
+            showError("正在加载活动信息，请稍候...");
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (currentEvent != null) {
+                    queryBalance();
+                } else {
+                    showError("活动信息加载失败，请重试");
+                }
+            }, 1000);
             return;
         }
         

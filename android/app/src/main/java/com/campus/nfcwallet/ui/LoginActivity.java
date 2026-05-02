@@ -138,7 +138,9 @@ public class LoginActivity extends AppCompatActivity {
     }
     
     private void navigateToCashier() {
-        Intent intent = new Intent(this, CashierActivity.class);
+        // For admin users, show booth selection
+        // For booth users, go directly to their assigned booth
+        Intent intent = new Intent(this, BoothSelectionActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
