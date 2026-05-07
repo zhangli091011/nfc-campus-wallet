@@ -111,15 +111,29 @@ public class LoginActivity extends AppCompatActivity {
                     navigateToCashier();
                 } else {
                     String errorMessage = APIClient.getErrorMessage(response);
+                    String detailedError = ErrorHandler.getDetailedErrorMessage(response);
+                    
                     showError(errorMessage);
+                    
+                    Log.e(TAG, "Login failed: " + errorMessage);
+                    Log.e(TAG, "Detailed error:\n" + detailedError);
                 }
             }
             
             @Override
             public void onFailure(Call<LoginResponse> call, Throwable t) {
                 setLoading(false);
-                Log.e(TAG, "Login failed", t);
-                showError(getString(R.string.error_network));
+                
+                String errorMsg = getString(R.string.error_network) + ": " + t.getMessage();
+                showError(errorMsg);
+                
+                Log.e(TAG, "Login failed - Network error", t);
+                Log.e(TAG, "Error type: " + t.getClass().getName());
+                Log.e(TAG, "Error message: " + t.getMessage());
+                
+                if (t.getCause() != null) {
+                    Log.e(TAG, "Caused by: " + t.getCause().getMessage());
+                }
             }
         });
     }

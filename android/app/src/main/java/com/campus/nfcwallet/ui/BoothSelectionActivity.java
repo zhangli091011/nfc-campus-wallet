@@ -101,18 +101,37 @@ public class BoothSelectionActivity extends AppCompatActivity {
                     }
                 } else {
                     String error = ErrorHandler.getErrorMessage(response);
-                    errorText.setText("加载摊位失败: " + error);
+                    String detailedError = ErrorHandler.getDetailedErrorMessage(response);
+                    
+                    errorText.setText("加载摊位失败:\n" + error);
                     errorText.setVisibility(View.VISIBLE);
+                    
                     Log.e(TAG, "Failed to load booths: " + error);
+                    Log.e(TAG, "Detailed error:\n" + detailedError);
+                    
+                    Toast.makeText(BoothSelectionActivity.this, 
+                        "错误详情已记录到日志", Toast.LENGTH_SHORT).show();
                 }
             }
             
             @Override
             public void onFailure(Call<List<BoothInfo>> call, Throwable t) {
                 progressBar.setVisibility(View.GONE);
-                errorText.setText("网络错误");
+                
+                String errorMsg = "网络错误: " + t.getMessage();
+                errorText.setText(errorMsg);
                 errorText.setVisibility(View.VISIBLE);
-                Log.e(TAG, "Failed to load booths", t);
+                
+                Log.e(TAG, "Failed to load booths - Network error", t);
+                Log.e(TAG, "Error type: " + t.getClass().getName());
+                Log.e(TAG, "Error message: " + t.getMessage());
+                
+                if (t.getCause() != null) {
+                    Log.e(TAG, "Caused by: " + t.getCause().getMessage());
+                }
+                
+                Toast.makeText(BoothSelectionActivity.this, 
+                    "网络连接失败，请检查网络设置", Toast.LENGTH_LONG).show();
             }
         });
     }

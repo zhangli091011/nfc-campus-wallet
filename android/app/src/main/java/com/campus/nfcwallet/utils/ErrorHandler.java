@@ -53,6 +53,44 @@ public class ErrorHandler {
     }
     
     /**
+     * Get detailed error message from API response (for debugging).
+     */
+    public static String getDetailedErrorMessage(Response<?> response) {
+        StringBuilder sb = new StringBuilder();
+        
+        // Add HTTP status
+        sb.append("HTTP ").append(response.code()).append(": ");
+        sb.append(response.message()).append("\n");
+        
+        // Add URL
+        sb.append("URL: ").append(response.raw().request().url()).append("\n");
+        
+        // Try to parse error body
+        try {
+            if (response.errorBody() != null) {
+                String errorJson = response.errorBody().string();
+                sb.append("Response: ").append(errorJson).append("\n");
+                
+                Gson gson = new Gson();
+                ErrorResponse errorResponse = gson.fromJson(errorJson, ErrorResponse.class);
+                
+                if (errorResponse != null) {
+                    if (errorResponse.getErrorCode() != null) {
+                        sb.append("Error Code: ").append(errorResponse.getErrorCode()).append("\n");
+                    }
+                    if (errorResponse.getMessage() != null) {
+                        sb.append("Message: ").append(errorResponse.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            sb.append("Error parsing response: ").append(e.getMessage());
+        }
+        
+        return sb.toString();
+    }
+    
+    /**
      * Get user-friendly error message based on error code.
      */
     public static String getErrorMessage(Context context, String errorCode) {
