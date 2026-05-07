@@ -45,6 +45,8 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
         self.bypass_paths = {"/health", "/docs", "/redoc", "/openapi.json", "/transactions", "/leaderboard"}
         # Path prefixes that bypass authentication (for JWT-authenticated endpoints)
         self.bypass_prefixes = ["/booths", "/products", "/auth", "/events", "/participants"]
+        # Paths that support event mode (no signature required when event_id + card_uid provided)
+        self.event_mode_paths = {"/recharge", "/pay", "/balance"}
     
     async def dispatch(self, request: Request, call_next):
         """
@@ -73,11 +75,31 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
             else:  # POST, PUT, etc.
                 auth_params = await self._extract_from_body(request)
             
-            # Check if event mode (empty dict means bypass signature verification)
-            if auth_params == {}:
+            # Check if event mode for paths that support it
+            if auth_params == {} and request.url.path in self.event_mode_paths:
                 # Event mode - bypass signature verification
                 logger.info(f"Event mode request - bypassing signature verification: {request.url.path}")
                 return await call_next(request)
+            
+            # Check if event mode (empty dict means bypass signature verification)
+            # Note: event_mode_paths are already handled above, this is for any other paths
+            if auth_params == {}:
+                # Event mode on unsupported path - still require authentication
+                logger.warning(
+                    f"Event mode not supported for path: {request.url.path}"
+                )
+                structured_logger.log_authentication_failure(
+                    endpoint=request.url.path,
+                    reason="Event mode not supported for this endpoint",
+                    error_code="AUTH_ERROR"
+                )
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error_code": "AUTH_ERROR",
+                        "message": "Event mode not supported for this endpoint. Please use JWT authentication."
+                    }
+                )
             
             # Verify request authentication
             if auth_params:
