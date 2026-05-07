@@ -299,7 +299,7 @@ GROUP BY p.id, p.name, p.booth_id, b.name, p.price, p.cost_price, p.stock, p.ena
 -- ============================================================================
 
 SELECT 'Database initialization completed successfully!' AS status;
-SELECT '========================================' AS separator;
+SELECT '========================================' AS divider;
 SELECT 'Table Statistics:' AS info;
 SELECT COUNT(*) AS event_count FROM events;
 SELECT COUNT(*) AS participant_count FROM participants;
@@ -308,9 +308,9 @@ SELECT COUNT(*) AS booth_count FROM booths;
 SELECT COUNT(*) AS product_count FROM products;
 SELECT COUNT(*) AS user_count FROM users;
 SELECT COUNT(*) AS transaction_count FROM transactions;
-SELECT '========================================' AS separator;
+SELECT '========================================' AS divider;
 SELECT 'Default Admin Account:' AS info;
 SELECT id, username, role, status, created_at FROM users WHERE role = 'super_admin';
-SELECT '========================================' AS separator;
+SELECT '========================================' AS divider;
 SELECT 'IMPORTANT: Default admin password is "admin123"' AS warning;
 SELECT 'Please change it immediately after first login!' AS warning;
