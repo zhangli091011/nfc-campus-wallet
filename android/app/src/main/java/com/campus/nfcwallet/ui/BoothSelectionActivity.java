@@ -130,8 +130,17 @@ public class BoothSelectionActivity extends AppCompatActivity {
                     Log.e(TAG, "Caused by: " + t.getCause().getMessage());
                 }
                 
-                Toast.makeText(BoothSelectionActivity.this, 
-                    "网络连接失败，请检查网络设置", Toast.LENGTH_LONG).show();
+                // Check if it's a JSON parsing error
+                if (t.getMessage() != null && t.getMessage().contains("Expected BEGIN_ARRAY")) {
+                    errorText.setText("服务器返回了错误的数据格式\n可能是服务器内部错误\n请联系管理员检查服务器日志");
+                    Log.e(TAG, "JSON parsing error - server returned non-array response");
+                    Log.e(TAG, "This usually means the server returned an error page or error message instead of JSON array");
+                    Toast.makeText(BoothSelectionActivity.this, 
+                        "服务器错误，请检查服务器状态", Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(BoothSelectionActivity.this, 
+                        "网络连接失败，请检查网络设置", Toast.LENGTH_LONG).show();
+                }
             }
         });
     }
