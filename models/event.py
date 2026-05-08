@@ -22,27 +22,26 @@ class Event(Base):
     Attributes:
         id: Auto-incrementing primary key
         name: Event name
-        start_time: Event start time
-        end_time: Event end time
-        status: Event status (draft/active/paused/ended)
-        recharge_enabled: Whether recharge is allowed
-        consume_enabled: Whether consumption is allowed
-        expire_rule: Quota expiration rule (event_end/never/custom)
+        start_date: Event start date
+        end_date: Event end date
+        status: Event status (active/inactive/closed)
+        allow_recharge: Whether recharge is allowed
+        allow_payment: Whether payment is allowed
         created_at: Creation timestamp
         updated_at: Last update timestamp
         accounts: Relationship to Account records
         transactions: Relationship to Transaction records
+        booths: Relationship to Booth records
     """
     __tablename__ = 'events'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=False)
-    status = Column(String(20), nullable=False, default='draft', index=True)
-    recharge_enabled = Column(Boolean, nullable=False, default=True)
-    consume_enabled = Column(Boolean, nullable=False, default=True)
-    expire_rule = Column(String(50), default='event_end')
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=False)
+    status = Column(String(20), nullable=False, default='active', index=True)
+    allow_recharge = Column(Boolean, nullable=False, default=True)
+    allow_payment = Column(Boolean, nullable=False, default=True)
     created_at = Column(
         DateTime,
         nullable=False,
@@ -79,12 +78,8 @@ class Event(Base):
     # Table constraints
     __table_args__ = (
         CheckConstraint(
-            "status IN ('draft', 'active', 'paused', 'ended')",
+            "status IN ('active', 'inactive', 'closed')",
             name='chk_event_status'
-        ),
-        CheckConstraint(
-            "expire_rule IN ('event_end', 'never', 'custom')",
-            name='chk_expire_rule'
         ),
     )
     
@@ -95,41 +90,41 @@ class Event(Base):
         """Check if event is currently active."""
         now = datetime.now(timezone.utc)
         
-        # Ensure start_time and end_time are timezone-aware
-        start_time = self.start_time
-        end_time = self.end_time
+        # Ensure start_date and end_date are timezone-aware
+        start_date = self.start_date
+        end_date = self.end_date
         
         # If times are naive, assume they are in UTC
-        if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        if end_time.tzinfo is None:
-            end_time = end_time.replace(tzinfo=timezone.utc)
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
         
         return (
             self.status == 'active' and
-            start_time <= now <= end_time
+            start_date <= now <= end_date
         )
     
     def can_recharge(self) -> bool:
         """Check if recharge is allowed."""
-        return self.is_active() and self.recharge_enabled
+        return self.is_active() and self.allow_recharge
     
     def can_consume(self) -> bool:
-        """Check if consumption is allowed."""
-        return self.is_active() and self.consume_enabled
+        """Check if consumption/payment is allowed."""
+        return self.is_active() and self.allow_payment
     
     def is_within_time_range(self) -> bool:
         """Check if current time is within event time range."""
         now = datetime.now(timezone.utc)
         
-        # Ensure start_time and end_time are timezone-aware
-        start_time = self.start_time
-        end_time = self.end_time
+        # Ensure start_date and end_date are timezone-aware
+        start_date = self.start_date
+        end_date = self.end_date
         
         # If times are naive, assume they are in UTC
-        if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        if end_time.tzinfo is None:
-            end_time = end_time.replace(tzinfo=timezone.utc)
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
         
-        return start_time <= now <= end_time
+        return start_date <= now <= end_date
