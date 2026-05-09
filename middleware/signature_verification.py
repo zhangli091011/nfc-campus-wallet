@@ -27,6 +27,25 @@ logger = logging.getLogger(__name__)
 structured_logger = get_structured_logger(__name__)
 
 
+# CORS headers to include in all error responses
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "*",
+    "Access-Control-Allow-Headers": "*",
+    "Access-Control-Expose-Headers": "*",
+}
+
+
+def _cors_json_response(status_code: int, content: dict) -> JSONResponse:
+    """Create a JSONResponse with CORS headers included."""
+    return JSONResponse(
+        status_code=status_code,
+        content=content,
+        headers=CORS_HEADERS
+    )
+
+
 class SignatureVerificationMiddleware(BaseHTTPMiddleware):
     """
     Middleware to verify request signatures and timestamps.
@@ -44,7 +63,12 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
         # Endpoints that bypass authentication
         self.bypass_paths = {"/health", "/docs", "/redoc", "/openapi.json", "/transactions", "/leaderboard"}
         # Path prefixes that bypass authentication (for JWT-authenticated endpoints)
-        self.bypass_prefixes = ["/booths", "/products", "/auth", "/events", "/participants"]
+        self.bypass_prefixes = [
+            "/booths", "/products", "/auth", "/events", "/participants",
+            "/api/stock", "/users", "/reports", "/leaderboard",
+            "/refund", "/correction", "/stocks", "/exports",
+            "/cash-reconciliation", "/api/trade", "/api/bank",
+        ]
         # Paths that support event mode (no signature required when event_id + card_uid provided)
         self.event_mode_paths = {"/recharge", "/pay", "/balance"}
     
@@ -59,6 +83,10 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
         Returns:
             Response from next handler or 401 error response
         """
+        # Bypass authentication for OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
         # Bypass authentication for health check and docs
         if request.url.path in self.bypass_paths:
             return await call_next(request)
@@ -93,7 +121,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
                     reason="Event mode not supported for this endpoint",
                     error_code="AUTH_ERROR"
                 )
-                return JSONResponse(
+                return _cors_json_response(
                     status_code=401,
                     content={
                         "error_code": "AUTH_ERROR",
@@ -122,7 +150,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
                     reason="Missing authentication parameters",
                     error_code="AUTH_ERROR"
                 )
-                return JSONResponse(
+                return _cors_json_response(
                     status_code=401,
                     content={
                         "error_code": "AUTH_ERROR",
@@ -146,7 +174,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
                 timestamp=auth_params.get("timestamp") if auth_params else None,
                 error_code="TIMESTAMP_EXPIRED"
             )
-            return JSONResponse(
+            return _cors_json_response(
                 status_code=401,
                 content={
                     "error_code": "TIMESTAMP_EXPIRED",
@@ -166,7 +194,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
                 timestamp=auth_params.get("timestamp") if auth_params else None,
                 error_code="TIMESTAMP_INVALID"
             )
-            return JSONResponse(
+            return _cors_json_response(
                 status_code=401,
                 content={
                     "error_code": "TIMESTAMP_INVALID",
@@ -186,7 +214,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
                 timestamp=auth_params.get("timestamp") if auth_params else None,
                 error_code="SIGNATURE_INVALID"
             )
-            return JSONResponse(
+            return _cors_json_response(
                 status_code=401,
                 content={
                     "error_code": "SIGNATURE_INVALID",
@@ -206,7 +234,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
                 uid=auth_params.get("uid") if auth_params else None,
                 error_code="AUTH_ERROR"
             )
-            return JSONResponse(
+            return _cors_json_response(
                 status_code=401,
                 content={
                     "error_code": "AUTH_ERROR",
