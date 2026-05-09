@@ -105,8 +105,8 @@ async def close_event(
         event = event_service.update_event(
             event_id,
             status='ended',
-            recharge_enabled=False,
-            consume_enabled=False
+            allow_recharge=False,
+            allow_payment=False
         )
         
         expired_accounts = 0
