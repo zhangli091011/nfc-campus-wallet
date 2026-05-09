@@ -77,10 +77,23 @@ public class BoothSelectionActivity extends AppCompatActivity {
             return;
         }
         
+        // Check user role and booth assignment
+        if (sessionManager.getUserInfo() != null) {
+            String role = sessionManager.getUserInfo().getRole();
+            Integer boothId = sessionManager.getUserInfo().getBoothId();
+            
+            // If user is booth_cashier and has assigned booth, go directly to it
+            if ("booth_cashier".equals(role) && boothId != null && boothId > 0) {
+                Log.i(TAG, "Booth cashier with assigned booth, navigating directly to booth " + boothId);
+                navigateToCashier(boothId);
+                return;
+            }
+        }
+        
         progressBar.setVisibility(View.VISIBLE);
         errorText.setVisibility(View.GONE);
         
-        // Load all active booths
+        // Load all active booths (for admin users)
         Call<List<BoothInfo>> call = apiService.getBooths(authHeader, "active");
         call.enqueue(new Callback<List<BoothInfo>>() {
             @Override

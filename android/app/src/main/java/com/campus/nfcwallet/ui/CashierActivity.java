@@ -1,5 +1,6 @@
 package com.campus.nfcwallet.ui;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -65,6 +66,7 @@ public class CashierActivity extends AppCompatActivity {
     private TextView eventNameText;
     private TextView boothNameText;
     private TextView cashierNameText;
+    private Button logoutButton;
     
     // UI Components - Card Info
     private View cardInfoSection;
@@ -153,6 +155,7 @@ public class CashierActivity extends AppCompatActivity {
         eventNameText = findViewById(R.id.eventNameText);
         boothNameText = findViewById(R.id.boothNameText);
         cashierNameText = findViewById(R.id.cashierNameText);
+        logoutButton = findViewById(R.id.logoutButton);
         
         // Card Info
         cardInfoSection = findViewById(R.id.cardInfoSection);
@@ -196,6 +199,7 @@ public class CashierActivity extends AppCompatActivity {
         payButton.setOnClickListener(v -> processPayment());
         rechargeButton.setOnClickListener(v -> processRecharge());
         clearButton.setOnClickListener(v -> clearCard());
+        logoutButton.setOnClickListener(v -> performLogout());
         
         // Initially hide sections
         cardInfoSection.setVisibility(View.GONE);
@@ -295,7 +299,24 @@ public class CashierActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call<BoothInfo> call, Throwable t) {
                 Log.e(TAG, "Failed to load booth info", t);
-                showError("摊位信息加载失败: 网络错误");
+                
+                String errorMessage = "摊位信息加载失败";
+                if (t != null) {
+                    Log.e(TAG, "Error type: " + t.getClass().getName());
+                    Log.e(TAG, "Error message: " + t.getMessage());
+                    
+                    if (t instanceof java.net.ConnectException) {
+                        errorMessage = "无法连接到服务器\n请检查网络连接";
+                    } else if (t instanceof java.net.SocketTimeoutException) {
+                        errorMessage = "连接超时\n请检查网络连接";
+                    } else if (t instanceof java.net.UnknownHostException) {
+                        errorMessage = "无法解析服务器地址\n请检查服务器配置";
+                    } else if (t.getMessage() != null) {
+                        errorMessage = "摊位信息加载失败: " + t.getMessage();
+                    }
+                }
+                
+                showError(errorMessage);
             }
         });
     }
@@ -325,7 +346,20 @@ public class CashierActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call<EventInfo> call, Throwable t) {
                 Log.e(TAG, "Failed to load event info", t);
-                showError("活动信息加载失败: 网络错误");
+                
+                String errorMessage = "活动信息加载失败";
+                if (t != null) {
+                    Log.e(TAG, "Error type: " + t.getClass().getName());
+                    Log.e(TAG, "Error message: " + t.getMessage());
+                    
+                    if (t instanceof java.net.ConnectException) {
+                        errorMessage = "无法连接到服务器";
+                    } else if (t.getMessage() != null) {
+                        errorMessage = "活动信息加载失败: " + t.getMessage();
+                    }
+                }
+                
+                showError(errorMessage);
                 eventNameText.setText("活动信息加载失败");
             }
         });
@@ -383,28 +417,40 @@ public class CashierActivity extends AppCompatActivity {
      * Query participant by card UID.
      */
     private void queryParticipant(String cardUid) {
+        Log.d(TAG, "Querying participant for card: " + cardUid);
+        
         Call<ParticipantInfo> call = apiService.getParticipantByCard(cardUid);
         call.enqueue(new Callback<ParticipantInfo>() {
             @Override
             public void onResponse(Call<ParticipantInfo> call, Response<ParticipantInfo> response) {
+                Log.d(TAG, "Participant query response code: " + response.code());
+                
                 if (response.isSuccessful() && response.body() != null) {
                     currentParticipant = response.body();
                     participantNameText.setText(currentParticipant.getName());
+                    
+                    Log.i(TAG, "Participant found: " + currentParticipant.getName());
                     
                     // Auto query balance
                     queryBalance();
                 } else {
                     cardLoadingProgress.setVisibility(View.GONE);
                     
+                    Log.w(TAG, "Participant not found, response code: " + response.code());
+                    
                     // Check if participant not found (404 or specific error code)
                     if (response.code() == 400 || response.code() == 404) {
                         // Show dialog to create new participant
                         participantNameText.setText("未绑定");
+                        
+                        Log.i(TAG, "Showing create participant dialog for card: " + cardUid);
                         showCreateParticipantDialog(cardUid);
                     } else {
                         String error = ErrorHandler.getErrorMessage(response);
                         participantNameText.setText("查询失败");
                         showError(error);
+                        
+                        Log.e(TAG, "Participant query failed with error: " + error);
                     }
                 }
             }
@@ -413,8 +459,53 @@ public class CashierActivity extends AppCompatActivity {
             public void onFailure(Call<ParticipantInfo> call, Throwable t) {
                 cardLoadingProgress.setVisibility(View.GONE);
                 Log.e(TAG, "Failed to query participant", t);
+                
                 participantNameText.setText("查询失败");
-                showError("网络错误");
+                
+                // 显示详细的错误信息
+                String errorMessage = "网络错误";
+                if (t != null) {
+                    if (t.getMessage() != null) {
+                        errorMessage = "网络错误: " + t.getMessage();
+                    }
+                    
+                    // 记录详细的错误信息到日志
+                    Log.e(TAG, "Error type: " + t.getClass().getName());
+                    Log.e(TAG, "Error message: " + t.getMessage());
+                    
+                    if (t.getCause() != null) {
+                        Log.e(TAG, "Caused by: " + t.getCause().getClass().getName());
+                        Log.e(TAG, "Cause message: " + t.getCause().getMessage());
+                    }
+                    
+                    // 显示更友好的错误提示
+                    if (t instanceof java.net.ConnectException) {
+                        errorMessage = "无法连接到服务器\n请检查网络连接和服务器地址";
+                    } else if (t instanceof java.net.SocketTimeoutException) {
+                        errorMessage = "连接超时\n请检查网络连接";
+                    } else if (t instanceof java.net.UnknownHostException) {
+                        errorMessage = "无法解析服务器地址\n请检查服务器配置";
+                    } else if (t.getMessage() != null && t.getMessage().contains("JSON")) {
+                        errorMessage = "服务器返回数据格式错误\n请联系管理员";
+                    }
+                }
+                
+                showError(errorMessage);
+                
+                // 显示详细错误对话框
+                new AlertDialog.Builder(CashierActivity.this)
+                    .setTitle("查询参与者失败")
+                    .setMessage(errorMessage + "\n\n详细信息:\n" + 
+                        (t != null ? t.toString() : "未知错误"))
+                    .setPositiveButton("重试", (dialog, which) -> {
+                        if (currentCardUid != null) {
+                            queryParticipant(currentCardUid);
+                        }
+                    })
+                    .setNegativeButton("取消", (dialog, which) -> {
+                        clearCard();
+                    })
+                    .show();
             }
         });
     }
@@ -473,7 +564,22 @@ public class CashierActivity extends AppCompatActivity {
             public void onFailure(Call<BalanceResponse> call, Throwable t) {
                 cardLoadingProgress.setVisibility(View.GONE);
                 Log.e(TAG, "Failed to query balance", t);
-                showError("网络错误");
+                
+                String errorMessage = "余额查询失败";
+                if (t != null) {
+                    Log.e(TAG, "Error type: " + t.getClass().getName());
+                    Log.e(TAG, "Error message: " + t.getMessage());
+                    
+                    if (t instanceof java.net.ConnectException) {
+                        errorMessage = "无法连接到服务器\n请检查网络连接";
+                    } else if (t instanceof java.net.SocketTimeoutException) {
+                        errorMessage = "连接超时\n请检查网络连接";
+                    } else if (t.getMessage() != null) {
+                        errorMessage = "余额查询失败: " + t.getMessage();
+                    }
+                }
+                
+                showError(errorMessage);
             }
         });
     }
@@ -674,7 +780,22 @@ public class CashierActivity extends AppCompatActivity {
                 actionProgress.setVisibility(View.GONE);
                 payButton.setEnabled(true);
                 Log.e(TAG, "Payment failed", t);
-                showError("网络错误");
+                
+                String errorMessage = "支付失败";
+                if (t != null) {
+                    Log.e(TAG, "Error type: " + t.getClass().getName());
+                    Log.e(TAG, "Error message: " + t.getMessage());
+                    
+                    if (t instanceof java.net.ConnectException) {
+                        errorMessage = "无法连接到服务器\n请检查网络连接";
+                    } else if (t instanceof java.net.SocketTimeoutException) {
+                        errorMessage = "连接超时\n请重试";
+                    } else if (t.getMessage() != null) {
+                        errorMessage = "支付失败: " + t.getMessage();
+                    }
+                }
+                
+                showError(errorMessage);
             }
         });
     }
@@ -767,7 +888,22 @@ public class CashierActivity extends AppCompatActivity {
                 actionProgress.setVisibility(View.GONE);
                 rechargeButton.setEnabled(true);
                 Log.e(TAG, "Recharge failed", t);
-                showError("网络错误");
+                
+                String errorMessage = "充值失败";
+                if (t != null) {
+                    Log.e(TAG, "Error type: " + t.getClass().getName());
+                    Log.e(TAG, "Error message: " + t.getMessage());
+                    
+                    if (t instanceof java.net.ConnectException) {
+                        errorMessage = "无法连接到服务器\n请检查网络连接";
+                    } else if (t instanceof java.net.SocketTimeoutException) {
+                        errorMessage = "连接超时\n请重试";
+                    } else if (t.getMessage() != null) {
+                        errorMessage = "充值失败: " + t.getMessage();
+                    }
+                }
+                
+                showError(errorMessage);
             }
         });
     }
@@ -807,6 +943,8 @@ public class CashierActivity extends AppCompatActivity {
      * Show dialog to create new participant.
      */
     private void showCreateParticipantDialog(String cardUid) {
+        Log.d(TAG, "Creating participant dialog for card: " + cardUid);
+        
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("新卡片");
         builder.setMessage("卡片 " + cardUid + " 未绑定，是否创建新参与者？");
@@ -847,6 +985,7 @@ public class CashierActivity extends AppCompatActivity {
         });
         
         builder.setNegativeButton("取消", (dialog, which) -> {
+            Log.d(TAG, "Create participant dialog cancelled");
             dialog.dismiss();
             // Clear card info
             currentCardUid = null;
@@ -855,7 +994,11 @@ public class CashierActivity extends AppCompatActivity {
         });
         
         builder.setCancelable(false);
-        builder.show();
+        
+        AlertDialog dialog = builder.create();
+        dialog.show();
+        
+        Log.i(TAG, "Create participant dialog shown");
     }
     
     /**
@@ -940,5 +1083,26 @@ public class CashierActivity extends AppCompatActivity {
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             statusText.setVisibility(View.GONE);
         }, 3000);
+    }
+    
+    /**
+     * Perform logout.
+     */
+    private void performLogout() {
+        new AlertDialog.Builder(this)
+            .setTitle("退出登录")
+            .setMessage("确定要退出登录吗？")
+            .setPositiveButton("确定", (dialog, which) -> {
+                // Clear session
+                sessionManager.clearSession();
+                
+                // Navigate to login activity
+                Intent intent = new Intent(this, LoginActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(intent);
+                finish();
+            })
+            .setNegativeButton("取消", null)
+            .show();
     }
 }

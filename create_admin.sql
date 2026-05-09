@@ -14,7 +14,7 @@
 INSERT INTO users (username, password_hash, role, status, created_at, updated_at)
 VALUES (
     'admin',
-    '$2b$12$1k1YoueJ786gm.O139qqmuhSI.QsMPl.evIZycDYJYnV2afo7MGvK',
+    '$2b$12$14BtTTqR5hA8SiGciAp89uvy.09EtoZnz7zt8cGTZDyezaYfMSPrq',
     'super_admin',
     'active',
     NOW(),
