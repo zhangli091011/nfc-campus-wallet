@@ -30,30 +30,28 @@ async def create_event(
     
     Request Body:
         - name: 活动名称（必填，1-255字符）
-        - start_time: 开始时间（必填，ISO 8601格式）
-        - end_time: 结束时间（必填，ISO 8601格式，必须晚于开始时间）
-        - status: 活动状态（可选，默认为 'draft'）
-        - recharge_enabled: 是否允许充值（可选，默认为 true）
-        - consume_enabled: 是否允许消费（可选，默认为 true）
-        - expire_rule: 过期规则（可选，默认为 'event_end'）
+        - start_date: 开始日期（必填，ISO 8601格式）
+        - end_date: 结束日期（必填，ISO 8601格式，必须晚于开始日期）
+        - status: 活动状态（可选，默认为 'active'）
+        - allow_recharge: 是否允许充值（可选，默认为 true）
+        - allow_payment: 是否允许消费（可选，默认为 true）
     
     Returns:
         EventResponse: 创建的活动信息
         
     Error Responses:
-        400: 验证错误（如结束时间早于开始时间）
+        400: 验证错误（如结束日期早于开始日期）
         500: 内部服务器错误
     
     Example:
         POST /events
         {
             "name": "2024春季校园美食节",
-            "start_time": "2024-03-01T08:00:00Z",
-            "end_time": "2024-03-03T20:00:00Z",
-            "status": "draft",
-            "recharge_enabled": true,
-            "consume_enabled": true,
-            "expire_rule": "event_end"
+            "start_date": "2024-03-01T00:00:00Z",
+            "end_date": "2024-03-03T23:59:59Z",
+            "status": "active",
+            "allow_recharge": true,
+            "allow_payment": true
         }
     """
     try:
@@ -61,12 +59,11 @@ async def create_event(
         
         event = event_service.create_event(
             name=event_data.name,
-            start_time=event_data.start_time,
-            end_time=event_data.end_time,
-            status=event_data.status.value,
-            recharge_enabled=event_data.recharge_enabled,
-            consume_enabled=event_data.consume_enabled,
-            expire_rule=event_data.expire_rule.value
+            start_date=event_data.start_date,
+            end_date=event_data.end_date,
+            status=event_data.status,
+            allow_recharge=event_data.allow_recharge,
+            allow_payment=event_data.allow_payment
         )
         
         logger.info(
@@ -224,12 +221,11 @@ async def update_event(
     
     Request Body:
         - name: 活动名称（可选）
-        - start_time: 开始时间（可选）
-        - end_time: 结束时间（可选）
+        - start_date: 开始日期（可选）
+        - end_date: 结束日期（可选）
         - status: 活动状态（可选）
-        - recharge_enabled: 是否允许充值（可选）
-        - consume_enabled: 是否允许消费（可选）
-        - expire_rule: 过期规则（可选）
+        - allow_recharge: 是否允许充值（可选）
+        - allow_payment: 是否允许消费（可选）
     
     Returns:
         EventResponse: 更新后的活动信息
@@ -242,7 +238,7 @@ async def update_event(
         PATCH /events/1
         {
             "status": "active",
-            "recharge_enabled": true
+            "allow_recharge": true
         }
     """
     try:
@@ -252,18 +248,16 @@ async def update_event(
         update_data = {}
         if event_data.name is not None:
             update_data['name'] = event_data.name
-        if event_data.start_time is not None:
-            update_data['start_time'] = event_data.start_time
-        if event_data.end_time is not None:
-            update_data['end_time'] = event_data.end_time
+        if event_data.start_date is not None:
+            update_data['start_date'] = event_data.start_date
+        if event_data.end_date is not None:
+            update_data['end_date'] = event_data.end_date
         if event_data.status is not None:
-            update_data['status'] = event_data.status.value
-        if event_data.recharge_enabled is not None:
-            update_data['recharge_enabled'] = event_data.recharge_enabled
-        if event_data.consume_enabled is not None:
-            update_data['consume_enabled'] = event_data.consume_enabled
-        if event_data.expire_rule is not None:
-            update_data['expire_rule'] = event_data.expire_rule.value
+            update_data['status'] = event_data.status
+        if event_data.allow_recharge is not None:
+            update_data['allow_recharge'] = event_data.allow_recharge
+        if event_data.allow_payment is not None:
+            update_data['allow_payment'] = event_data.allow_payment
         
         event = event_service.update_event(event_id, **update_data)
         

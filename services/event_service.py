@@ -57,44 +57,34 @@ class EventService:
     def create_event(
         self,
         name: str,
-        start_time: datetime,
-        end_time: datetime,
-        status: str = 'draft',
-        recharge_enabled: bool = True,
-        consume_enabled: bool = True,
-        expire_rule: str = 'event_end'
+        start_date: datetime,
+        end_date: datetime,
+        status: str = 'active',
+        allow_recharge: bool = True,
+        allow_payment: bool = True
     ) -> Event:
         """
         创建新活动。
         
-        如果创建的活动状态为 'active'，会自动将其他所有活动状态设置为 'paused'，
-        确保同一时间只有一个活动处于激活状态。
-        
         Args:
             name: 活动名称
-            start_time: 开始时间
-            end_time: 结束时间
+            start_date: 开始日期
+            end_date: 结束日期
             status: 活动状态
-            recharge_enabled: 是否允许充值
-            consume_enabled: 是否允许消费
-            expire_rule: 过期规则
+            allow_recharge: 是否允许充值
+            allow_payment: 是否允许消费
             
         Returns:
             Event: 新创建的活动对象
         """
         try:
-            # 如果新活动状态为 active，暂停所有其他活动
-            if status == 'active':
-                self._pause_all_active_events()
-            
             event = Event(
                 name=name,
-                start_time=start_time,
-                end_time=end_time,
+                start_date=start_date,
+                end_date=end_date,
                 status=status,
-                recharge_enabled=recharge_enabled,
-                consume_enabled=consume_enabled,
-                expire_rule=expire_rule
+                allow_recharge=allow_recharge,
+                allow_payment=allow_payment
             )
             
             self.db.add(event)
@@ -171,9 +161,6 @@ class EventService:
         """
         更新活动信息。
         
-        如果将活动状态更新为 'active'，会自动将其他所有活动状态设置为 'paused'，
-        确保同一时间只有一个活动处于激活状态。
-        
         Args:
             event_id: 活动ID
             **kwargs: 要更新的字段
@@ -185,10 +172,6 @@ class EventService:
             EventNotFoundError: 活动不存在
         """
         event = self.get_event(event_id)
-        
-        # 如果要将活动状态更新为 active，暂停所有其他活动
-        if 'status' in kwargs and kwargs['status'] == 'active':
-            self._pause_all_active_events(exclude_event_id=event_id)
         
         for key, value in kwargs.items():
             if value is not None and hasattr(event, key):
@@ -227,7 +210,7 @@ class EventService:
                 raise EventInactiveError(event_id, f"status is '{event.status}'")
             elif not event.is_within_time_range():
                 raise EventInactiveError(event_id, "not within time range")
-            elif not event.recharge_enabled:
+            elif not event.allow_recharge:
                 raise EventInactiveError(event_id, "recharge is disabled")
         
         return event
@@ -253,7 +236,7 @@ class EventService:
                 raise EventInactiveError(event_id, f"status is '{event.status}'")
             elif not event.is_within_time_range():
                 raise EventInactiveError(event_id, "not within time range")
-            elif not event.consume_enabled:
+            elif not event.allow_payment:
                 raise EventInactiveError(event_id, "consumption is disabled")
         
         return event
@@ -274,24 +257,4 @@ class EventService:
         
         return event
     
-    def _pause_all_active_events(self, exclude_event_id: Optional[int] = None):
-        """
-        将所有激活的活动状态设置为 'paused'。
-        
-        Args:
-            exclude_event_id: 要排除的活动ID（可选）
-        """
-        query = self.db.query(Event).filter(Event.status == 'active')
-        
-        if exclude_event_id is not None:
-            query = query.filter(Event.id != exclude_event_id)
-        
-        active_events = query.all()
-        
-        if active_events:
-            for event in active_events:
-                event.status = 'paused'
-                logger.info(f"Event paused: id={event.id}, name='{event.name}'")
-            
-            self.db.commit()
-            logger.info(f"Paused {len(active_events)} active event(s)")
+
