@@ -37,8 +37,8 @@ class Event(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=False)
+    start_date = Column(DateTime, nullable=False)  # 注意：数据库中是 DATE 类型
+    end_date = Column(DateTime, nullable=False)    # 注意：数据库中是 DATE 类型
     status = Column(String(20), nullable=False, default='active', index=True)
     allow_recharge = Column(Boolean, nullable=False, default=True)
     allow_payment = Column(Boolean, nullable=False, default=True)
@@ -88,17 +88,17 @@ class Event(Base):
     
     def is_active(self) -> bool:
         """Check if event is currently active."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).date()
         
-        # Ensure start_date and end_date are timezone-aware
+        # Convert to date objects for comparison
         start_date = self.start_date
         end_date = self.end_date
         
-        # If times are naive, assume they are in UTC
-        if start_date.tzinfo is None:
-            start_date = start_date.replace(tzinfo=timezone.utc)
-        if end_date.tzinfo is None:
-            end_date = end_date.replace(tzinfo=timezone.utc)
+        # Handle both date and datetime objects
+        if isinstance(start_date, datetime):
+            start_date = start_date.date()
+        if isinstance(end_date, datetime):
+            end_date = end_date.date()
         
         return (
             self.status == 'active' and
@@ -115,16 +115,16 @@ class Event(Base):
     
     def is_within_time_range(self) -> bool:
         """Check if current time is within event time range."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).date()
         
-        # Ensure start_date and end_date are timezone-aware
+        # Convert to date objects for comparison
         start_date = self.start_date
         end_date = self.end_date
         
-        # If times are naive, assume they are in UTC
-        if start_date.tzinfo is None:
-            start_date = start_date.replace(tzinfo=timezone.utc)
-        if end_date.tzinfo is None:
-            end_date = end_date.replace(tzinfo=timezone.utc)
+        # Handle both date and datetime objects
+        if isinstance(start_date, datetime):
+            start_date = start_date.date()
+        if isinstance(end_date, datetime):
+            end_date = end_date.date()
         
         return start_date <= now <= end_date
