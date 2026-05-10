@@ -9,18 +9,38 @@ import {
   Select,
   message,
   Tag,
+  Descriptions,
+  Typography,
+  Divider,
+  List,
 } from 'antd'
-import { PlusOutlined, EditOutlined } from '@ant-design/icons'
+import {
+  PlusOutlined,
+  EditOutlined,
+  KeyOutlined,
+  UserAddOutlined,
+  CopyOutlined,
+} from '@ant-design/icons'
 import {
   getBooths,
   createBooth,
   updateBooth,
+  getBoothCredentials,
+  generateBoothCredentials,
+  getBoothCashiers,
+  assignCashierToBooth,
   type Booth,
   type CreateBoothRequest,
   type UpdateBoothRequest,
+  type BoothCredential,
+  type BoothCashier,
 } from '@/services/booth'
+import { getUsers } from '@/services/user'
 import { getEvents, type Event } from '@/services/event'
+import { User } from '@/utils/auth'
 import dayjs from 'dayjs'
+
+const { Text } = Typography
 
 const BoothManagement = () => {
   const [booths, setBooths] = useState<Booth[]>([])
@@ -30,6 +50,19 @@ const BoothManagement = () => {
   const [editingBooth, setEditingBooth] = useState<Booth | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<number>()
   const [form] = Form.useForm()
+
+  // 凭据相关状态
+  const [credentialModalVisible, setCredentialModalVisible] = useState(false)
+  const [currentCredential, setCurrentCredential] = useState<BoothCredential | null>(null)
+  const [credentialLoading, setCredentialLoading] = useState(false)
+  const [selectedBoothForCredential, setSelectedBoothForCredential] = useState<Booth | null>(null)
+
+  // 收银员管理相关状态
+  const [cashierModalVisible, setCashierModalVisible] = useState(false)
+  const [cashiers, setCashiers] = useState<BoothCashier[]>([])
+  const [allUsers, setAllUsers] = useState<User[]>([])
+  const [selectedBoothForCashier, setSelectedBoothForCashier] = useState<Booth | null>(null)
+  const [assignUserId, setAssignUserId] = useState<number>()
 
   useEffect(() => {
     loadEvents()
@@ -43,14 +76,13 @@ const BoothManagement = () => {
 
   const loadEvents = async () => {
     try {
-      const data = await getEvents()  // 移除 status 筛选
+      const data = await getEvents()
       const eventList = data?.events || []
       setEvents(eventList)
       if (eventList.length > 0) {
         setSelectedEventId(eventList[0].id)
       }
     } catch (error) {
-      // 错误已处理
       setEvents([])
     }
   }
@@ -62,7 +94,6 @@ const BoothManagement = () => {
       const data = await getBooths({ event_id: selectedEventId, limit: 100 })
       setBooths(Array.isArray(data) ? data : [])
     } catch (error) {
-      // 错误已处理
       setBooths([])
     } finally {
       setLoading(false)
@@ -116,6 +147,76 @@ const BoothManagement = () => {
     }
   }
 
+  // ========== 凭据管理 ==========
+  const handleViewCredentials = async (booth: Booth) => {
+    setSelectedBoothForCredential(booth)
+    setCredentialLoading(true)
+    setCredentialModalVisible(true)
+    try {
+      const data = await getBoothCredentials(booth.id)
+      setCurrentCredential(data)
+    } catch (error) {
+      setCurrentCredential(null)
+    } finally {
+      setCredentialLoading(false)
+    }
+  }
+
+  const handleGenerateCredentials = async () => {
+    if (!selectedBoothForCredential) return
+    setCredentialLoading(true)
+    try {
+      const data = await generateBoothCredentials(selectedBoothForCredential.id)
+      setCurrentCredential(data)
+      message.success('凭据生成成功，请妥善保存密码！')
+    } catch (error) {
+      message.error('生成凭据失败')
+    } finally {
+      setCredentialLoading(false)
+    }
+  }
+
+  const handleCopyCredentials = () => {
+    if (!currentCredential) return
+    const text = `用户名: ${currentCredential.username}\n密码: ${currentCredential.password || '(已隐藏)'}`
+    navigator.clipboard.writeText(text).then(() => {
+      message.success('已复制到剪贴板')
+    }).catch(() => {
+      message.error('复制失败')
+    })
+  }
+
+  // ========== 收银员管理 ==========
+  const handleManageCashiers = async (booth: Booth) => {
+    setSelectedBoothForCashier(booth)
+    setCashierModalVisible(true)
+    try {
+      const [cashierData, userData] = await Promise.all([
+        getBoothCashiers(booth.id),
+        getUsers({ limit: 100 }),
+      ])
+      setCashiers(Array.isArray(cashierData) ? cashierData : [])
+      setAllUsers(Array.isArray(userData) ? userData : [])
+    } catch (error) {
+      setCashiers([])
+      setAllUsers([])
+    }
+  }
+
+  const handleAssignCashier = async () => {
+    if (!selectedBoothForCashier || !assignUserId) return
+    try {
+      await assignCashierToBooth(selectedBoothForCashier.id, assignUserId)
+      message.success('收银员分配成功')
+      setAssignUserId(undefined)
+      // 刷新收银员列表
+      const cashierData = await getBoothCashiers(selectedBoothForCashier.id)
+      setCashiers(Array.isArray(cashierData) ? cashierData : [])
+    } catch (error) {
+      message.error('分配失败')
+    }
+  }
+
   const columns = [
     {
       title: 'ID',
@@ -160,7 +261,7 @@ const BoothManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 100,
+      width: 280,
       render: (_: any, record: Booth) => (
         <Space>
           <Button
@@ -170,6 +271,22 @@ const BoothManagement = () => {
             onClick={() => handleEdit(record)}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<KeyOutlined />}
+            onClick={() => handleViewCredentials(record)}
+          >
+            凭据
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<UserAddOutlined />}
+            onClick={() => handleManageCashiers(record)}
+          >
+            收银员
           </Button>
         </Space>
       ),
@@ -199,6 +316,7 @@ const BoothManagement = () => {
         pagination={{ pageSize: 10 }}
       />
 
+      {/* 新建/编辑摊位 Modal */}
       <Modal
         title={editingBooth ? '编辑摊位' : '新建摊位'}
         open={modalVisible}
@@ -251,6 +369,149 @@ const BoothManagement = () => {
             </Form.Item>
           )}
         </Form>
+      </Modal>
+
+      {/* 凭据管理 Modal */}
+      <Modal
+        title={`摊位凭据 - ${selectedBoothForCredential?.name || ''}`}
+        open={credentialModalVisible}
+        onCancel={() => {
+          setCredentialModalVisible(false)
+          setCurrentCredential(null)
+        }}
+        footer={[
+          <Button key="close" onClick={() => {
+            setCredentialModalVisible(false)
+            setCurrentCredential(null)
+          }}>
+            关闭
+          </Button>,
+          currentCredential?.password && (
+            <Button key="copy" icon={<CopyOutlined />} onClick={handleCopyCredentials}>
+              复制凭据
+            </Button>
+          ),
+          <Button
+            key="generate"
+            type="primary"
+            icon={<KeyOutlined />}
+            loading={credentialLoading}
+            onClick={handleGenerateCredentials}
+          >
+            {currentCredential?.user_id ? '重置密码' : '生成凭据'}
+          </Button>,
+        ]}
+        width={500}
+      >
+        {credentialLoading ? (
+          <div style={{ textAlign: 'center', padding: 20 }}>加载中...</div>
+        ) : currentCredential ? (
+          <Descriptions column={1} bordered size="small">
+            <Descriptions.Item label="摊位">{currentCredential.booth_name}</Descriptions.Item>
+            <Descriptions.Item label="登录账号">
+              {currentCredential.username ? (
+                <Text strong copyable>{currentCredential.username}</Text>
+              ) : (
+                <Text type="secondary">未生成</Text>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="密码">
+              {currentCredential.password ? (
+                <Text strong copyable type="success">{currentCredential.password}</Text>
+              ) : currentCredential.username ? (
+                <Text type="secondary">已隐藏（点击"重置密码"可重新生成）</Text>
+              ) : (
+                <Text type="secondary">未生成</Text>
+              )}
+            </Descriptions.Item>
+            {currentCredential.user_status && (
+              <Descriptions.Item label="账号状态">
+                <Tag color={currentCredential.user_status === 'active' ? 'success' : 'default'}>
+                  {currentCredential.user_status === 'active' ? '正常' : currentCredential.user_status}
+                </Tag>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 20 }}>
+            <Text type="secondary">该摊位尚未生成登录凭据</Text>
+          </div>
+        )}
+        {currentCredential?.password && (
+          <div style={{ marginTop: 12, padding: 8, background: '#fff7e6', borderRadius: 4 }}>
+            <Text type="warning">⚠️ 密码仅显示一次，请妥善保存！关闭后将无法再次查看。</Text>
+          </div>
+        )}
+      </Modal>
+
+      {/* 收银员管理 Modal */}
+      <Modal
+        title={`收银员管理 - ${selectedBoothForCashier?.name || ''}`}
+        open={cashierModalVisible}
+        onCancel={() => {
+          setCashierModalVisible(false)
+          setCashiers([])
+          setAssignUserId(undefined)
+        }}
+        footer={[
+          <Button key="close" onClick={() => {
+            setCashierModalVisible(false)
+            setCashiers([])
+            setAssignUserId(undefined)
+          }}>
+            关闭
+          </Button>,
+        ]}
+        width={600}
+      >
+        <Divider orientation="left">当前收银员</Divider>
+        {cashiers.length > 0 ? (
+          <List
+            size="small"
+            dataSource={cashiers}
+            renderItem={(item) => (
+              <List.Item>
+                <Space>
+                  <Text strong>{item.username}</Text>
+                  <Tag color={item.status === 'active' ? 'success' : 'default'}>
+                    {item.status === 'active' ? '正常' : item.status}
+                  </Tag>
+                  <Text type="secondary">
+                    创建于 {dayjs(item.created_at).format('YYYY-MM-DD')}
+                  </Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Text type="secondary">暂无收银员</Text>
+        )}
+
+        <Divider orientation="left">指定收银员</Divider>
+        <Space>
+          <Select
+            style={{ width: 300 }}
+            placeholder="选择用户"
+            value={assignUserId}
+            onChange={setAssignUserId}
+            showSearch
+            optionFilterProp="label"
+            options={allUsers
+              .filter((u) => u.role !== 'super_admin')
+              .map((u) => ({
+                label: `${u.username} (${u.role})`,
+                value: u.id,
+              }))}
+          />
+          <Button
+            type="primary"
+            icon={<UserAddOutlined />}
+            disabled={!assignUserId}
+            onClick={handleAssignCashier}
+          >
+            分配
+          </Button>
+        </Space>
       </Modal>
     </div>
   )

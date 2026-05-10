@@ -250,9 +250,9 @@ class ExportService:
         for row_idx, txn in enumerate(transactions, start=4):
             ws.cell(row=row_idx, column=1, value=txn.id)
             ws.cell(row=row_idx, column=2, value=txn.type)
-            ws.cell(row=row_idx, column=3, value=txn.amount / 100.0)
-            ws.cell(row=row_idx, column=4, value=txn.balance_before / 100.0)
-            ws.cell(row=row_idx, column=5, value=txn.balance_after / 100.0)
+            ws.cell(row=row_idx, column=3, value=float(txn.amount))
+            ws.cell(row=row_idx, column=4, value=float(txn.balance_before))
+            ws.cell(row=row_idx, column=5, value=float(txn.balance_after))
             ws.cell(row=row_idx, column=6, value=txn.card_uid)
             ws.cell(row=row_idx, column=7, value=txn.booth_id)
             ws.cell(row=row_idx, column=8, value=txn.product_id)
@@ -317,7 +317,7 @@ class ExportService:
         for row_idx, txn in enumerate(transactions, start=4):
             ws.cell(row=row_idx, column=1, value=txn.id)
             ws.cell(row=row_idx, column=2, value=txn.type)
-            ws.cell(row=row_idx, column=3, value=txn.amount / 100.0)
+            ws.cell(row=row_idx, column=3, value=float(txn.amount))
             ws.cell(row=row_idx, column=4, value=txn.card_uid)
             ws.cell(row=row_idx, column=5, value=txn.related_txn_id)
             ws.cell(row=row_idx, column=6, value=txn.booth_operator_id)

@@ -6,6 +6,7 @@ import com.google.gson.annotations.SerializedName;
  * Response model for balance query endpoint.
  * 
  * Corresponds to GET /balance API response.
+ * Balance is returned in yuan (元) as a floating-point number.
  */
 public class BalanceResponse {
     @SerializedName("balance")

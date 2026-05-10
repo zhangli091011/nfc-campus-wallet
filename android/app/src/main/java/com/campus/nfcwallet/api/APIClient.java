@@ -24,7 +24,7 @@ public class APIClient {
     private static final String TAG = "APIClient";
     
     // TODO: Replace with your actual backend URL
-    private static final String BASE_URL = "http://49.235.143.45:8000/";  // Android emulator localhost
+    private static final String BASE_URL = "http://172.16.202.127:8000/";  // Android emulator localhost
     // For physical device, use: "http://YOUR_COMPUTER_IP:8000/"
     
     private static Retrofit retrofit = null;

@@ -5,8 +5,10 @@ This module initializes the FastAPI application, loads configuration,
 and sets up routes and middleware.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import logging
 
 # 更新导入路径 - 使用 core 模块
@@ -71,20 +73,55 @@ def create_app() -> FastAPI:
         version="1.0.0"
     )
     
-    # Add CORS middleware
+    # Middleware order: Middleware added LAST runs FIRST (outermost)
+    # So we add in reverse order: inner -> outer
+    
+    # 1. Request logging (innermost - runs last on request, first on response)
+    app.add_middleware(RequestLoggingMiddleware)
+    
+    # 2. Signature verification (middle layer)
+    app.add_middleware(SignatureVerificationMiddleware)
+    
+    # 3. CORS middleware (outermost - runs first on request, last on response)
+    # This ensures CORS headers are added to ALL responses, including 401/403 errors
+    # from the SignatureVerificationMiddleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # Configure appropriately for production
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["*"],
     )
     
-    # Add request logging middleware (first, to log all requests)
-    app.add_middleware(RequestLoggingMiddleware)
+    # Add exception handlers to ensure CORS headers are included in error responses
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        """Handle HTTP exceptions and ensure CORS headers are included"""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
     
-    # Add signature verification middleware
-    app.add_middleware(SignatureVerificationMiddleware)
+    @app.exception_handler(HTTPException)
+    async def fastapi_exception_handler(request: Request, exc: HTTPException):
+        """Handle FastAPI HTTP exceptions and ensure CORS headers are included"""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
     
     # Register routes
     # Authentication routes (first, for login and user management)
@@ -115,6 +152,26 @@ def create_app() -> FastAPI:
     app.include_router(event_close_router, tags=["events"])
     app.include_router(cash_reconciliation_router, tags=["cash-reconciliation"])
     app.include_router(exports_router, tags=["exports"])
+    
+    # Stock market system
+    from routes.stocks import router as stocks_router
+    from routes.stock_api import router as stock_api_router
+    
+    app.include_router(stocks_router, tags=["stock-market"])
+    app.include_router(stock_api_router, tags=["stock-api"])
+    
+    # Bank credit system (官方银行信用垫资)
+    from routes.bank_credit import router as bank_credit_router, legacy_router as bank_credit_legacy_router
+    app.include_router(bank_credit_router, tags=["bank-credit"])
+    app.include_router(bank_credit_legacy_router, tags=["bank-credit-legacy"])
+    
+    # Refund monitoring system (退款监控与审计)
+    from routes.refund_monitor import router as refund_monitor_router
+    app.include_router(refund_monitor_router, tags=["refund-monitor"])
+    
+    # Trade operations (退款等交易操作)
+    from routes.refund import router as refund_router
+    app.include_router(refund_router, tags=["trade"])
     
     # Health check endpoint
     @app.get("/health")

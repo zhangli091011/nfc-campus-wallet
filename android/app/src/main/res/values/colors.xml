@@ -17,6 +17,7 @@
     <color name="dark_gray">#757575</color>
     
     <!-- Additional colors for cashier terminal -->
+    <color name="primary">#2196F3</color>
     <color name="background_gray">#FAFAFA</color>
     <color name="text_primary">#212121</color>
     <color name="text_secondary">#757575</color>

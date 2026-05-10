@@ -82,13 +82,13 @@ class Product(Base):
     
     @property
     def price_yuan(self) -> float:
-        """Get price in yuan (元)."""
-        return self.price / 100.0
+        """Get price in yuan (元) - 值已为元."""
+        return float(self.price)
     
     @property
     def cost_price_yuan(self) -> float | None:
-        """Get cost price in yuan (元)."""
-        return self.cost_price / 100.0 if self.cost_price is not None else None
+        """Get cost price in yuan (元) - 值已为元."""
+        return float(self.cost_price) if self.cost_price is not None else None
     
     def is_available(self) -> bool:
         """
@@ -134,7 +134,7 @@ class Product(Base):
         if self.cost_price is None:
             return None
         
-        return (self.price - self.cost_price) / 100.0
+        return float(self.price - self.cost_price)
     
     def calculate_profit_margin(self) -> float | None:
         """

@@ -107,8 +107,8 @@ const ProductManagement = () => {
     form.setFieldsValue({
       booth_id: record.booth_id,
       name: record.name,
-      price: record.price / 100, // 转换为元
-      cost_price: record.cost_price ? record.cost_price / 100 : undefined,
+      price: record.price, // 金额已为元
+      cost_price: record.cost_price ? record.cost_price : undefined,
       stock: record.stock,
       enabled: record.enabled,
     })
@@ -161,14 +161,14 @@ const ProductManagement = () => {
       title: '售价',
       dataIndex: 'price',
       key: 'price',
-      render: (price: number) => `¥${(price / 100).toFixed(2)}`,
+      render: (price: number) => `¥${price.toFixed(2)}`,
     },
     {
       title: '成本价',
       dataIndex: 'cost_price',
       key: 'cost_price',
       render: (price: number | null) =>
-        price ? `¥${(price / 100).toFixed(2)}` : '-',
+        price ? `¥${price.toFixed(2)}` : '-',
     },
     {
       title: '库存',

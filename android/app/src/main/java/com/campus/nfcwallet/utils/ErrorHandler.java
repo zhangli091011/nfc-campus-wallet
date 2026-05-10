@@ -14,6 +14,13 @@ import retrofit2.Response;
 public class ErrorHandler {
     
     /**
+     * Parse error from API response.
+     */
+    public static String parseError(Response<?> response) {
+        return getErrorMessage(response);
+    }
+    
+    /**
      * Get error message from API response.
      */
     public static String getErrorMessage(Response<?> response) {

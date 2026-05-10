@@ -21,6 +21,27 @@ export interface UpdateBoothRequest {
   status?: 'active' | 'inactive' | 'closed'
 }
 
+export interface BoothCredential {
+  booth_id: number
+  booth_name: string
+  username: string
+  password: string | null
+  user_id: number | null
+  user_status: string | null
+}
+
+export interface BoothCashier {
+  id: number
+  username: string
+  status: string
+  created_at: string
+}
+
+export interface GenerateCredentialRequest {
+  username?: string
+  password?: string
+}
+
 // 获取摊位列表
 export const getBooths = (params?: {
   event_id?: number
@@ -46,7 +67,22 @@ export const updateBooth = (id: number, data: UpdateBoothRequest) => {
   return request.patch<any, Booth>(`/booths/${id}`, data)
 }
 
-// 删除摊位 - 后端暂不支持
-// export const deleteBooth = (id: number) => {
-//   return request.delete(`/booths/${id}`)
-// }
+// 获取摊位登录凭据
+export const getBoothCredentials = (boothId: number) => {
+  return request.get<any, BoothCredential>(`/booths/${boothId}/credentials`)
+}
+
+// 生成/重置摊位登录凭据
+export const generateBoothCredentials = (boothId: number, data?: GenerateCredentialRequest) => {
+  return request.post<any, BoothCredential>(`/booths/${boothId}/credentials`, data || {})
+}
+
+// 获取摊位收银员列表
+export const getBoothCashiers = (boothId: number) => {
+  return request.get<any, BoothCashier[]>(`/booths/${boothId}/cashiers`)
+}
+
+// 指定收银员到摊位
+export const assignCashierToBooth = (boothId: number, userId: number) => {
+  return request.post<any, any>(`/booths/${boothId}/cashiers`, { user_id: userId })
+}

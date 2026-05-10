@@ -18,6 +18,9 @@ public class UserInfo {
     @SerializedName("booth_id")
     private Integer boothId;
     
+    @SerializedName("event_id")
+    private Integer eventId;
+    
     @SerializedName("status")
     private String status;
     
@@ -38,6 +41,10 @@ public class UserInfo {
     
     public Integer getBoothId() {
         return boothId;
+    }
+    
+    public Integer getEventId() {
+        return eventId;
     }
     
     public String getStatus() {

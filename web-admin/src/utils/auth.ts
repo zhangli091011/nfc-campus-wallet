@@ -6,7 +6,7 @@ const USER_KEY = 'nfc_wallet_user'
 export interface User {
   id: number
   username: string
-  role: 'super_admin' | 'event_admin' | 'booth_cashier' | 'issuer' | 'reviewer'
+  role: 'super_admin' | 'event_admin' | 'booth_cashier' | 'issuer' | 'reviewer' | 'bank_clerk'
   booth_id: number | null
   status: string
   created_at: string

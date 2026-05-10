@@ -64,7 +64,7 @@ class User(Base):
     # Table constraints
     __table_args__ = (
         CheckConstraint(
-            "role IN ('super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer')",
+            "role IN ('super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer', 'bank_clerk')",
             name='chk_user_role'
         ),
         CheckConstraint(
@@ -87,6 +87,10 @@ class User(Base):
     def is_booth_cashier(self) -> bool:
         """Check if user is a booth cashier."""
         return self.role == 'booth_cashier'
+    
+    def is_bank_clerk(self) -> bool:
+        """Check if user is a bank clerk (investment counter operator)."""
+        return self.role == 'bank_clerk'
     
     def is_admin(self) -> bool:
         """Check if user is an admin (super_admin or event_admin)."""

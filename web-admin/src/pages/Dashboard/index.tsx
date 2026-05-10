@@ -77,7 +77,7 @@ const Dashboard = () => {
         totalBooths: booths.length,
         totalParticipants: participants.length,
         totalTransactions: transactionsData?.total_count || 0,
-        totalAmount: totalAmount / 100, // 转换为元
+        totalAmount: totalAmount, // 金额已为元
       })
     } catch (error) {
       // 错误已处理
@@ -130,7 +130,7 @@ const Dashboard = () => {
       title: '金额',
       dataIndex: 'amount',
       key: 'amount',
-      render: (amount: number) => `¥${(amount / 100).toFixed(2)}`,
+      render: (amount: number) => `¥${amount.toFixed(2)}`,
     },
     {
       title: '卡号',

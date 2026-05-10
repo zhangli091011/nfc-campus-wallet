@@ -44,6 +44,23 @@ public class SignatureGenerator {
     }
     
     /**
+     * Generate signature with integer amount.
+     * 
+     * Signature = SHA256(uid + amount + timestamp + secret_key)
+     * 
+     * @param uid User identifier from NFC card
+     * @param amount Transaction amount (integer)
+     * @param timestamp Unix timestamp in seconds
+     * @return Hexadecimal signature string
+     */
+    public static String generateSignature(String uid, int amount, long timestamp) {
+        // Use default secret key or get from config
+        String secretKey = "your_secret_key_here";
+        String data = uid + amount + timestamp + secretKey;
+        return sha256Hex(data);
+    }
+    
+    /**
      * Get current Unix timestamp in seconds.
      * 
      * @return Current timestamp in seconds

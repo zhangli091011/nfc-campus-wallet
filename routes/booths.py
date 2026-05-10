@@ -10,9 +10,11 @@ from fastapi.responses import JSONResponse
 from typing import Optional, List
 from pydantic import BaseModel, Field
 import logging
+import secrets
+import string
 
 from core.database import get_db
-from core.security import get_current_user, RoleChecker
+from core.security import get_current_user, RoleChecker, hash_password
 from services.booth_service import (
     BoothService,
     BoothNotFoundError,
@@ -166,7 +168,7 @@ async def list_booths(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of booths to return"),
     offset: int = Query(0, ge=0, description="Number of booths to skip"),
     current_user: User = Depends(get_current_user),
-    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin", "bank_clerk"])),
     db: Session = Depends(get_db)
 ):
     """
@@ -175,7 +177,7 @@ async def list_booths(
     如果未指定 event_id，则自动使用当前激活的活动。
     如果没有激活的活动，则返回所有摊位。
     
-    需要 event_admin 或 super_admin 角色。
+    需要 event_admin、super_admin 或 bank_clerk 角色。
     
     Query Parameters:
         - event_id: 活动ID过滤（可选，默认为当前激活的活动）
@@ -253,6 +255,7 @@ async def get_booth(
     权限验证：
     - super_admin 和 event_admin 可以查看所有摊位
     - booth_cashier 只能查看自己的摊位
+    - bank_clerk（投资办理员）可以查看所有摊位（用于投资办理）
     
     Path Parameters:
         - booth_id: 摊位ID
@@ -282,8 +285,8 @@ async def get_booth(
         booth = booth_service.get_booth(booth_id)
         
         # Permission validation
-        # super_admin and event_admin can view all booths
-        if current_user.role in ('super_admin', 'event_admin'):
+        # super_admin、event_admin 以及 bank_clerk 可以查看所有摊位
+        if current_user.role in ('super_admin', 'event_admin', 'bank_clerk'):
             logger.info(
                 f"Booth retrieved: id={booth_id}, name='{booth.name}', "
                 f"requested_by={current_user.username} (role={current_user.role})"
@@ -735,4 +738,307 @@ async def get_booth_transactions(
                 "error_code": "INTERNAL_ERROR",
                 "message": "An internal error occurred. Please try again later."
             }
+        )
+
+
+# ============================================================================
+# 摊位账号凭据管理 (Booth Credentials Management)
+# ============================================================================
+
+
+def _generate_password(length: int = 8) -> str:
+    """生成随机密码（数字+字母）"""
+    chars = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+
+class BoothCredentialResponse(BaseModel):
+    """摊位登录凭据响应"""
+    booth_id: int
+    booth_name: str
+    username: str
+    password: Optional[str] = Field(None, description="仅在生成时返回明文密码")
+    user_id: Optional[int] = None
+    user_status: Optional[str] = None
+
+
+class BoothCashierInfo(BaseModel):
+    """摊位收银员信息"""
+    id: int
+    username: str
+    status: str
+    created_at: str
+
+
+class AssignCashierRequest(BaseModel):
+    """指定收银员请求"""
+    user_id: int = Field(..., description="要分配到此摊位的用户ID")
+
+
+class GenerateCredentialRequest(BaseModel):
+    """生成摊位凭据请求"""
+    username: Optional[str] = Field(None, description="自定义用户名（可选，默认自动生成）")
+    password: Optional[str] = Field(None, description="自定义密码（可选，默认自动生成）")
+
+
+@router.get("/booths/{booth_id}/credentials", response_model=BoothCredentialResponse)
+async def get_booth_credentials(
+    booth_id: int,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    获取摊位的登录账号信息。
+    
+    显示该摊位关联的收银员账号用户名（密码不可查看，只能重新生成）。
+    
+    需要 super_admin 或 event_admin 角色。
+    """
+    try:
+        booth_service = BoothService(db)
+        booth = booth_service.get_booth(booth_id)
+        
+        # 查找该摊位关联的收银员账号
+        cashier = db.query(User).filter(
+            User.booth_id == booth_id,
+            User.role == 'booth_cashier'
+        ).first()
+        
+        if cashier:
+            return BoothCredentialResponse(
+                booth_id=booth.id,
+                booth_name=booth.name,
+                username=cashier.username,
+                password=None,  # 不返回密码
+                user_id=cashier.id,
+                user_status=cashier.status
+            )
+        else:
+            return BoothCredentialResponse(
+                booth_id=booth.id,
+                booth_name=booth.name,
+                username="",
+                password=None,
+                user_id=None,
+                user_status=None
+            )
+    
+    except BoothNotFoundError as e:
+        return JSONResponse(
+            status_code=404,
+            content={"error_code": e.error_code, "message": e.message}
+        )
+    except Exception as e:
+        logger.error(f"Error getting booth credentials: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "An internal error occurred."}
+        )
+
+
+@router.post("/booths/{booth_id}/credentials", response_model=BoothCredentialResponse)
+async def generate_booth_credentials(
+    booth_id: int,
+    request_data: Optional[GenerateCredentialRequest] = None,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    为摊位生成登录凭据（账号+密码）。
+    
+    如果摊位已有收银员账号，则重置密码。
+    如果没有，则创建新的收银员账号。
+    
+    需要 super_admin 或 event_admin 角色。
+    
+    Returns:
+        BoothCredentialResponse: 包含明文密码（仅此一次可见）
+    """
+    try:
+        booth_service = BoothService(db)
+        booth = booth_service.get_booth(booth_id)
+        
+        # 确定用户名和密码
+        custom_username = request_data.username if request_data else None
+        custom_password = request_data.password if request_data else None
+        
+        password = custom_password or _generate_password(8)
+        
+        # 查找该摊位已有的收银员账号
+        existing_cashier = db.query(User).filter(
+            User.booth_id == booth_id,
+            User.role == 'booth_cashier'
+        ).first()
+        
+        if existing_cashier:
+            # 重置密码
+            existing_cashier.password_hash = hash_password(password)
+            db.commit()
+            db.refresh(existing_cashier)
+            
+            logger.info(
+                f"Booth credentials reset: booth_id={booth_id}, username='{existing_cashier.username}', "
+                f"reset_by={current_user.username}"
+            )
+            
+            return BoothCredentialResponse(
+                booth_id=booth.id,
+                booth_name=booth.name,
+                username=existing_cashier.username,
+                password=password,
+                user_id=existing_cashier.id,
+                user_status=existing_cashier.status
+            )
+        else:
+            # 创建新的收银员账号
+            username = custom_username or f"booth_{booth_id}"
+            
+            # 检查用户名是否已存在
+            existing_user = db.query(User).filter(User.username == username).first()
+            if existing_user:
+                # 如果默认用户名已存在，加上随机后缀
+                username = f"booth_{booth_id}_{secrets.token_hex(2)}"
+            
+            new_user = User(
+                username=username,
+                password_hash=hash_password(password),
+                role='booth_cashier',
+                booth_id=booth_id,
+                status='active'
+            )
+            db.add(new_user)
+            db.commit()
+            db.refresh(new_user)
+            
+            logger.info(
+                f"Booth credentials created: booth_id={booth_id}, username='{username}', "
+                f"user_id={new_user.id}, created_by={current_user.username}"
+            )
+            
+            return BoothCredentialResponse(
+                booth_id=booth.id,
+                booth_name=booth.name,
+                username=username,
+                password=password,
+                user_id=new_user.id,
+                user_status=new_user.status
+            )
+    
+    except BoothNotFoundError as e:
+        return JSONResponse(
+            status_code=404,
+            content={"error_code": e.error_code, "message": e.message}
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error generating booth credentials: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "An internal error occurred."}
+        )
+
+
+@router.get("/booths/{booth_id}/cashiers", response_model=List[BoothCashierInfo])
+async def get_booth_cashiers(
+    booth_id: int,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    获取摊位的所有收银员列表。
+    
+    需要 super_admin 或 event_admin 角色。
+    """
+    try:
+        booth_service = BoothService(db)
+        booth_service.get_booth(booth_id)  # 验证摊位存在
+        
+        cashiers = db.query(User).filter(
+            User.booth_id == booth_id,
+            User.role == 'booth_cashier'
+        ).all()
+        
+        return [
+            BoothCashierInfo(
+                id=c.id,
+                username=c.username,
+                status=c.status,
+                created_at=c.created_at.isoformat() if c.created_at else ""
+            )
+            for c in cashiers
+        ]
+    
+    except BoothNotFoundError as e:
+        return JSONResponse(
+            status_code=404,
+            content={"error_code": e.error_code, "message": e.message}
+        )
+    except Exception as e:
+        logger.error(f"Error getting booth cashiers: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "An internal error occurred."}
+        )
+
+
+@router.post("/booths/{booth_id}/cashiers")
+async def assign_cashier_to_booth(
+    booth_id: int,
+    request_data: AssignCashierRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    将用户指定为摊位收银员。
+    
+    将指定用户的角色设为 booth_cashier 并关联到此摊位。
+    
+    需要 super_admin 或 event_admin 角色。
+    """
+    try:
+        booth_service = BoothService(db)
+        booth_service.get_booth(booth_id)  # 验证摊位存在
+        
+        # 获取目标用户
+        target_user = db.query(User).filter(User.id == request_data.user_id).first()
+        if not target_user:
+            return JSONResponse(
+                status_code=404,
+                content={"error_code": "USER_NOT_FOUND", "message": f"User with id {request_data.user_id} not found"}
+            )
+        
+        # 更新用户角色和摊位
+        target_user.role = 'booth_cashier'
+        target_user.booth_id = booth_id
+        db.commit()
+        db.refresh(target_user)
+        
+        logger.info(
+            f"Cashier assigned to booth: user_id={target_user.id}, username='{target_user.username}', "
+            f"booth_id={booth_id}, assigned_by={current_user.username}"
+        )
+        
+        return {
+            "success": True,
+            "message": f"User '{target_user.username}' assigned to booth {booth_id} as cashier",
+            "user_id": target_user.id,
+            "username": target_user.username,
+            "booth_id": booth_id
+        }
+    
+    except BoothNotFoundError as e:
+        return JSONResponse(
+            status_code=404,
+            content={"error_code": e.error_code, "message": e.message}
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error assigning cashier to booth: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "An internal error occurred."}
         )

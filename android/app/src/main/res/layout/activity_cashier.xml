@@ -375,6 +375,18 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- Refund Management Button -->
+        <Button
+            android:id="@+id/refundButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/error_red"
+            android:drawableStart="@android:drawable/ic_menu_revert"
+            android:drawablePadding="8dp"
+            android:text="退款管理"
+            android:textSize="14sp" />
+
         <!-- Status Section -->
         <LinearLayout
             android:layout_width="match_parent"

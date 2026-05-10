@@ -125,7 +125,7 @@ async def close_event(
                     # 生成 expire 类型流水，余额归零
                     ledger_entry = ledger_service.append_debit_from_account(
                         account_id=account.id,
-                        amount_yuan=account.balance / 100.0,
+                        amount_yuan=float(account.balance),
                         transaction_type="expire",
                         event_id=event_id,
                         participant_id=account.participant_id,
@@ -159,7 +159,7 @@ async def close_event(
             event_id=event_id,
             status=event.status,
             expired_accounts=expired_accounts,
-            total_expired_amount=total_expired_amount / 100.0
+            total_expired_amount=float(total_expired_amount)
         )
     
     except EventNotFoundError as e:

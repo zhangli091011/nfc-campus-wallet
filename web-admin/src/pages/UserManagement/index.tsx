@@ -10,12 +10,23 @@ import {
   message,
   Tag,
   Popconfirm,
+  Badge,
+  Tooltip,
+  Alert,
 } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import {
+  PlusOutlined,
+  EditOutlined,
+  BankOutlined,
+  CrownOutlined,
+  SafetyCertificateOutlined,
+} from '@ant-design/icons'
 import {
   getUsers,
   createUser,
   updateUserStatus,
+  updateUserBooth,
+  updateUserRole,
   type CreateUserRequest,
 } from '@/services/user'
 import { getBooths, type Booth } from '@/services/booth'
@@ -32,6 +43,19 @@ const UserManagement = () => {
   const [selectedEventId, setSelectedEventId] = useState<number>()
   const [form] = Form.useForm()
 
+  // 分配摊位相关状态
+  const [boothModalVisible, setBoothModalVisible] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [boothEventId, setBoothEventId] = useState<number>()
+  const [boothOptions, setBoothOptions] = useState<Booth[]>([])
+
+  // 角色编辑相关状态
+  const [roleModalVisible, setRoleModalVisible] = useState(false)
+  const [roleEditingUser, setRoleEditingUser] = useState<User | null>(null)
+  const [roleForm] = Form.useForm()
+  const [roleEventId, setRoleEventId] = useState<number>()
+  const [roleBoothOptions, setRoleBoothOptions] = useState<Booth[]>([])
+
   useEffect(() => {
     loadUsers()
     loadEvents()
@@ -43,13 +67,24 @@ const UserManagement = () => {
     }
   }, [selectedEventId])
 
+  useEffect(() => {
+    if (boothEventId) {
+      loadBoothOptions()
+    }
+  }, [boothEventId])
+
+  useEffect(() => {
+    if (roleEventId) {
+      loadRoleBoothOptions()
+    }
+  }, [roleEventId])
+
   const loadUsers = async () => {
     setLoading(true)
     try {
       const data = await getUsers({ limit: 100 })
       setUsers(Array.isArray(data) ? data : [])
     } catch (error) {
-      // 错误已处理
       setUsers([])
     } finally {
       setLoading(false)
@@ -58,14 +93,13 @@ const UserManagement = () => {
 
   const loadEvents = async () => {
     try {
-      const data = await getEvents()  // 移除 status 筛选
+      const data = await getEvents()
       const eventList = data?.events || []
       setEvents(eventList)
       if (eventList.length > 0) {
         setSelectedEventId(eventList[0].id)
       }
     } catch (error) {
-      // 错误已处理
       setEvents([])
     }
   }
@@ -76,8 +110,27 @@ const UserManagement = () => {
       const data = await getBooths({ event_id: selectedEventId, limit: 100 })
       setBooths(Array.isArray(data) ? data : [])
     } catch (error) {
-      // 错误已处理
       setBooths([])
+    }
+  }
+
+  const loadBoothOptions = async () => {
+    if (!boothEventId) return
+    try {
+      const data = await getBooths({ event_id: boothEventId, limit: 100 })
+      setBoothOptions(Array.isArray(data) ? data : [])
+    } catch (error) {
+      setBoothOptions([])
+    }
+  }
+
+  const loadRoleBoothOptions = async () => {
+    if (!roleEventId) return
+    try {
+      const data = await getBooths({ event_id: roleEventId, limit: 100 })
+      setRoleBoothOptions(Array.isArray(data) ? data : [])
+    } catch (error) {
+      setRoleBoothOptions([])
     }
   }
 
@@ -114,6 +167,56 @@ const UserManagement = () => {
     }
   }
 
+  // ========== 分配摊位 ==========
+  const handleAssignBooth = (record: User) => {
+    setEditingUser(record)
+    setBoothModalVisible(true)
+    if (events.length > 0) {
+      setBoothEventId(events[0].id)
+    }
+  }
+
+  const handleBoothAssignSubmit = async (boothId: number | null) => {
+    if (!editingUser) return
+    try {
+      await updateUserBooth(editingUser.id, boothId)
+      message.success('摊位分配成功')
+      setBoothModalVisible(false)
+      setEditingUser(null)
+      loadUsers()
+    } catch (error) {
+      message.error('分配失败')
+    }
+  }
+
+  // ========== 角色编辑 ==========
+  const handleEditRole = (record: User) => {
+    setRoleEditingUser(record)
+    roleForm.setFieldsValue({ role: record.role })
+    setRoleModalVisible(true)
+    if (events.length > 0) {
+      setRoleEventId(events[0].id)
+    }
+  }
+
+  const handleRoleSubmit = async () => {
+    if (!roleEditingUser) return
+    try {
+      const values = await roleForm.validateFields()
+      const boothId = values.role === 'booth_cashier' ? values.booth_id : null
+      await updateUserRole(roleEditingUser.id, values.role, boothId)
+      message.success('角色更新成功')
+      setRoleModalVisible(false)
+      setRoleEditingUser(null)
+      loadUsers()
+    } catch (error) {
+      // 错误已处理
+    }
+  }
+
+  // ========== 判断是否为特殊用户 ==========
+  const isBankClerk = (record: User) => record.role === 'bank_clerk'
+
   const columns = [
     {
       title: 'ID',
@@ -125,28 +228,75 @@ const UserManagement = () => {
       title: '用户名',
       dataIndex: 'username',
       key: 'username',
+      render: (username: string, record: User) => {
+        if (isBankClerk(record)) {
+          return (
+            <Space>
+              <BankOutlined style={{ color: '#d4a017', fontSize: 16 }} />
+              <span style={{ fontWeight: 600, color: '#8b6914' }}>{username}</span>
+              <Tag color="gold" style={{ marginLeft: 4, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>
+                特殊账户
+              </Tag>
+            </Space>
+          )
+        }
+        return username
+      },
     },
     {
       title: '角色',
       dataIndex: 'role',
       key: 'role',
-      render: (role: string) => {
-        const roleMap: Record<string, { text: string; color: string }> = {
-          super_admin: { text: '超级管理员', color: 'red' },
+      render: (role: string, record: User) => {
+        const roleMap: Record<string, { text: string; color: string; icon?: React.ReactNode }> = {
+          super_admin: { text: '超级管理员', color: 'red', icon: <CrownOutlined /> },
           event_admin: { text: '活动管理员', color: 'orange' },
           booth_cashier: { text: '摊位收银员', color: 'blue' },
           issuer: { text: '充值员', color: 'green' },
           reviewer: { text: '审核员', color: 'purple' },
+          bank_clerk: { text: '投资办理员', color: 'gold', icon: <BankOutlined /> },
         }
         const config = roleMap[role] || { text: role, color: 'default' }
-        return <Tag color={config.color}>{config.text}</Tag>
+        if (isBankClerk(record)) {
+          return (
+            <Badge dot color="#d4a017" offset={[4, 0]}>
+              <Tag
+                color={config.color}
+                icon={config.icon}
+                style={{ fontWeight: 600, border: '1px solid #d4a017' }}
+              >
+                {config.text}
+              </Tag>
+            </Badge>
+          )
+        }
+        return (
+          <Tag color={config.color} icon={config.icon}>
+            {config.text}
+          </Tag>
+        )
       },
     },
     {
-      title: '摊位ID',
+      title: '关联摊位',
       dataIndex: 'booth_id',
       key: 'booth_id',
-      render: (id: number | null) => id || '-',
+      render: (id: number | null, record: User) => {
+        if (!id) return <Tag>无</Tag>
+        const booth = booths.find((b) => b.id === id)
+        if (isBankClerk(record)) {
+          return booth ? (
+            <Tooltip title="投资办理专用摊位（官方中央银行）">
+              <Tag color="gold" icon={<BankOutlined />}>
+                {booth.name} (ID:{id})
+              </Tag>
+            </Tooltip>
+          ) : (
+            <Tag color="gold">ID:{id}</Tag>
+          )
+        }
+        return booth ? <Tag color="blue">{booth.name} (ID:{id})</Tag> : <Tag>ID:{id}</Tag>
+      },
     },
     {
       title: '状态',
@@ -175,9 +325,27 @@ const UserManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 250,
+      width: 360,
       render: (_: any, record: User) => (
         <Space>
+          <Tooltip title="修改角色">
+            <Button
+              type="link"
+              size="small"
+              icon={<SafetyCertificateOutlined />}
+              onClick={() => handleEditRole(record)}
+            >
+              角色
+            </Button>
+          </Tooltip>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleAssignBooth(record)}
+          >
+            分配摊位
+          </Button>
           {record.status === 'active' && (
             <>
               <Popconfirm
@@ -219,22 +387,41 @@ const UserManagement = () => {
     },
   ]
 
+  // 对用户列表排序：bank_clerk 排在前面（特殊用户置顶）
+  const sortedUsers = [...users].sort((a, b) => {
+    if (a.role === 'bank_clerk' && b.role !== 'bank_clerk') return -1
+    if (a.role !== 'bank_clerk' && b.role === 'bank_clerk') return 1
+    if (a.role === 'super_admin' && b.role !== 'super_admin') return -1
+    if (a.role !== 'super_admin' && b.role === 'super_admin') return 1
+    return a.id - b.id
+  })
+
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
           新建用户
         </Button>
+        <Alert
+          message="特殊账户说明"
+          description="带有 🏦 标记的「投资办理员」为系统特殊账户，用于官方中央银行投资办理终端，拥有独立的权限体系。"
+          type="warning"
+          showIcon
+          style={{ marginLeft: 16, flex: 1, marginBottom: 0 }}
+          banner
+        />
       </div>
 
       <Table
         columns={columns}
-        dataSource={users}
+        dataSource={sortedUsers}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        rowClassName={(record) => isBankClerk(record) ? 'bank-clerk-row' : ''}
       />
 
+      {/* 新建用户 Modal */}
       <Modal
         title="新建用户"
         open={modalVisible}
@@ -273,6 +460,12 @@ const UserManagement = () => {
               <Select.Option value="booth_cashier">摊位收银员</Select.Option>
               <Select.Option value="issuer">充值员</Select.Option>
               <Select.Option value="reviewer">审核员</Select.Option>
+              <Select.Option value="bank_clerk">
+                <Space>
+                  <BankOutlined style={{ color: '#d4a017' }} />
+                  <span>投资办理员（特殊）</span>
+                </Space>
+              </Select.Option>
             </Select>
           </Form.Item>
 
@@ -282,47 +475,242 @@ const UserManagement = () => {
               prevValues.role !== currentValues.role
             }
           >
-            {({ getFieldValue }) =>
-              getFieldValue('role') === 'booth_cashier' ? (
-                <>
-                  <Form.Item
-                    name="event_id_for_booth"
-                    label="选择活动"
-                    rules={[{ required: true, message: '请选择活动' }]}
-                  >
-                    <Select
-                      placeholder="请选择活动"
-                      onChange={(value) => {
-                        setSelectedEventId(value)
-                        form.setFieldValue('booth_id', undefined)
-                      }}
+            {({ getFieldValue }) => {
+              const role = getFieldValue('role')
+              if (role === 'booth_cashier') {
+                return (
+                  <>
+                    <Form.Item
+                      name="event_id_for_booth"
+                      label="选择活动"
+                      rules={[{ required: true, message: '请选择活动' }]}
                     >
-                      {events.map((e) => (
-                        <Select.Option key={e.id} value={e.id}>
-                          {e.name}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                  <Form.Item
-                    name="booth_id"
-                    label="分配摊位"
-                    rules={[{ required: true, message: '请选择摊位' }]}
-                  >
-                    <Select placeholder="请选择摊位">
-                      {booths.map((b) => (
-                        <Select.Option key={b.id} value={b.id}>
-                          {b.name}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                </>
-              ) : null
-            }
+                      <Select
+                        placeholder="请选择活动"
+                        onChange={(value) => {
+                          setSelectedEventId(value)
+                          form.setFieldValue('booth_id', undefined)
+                        }}
+                      >
+                        {events.map((e) => (
+                          <Select.Option key={e.id} value={e.id}>
+                            {e.name}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      name="booth_id"
+                      label="分配摊位"
+                      rules={[{ required: true, message: '请选择摊位' }]}
+                    >
+                      <Select placeholder="请选择摊位">
+                        {booths.map((b) => (
+                          <Select.Option key={b.id} value={b.id}>
+                            {b.name}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  </>
+                )
+              }
+              if (role === 'bank_clerk') {
+                return (
+                  <Alert
+                    message="投资办理员说明"
+                    description="该角色为系统特殊账户，用于官方中央银行投资办理终端。创建后将自动拥有投资相关的摊位查看和股票操作权限。"
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                )
+              }
+              return null
+            }}
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* 分配摊位 Modal */}
+      <Modal
+        title={`分配摊位 - ${editingUser?.username || ''}`}
+        open={boothModalVisible}
+        onCancel={() => {
+          setBoothModalVisible(false)
+          setEditingUser(null)
+        }}
+        footer={[
+          <Button
+            key="unassign"
+            danger
+            onClick={() => handleBoothAssignSubmit(null)}
+            disabled={!editingUser?.booth_id}
+          >
+            取消摊位关联
+          </Button>,
+          <Button key="cancel" onClick={() => {
+            setBoothModalVisible(false)
+            setEditingUser(null)
+          }}>
+            关闭
+          </Button>,
+        ]}
+        width={500}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p>当前摊位: {editingUser?.booth_id ? `ID ${editingUser.booth_id}` : '无'}</p>
+        </div>
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="选择活动"
+            value={boothEventId}
+            onChange={(val) => {
+              setBoothEventId(val)
+            }}
+            options={events.map((e) => ({ label: e.name, value: e.id }))}
+          />
+          <Space style={{ width: '100%' }}>
+            <Select
+              style={{ width: 300 }}
+              placeholder="选择摊位"
+              showSearch
+              optionFilterProp="label"
+              options={boothOptions.map((b) => ({
+                label: `${b.name} (${b.class_name})`,
+                value: b.id,
+              }))}
+              onChange={(val) => handleBoothAssignSubmit(val)}
+            />
+          </Space>
+        </Space>
+      </Modal>
+
+      {/* 角色编辑 Modal */}
+      <Modal
+        title={
+          <Space>
+            <SafetyCertificateOutlined />
+            <span>修改角色 - {roleEditingUser?.username || ''}</span>
+            {roleEditingUser && isBankClerk(roleEditingUser) && (
+              <Tag color="gold" icon={<BankOutlined />}>特殊账户</Tag>
+            )}
+          </Space>
+        }
+        open={roleModalVisible}
+        onOk={handleRoleSubmit}
+        onCancel={() => {
+          setRoleModalVisible(false)
+          setRoleEditingUser(null)
+        }}
+        width={550}
+      >
+        {roleEditingUser && isBankClerk(roleEditingUser) && (
+          <Alert
+            message="注意：这是一个特殊系统账户"
+            description="投资办理员账户用于官方中央银行终端。修改其角色可能影响投资办理功能的正常运行。"
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        <Form form={roleForm} layout="vertical">
+          <Form.Item
+            name="role"
+            label="新角色"
+            rules={[{ required: true, message: '请选择角色' }]}
+          >
+            <Select placeholder="请选择角色">
+              <Select.Option value="super_admin">超级管理员</Select.Option>
+              <Select.Option value="event_admin">活动管理员</Select.Option>
+              <Select.Option value="booth_cashier">摊位收银员</Select.Option>
+              <Select.Option value="issuer">充值员</Select.Option>
+              <Select.Option value="reviewer">审核员</Select.Option>
+              <Select.Option value="bank_clerk">
+                <Space>
+                  <BankOutlined style={{ color: '#d4a017' }} />
+                  <span>投资办理员（特殊）</span>
+                </Space>
+              </Select.Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) =>
+              prevValues.role !== currentValues.role
+            }
+          >
+            {({ getFieldValue }) => {
+              const role = getFieldValue('role')
+              if (role === 'booth_cashier') {
+                return (
+                  <>
+                    <Form.Item
+                      name="event_id_for_role_booth"
+                      label="选择活动"
+                    >
+                      <Select
+                        placeholder="请选择活动"
+                        onChange={(value) => {
+                          setRoleEventId(value)
+                          roleForm.setFieldValue('booth_id', undefined)
+                        }}
+                      >
+                        {events.map((e) => (
+                          <Select.Option key={e.id} value={e.id}>
+                            {e.name}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      name="booth_id"
+                      label="分配摊位"
+                      rules={[{ required: true, message: '请选择摊位' }]}
+                    >
+                      <Select placeholder="请选择摊位">
+                        {roleBoothOptions.map((b) => (
+                          <Select.Option key={b.id} value={b.id}>
+                            {b.name} ({b.class_name})
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  </>
+                )
+              }
+              if (role === 'bank_clerk') {
+                return (
+                  <Alert
+                    message="投资办理员说明"
+                    description="该角色为系统特殊账户，用于官方中央银行投资办理终端。设置后将自动拥有投资相关权限。"
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                )
+              }
+              return null
+            }}
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 特殊行样式 */}
+      <style>{`
+        .bank-clerk-row {
+          background: linear-gradient(90deg, #fffbe6 0%, #fff 40%) !important;
+          border-left: 3px solid #d4a017 !important;
+        }
+        .bank-clerk-row:hover > td {
+          background: #fff8e1 !important;
+        }
+        .bank-clerk-row > td {
+          background: transparent !important;
+        }
+      `}</style>
     </div>
   )
 }

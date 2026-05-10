@@ -35,6 +35,13 @@ from schemas.report import (
 logger = logging.getLogger(__name__)
 
 
+def _to_int(value) -> int:
+    """Convert Decimal/None to int safely."""
+    if value is None:
+        return 0
+    return int(value)
+
+
 class ReportService:
     """报表服务类"""
     
@@ -69,36 +76,36 @@ class ReportService:
             query_filter.append(Transaction.event_id == event_id)
         
         # 总发放额度（issue 类型交易）
-        total_issued_cents = self.db.query(
+        total_issued_cents = _to_int(self.db.query(
             func.coalesce(func.sum(Transaction.amount), 0)
         ).filter(
             Transaction.type == TransactionType.issue.value,
             *query_filter
-        ).scalar()
+        ).scalar())
         
         # 总充值额（recharge 类型交易）
-        total_recharged_cents = self.db.query(
+        total_recharged_cents = _to_int(self.db.query(
             func.coalesce(func.sum(Transaction.amount), 0)
         ).filter(
             Transaction.type == TransactionType.recharge.value,
             *query_filter
-        ).scalar()
+        ).scalar())
         
         # 总消费额（pay 类型交易）
-        total_consumed_cents = self.db.query(
+        total_consumed_cents = _to_int(self.db.query(
             func.coalesce(func.sum(Transaction.amount), 0)
         ).filter(
             Transaction.type == TransactionType.pay.value,
             *query_filter
-        ).scalar()
+        ).scalar())
         
         # 总退款额（refund 类型交易）
-        total_refunded_cents = self.db.query(
+        total_refunded_cents = _to_int(self.db.query(
             func.coalesce(func.sum(Transaction.amount), 0)
         ).filter(
             Transaction.type == TransactionType.refund.value,
             *query_filter
-        ).scalar()
+        ).scalar())
         
         # 净消费额 = 总消费 - 总退款
         net_consumed_cents = total_consumed_cents - total_refunded_cents
@@ -125,11 +132,11 @@ class ReportService:
         booth_count = booth_query.scalar()
         
         return SummaryReportResponse(
-            total_issued=total_issued_cents / 100.0,
-            total_recharged=total_recharged_cents / 100.0,
-            total_consumed=total_consumed_cents / 100.0,
-            total_refunded=total_refunded_cents / 100.0,
-            net_consumed=net_consumed_cents / 100.0,
+            total_issued=float(total_issued_cents),
+            total_recharged=float(total_recharged_cents),
+            total_consumed=float(total_consumed_cents),
+            total_refunded=float(total_refunded_cents),
+            net_consumed=float(net_consumed_cents),
             total_transactions=total_transactions,
             participant_count=participant_count,
             booth_count=booth_count
@@ -161,31 +168,31 @@ class ReportService:
         
         for booth in booths:
             # 营业额（pay 类型交易）
-            revenue_cents = self.db.query(
+            revenue_cents = _to_int(self.db.query(
                 func.coalesce(func.sum(Transaction.amount), 0)
             ).filter(
                 Transaction.booth_id == booth.id,
                 Transaction.type == TransactionType.pay.value
-            ).scalar()
+            ).scalar())
             
             # 退款额（refund 类型交易）
-            refund_cents = self.db.query(
+            refund_cents = _to_int(self.db.query(
                 func.coalesce(func.sum(Transaction.amount), 0)
             ).filter(
                 Transaction.booth_id == booth.id,
                 Transaction.type == TransactionType.refund.value
-            ).scalar()
+            ).scalar())
             
             # 净收入 = 营业额 - 退款
             net_revenue_cents = revenue_cents - refund_cents
             
             # 销量（pay 类型交易笔数）
-            sales_count = self.db.query(
+            sales_count = _to_int(self.db.query(
                 func.count(Transaction.id)
             ).filter(
                 Transaction.booth_id == booth.id,
                 Transaction.type == TransactionType.pay.value
-            ).scalar()
+            ).scalar())
             
             # 总成本（基于商品成本价和销量）
             # 查询该摊位所有商品的销售记录，计算总成本
@@ -200,7 +207,7 @@ class ReportService:
                 Product.cost_price.isnot(None)
             )
             
-            total_cost_cents = cost_query.scalar() or 0
+            total_cost_cents = _to_int(cost_query.scalar()) or 0
             
             # 利润 = 净收入 - 成本
             profit_cents = net_revenue_cents - total_cost_cents
@@ -214,12 +221,12 @@ class ReportService:
                 booth_id=booth.id,
                 booth_name=booth.name,
                 class_name=booth.class_name,
-                revenue=revenue_cents / 100.0,
-                refund_amount=refund_cents / 100.0,
-                net_revenue=net_revenue_cents / 100.0,
+                revenue=float(revenue_cents),
+                refund_amount=float(refund_cents),
+                net_revenue=float(net_revenue_cents),
                 sales_count=sales_count,
-                total_cost=total_cost_cents / 100.0,
-                profit=profit_cents / 100.0,
+                total_cost=float(total_cost_cents),
+                profit=float(profit_cents),
                 profit_margin=round(profit_margin, 2) if profit_margin is not None else None
             ))
         
@@ -262,20 +269,20 @@ class ReportService:
         
         for product in products:
             # 销量（pay 类型交易笔数）
-            sales_quantity = self.db.query(
+            sales_quantity = _to_int(self.db.query(
                 func.count(Transaction.id)
             ).filter(
                 Transaction.product_id == product.id,
                 Transaction.type == TransactionType.pay.value
-            ).scalar()
+            ).scalar())
             
             # 收入（pay 类型交易金额）
-            revenue_cents = self.db.query(
+            revenue_cents = _to_int(self.db.query(
                 func.coalesce(func.sum(Transaction.amount), 0)
             ).filter(
                 Transaction.product_id == product.id,
                 Transaction.type == TransactionType.pay.value
-            ).scalar()
+            ).scalar())
             
             # 总成本 = 成本价 * 销量
             total_cost_cents = 0
@@ -296,9 +303,9 @@ class ReportService:
                 booth_id=product.booth_id,
                 booth_name=product.booth.name,
                 sales_quantity=sales_quantity,
-                revenue=revenue_cents / 100.0,
-                total_cost=total_cost_cents / 100.0,
-                profit=profit_cents / 100.0,
+                revenue=float(revenue_cents),
+                total_cost=float(total_cost_cents),
+                profit=float(profit_cents),
                 profit_margin=round(profit_margin, 2) if profit_margin is not None else None
             ))
         
@@ -356,7 +363,7 @@ class ReportService:
                 booth_id=row.booth_id,
                 booth_name=row.booth_name,
                 class_name=row.class_name,
-                value=row.revenue / 100.0
+                value=float(_to_int(row.revenue))
             )
             for idx, row in enumerate(results)
         ]
@@ -683,7 +690,7 @@ class ReportService:
         return AuditLogItem(
             transaction_id=transaction.id,
             transaction_type=transaction.type,
-            amount=transaction.amount / 100.0,
+            amount=float(transaction.amount),
             participant_name=participant_name,
             booth_name=booth_name,
             operator_username=operator_username,

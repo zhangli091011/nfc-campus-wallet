@@ -18,6 +18,10 @@ import {
   FileExcelOutlined,
   AuditOutlined,
   FundOutlined,
+  StockOutlined,
+  DollarCircleOutlined,
+  BankOutlined,
+  AlertOutlined,
 } from '@ant-design/icons'
 import { getUser, clearAuth, isSuperAdmin } from '@/utils/auth'
 import type { MenuProps } from 'antd'
@@ -71,6 +75,11 @@ const Layout = () => {
       label: '退款审批',
     },
     {
+      key: '/refund-monitor',
+      icon: <AlertOutlined />,
+      label: '退款监控',
+    },
+    {
       key: 'reports',
       icon: <BarChartOutlined />,
       label: '报表中心',
@@ -107,6 +116,26 @@ const Layout = () => {
         },
       ],
     },
+    {
+      key: 'stock-dashboard',
+      icon: <StockOutlined />,
+      label: '股市大屏',
+    },
+    {
+      key: 'bank-credit-dashboard',
+      icon: <BankOutlined />,
+      label: '央行风控大屏',
+    },
+    {
+      key: 'macro-economy-dashboard',
+      icon: <FundOutlined />,
+      label: '宏观经济大屏',
+    },
+    {
+      key: '/investment',
+      icon: <DollarCircleOutlined />,
+      label: '投资管理',
+    },
     ...(isSuperAdmin()
       ? [
           {
@@ -132,6 +161,21 @@ const Layout = () => {
   ]
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
+    // 股市大屏在新窗口打开
+    if (key === 'stock-dashboard') {
+      window.open('/stock-dashboard', '_blank')
+      return
+    }
+    // 央行风控大屏在新窗口打开
+    if (key === 'bank-credit-dashboard') {
+      window.open('/bank-credit-dashboard', '_blank')
+      return
+    }
+    // 宏观经济大屏在新窗口打开
+    if (key === 'macro-economy-dashboard') {
+      window.open('/macro-economy-dashboard', '_blank')
+      return
+    }
     navigate(key)
   }
 

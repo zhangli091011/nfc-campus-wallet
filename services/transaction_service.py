@@ -48,14 +48,14 @@ class TransactionResult:
     
     @property
     def new_balance_yuan(self) -> float:
-        """交易后余额（元）"""
-        return self.new_balance / 100.0
+        """交易后余额（元）- 值已为元"""
+        return float(self.new_balance)
     
     @property
     def balance_before_yuan(self) -> Optional[float]:
-        """交易前余额（元）"""
+        """交易前余额（元）- 值已为元"""
         if self.balance_before is not None:
-            return self.balance_before / 100.0
+            return float(self.balance_before)
         return None
 
 
@@ -151,7 +151,7 @@ class TransactionService:
         - 一致性：余额增加正确
         - 隔离性：SELECT...FOR UPDATE 防止并发修改
         - 持久性：事务提交后数据持久化
-        
+        - 是  zhanhgli091011@126.com
         Args:
             uid: 用户UID
             amount_yuan: 充值金额（元）
@@ -514,7 +514,7 @@ class TransactionService:
             # 转换为字典列表
             result = []
             for txn in transactions:
-                result.append({
+                txn_dict = {
                     'id': txn.id,
                     'type': txn.type,
                     'amount': txn.amount,  # 返回分，前端负责转换
@@ -522,12 +522,15 @@ class TransactionService:
                     'balance_after': txn.balance_after,  # 返回分
                     'participant_id': txn.participant_id,
                     'card_uid': txn.card_uid,
+                    'booth_id': txn.booth_id if hasattr(txn, 'booth_id') else None,  # 安全访问
+                    'product_id': txn.product_id if hasattr(txn, 'product_id') else None,  # 安全访问
                     'merchant_id': txn.merchant_id,
                     'related_txn_id': txn.related_txn_id,
                     'remark': txn.remark,
                     'operator_id': txn.operator_id,
-                    'created_at': txn.created_at.isoformat()
-                })
+                    'created_at': txn.created_at.isoformat() if txn.created_at else None
+                }
+                result.append(txn_dict)
             
             return {
                 'transactions': result,
@@ -598,7 +601,7 @@ class TransactionService:
             for rank, (uid, total_amount) in enumerate(results, start=1):
                 leaderboard.append({
                     'uid': uid,
-                    'total_amount': total_amount / 100.0,  # 转换为元
+                    'total_amount': float(total_amount),  # 金额已为元
                     'rank': rank
                 })
             

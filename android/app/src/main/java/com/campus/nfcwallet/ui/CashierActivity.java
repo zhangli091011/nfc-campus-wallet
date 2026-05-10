@@ -34,6 +34,7 @@ import com.campus.nfcwallet.models.TransactionResponse;
 import com.campus.nfcwallet.models.UserInfo;
 import com.campus.nfcwallet.nfc.NFCReader;
 import com.campus.nfcwallet.signature.SignatureGenerator;
+import com.campus.nfcwallet.ui.refund.RefundManagerActivity;
 import com.campus.nfcwallet.utils.ErrorHandler;
 import com.campus.nfcwallet.utils.SessionManager;
 
@@ -98,6 +99,7 @@ public class CashierActivity extends AppCompatActivity {
     private Button payButton;
     private Button rechargeButton;
     private Button clearButton;
+    private Button refundButton;
     
     // UI Components - Status
     private TextView statusText;
@@ -189,6 +191,7 @@ public class CashierActivity extends AppCompatActivity {
         payButton = findViewById(R.id.payButton);
         rechargeButton = findViewById(R.id.rechargeButton);
         clearButton = findViewById(R.id.clearButton);
+        refundButton = findViewById(R.id.refundButton);
         
         // Status
         statusText = findViewById(R.id.statusText);
@@ -200,6 +203,7 @@ public class CashierActivity extends AppCompatActivity {
         rechargeButton.setOnClickListener(v -> processRecharge());
         clearButton.setOnClickListener(v -> clearCard());
         logoutButton.setOnClickListener(v -> performLogout());
+        refundButton.setOnClickListener(v -> openRefundManager());
         
         // Initially hide sections
         cardInfoSection.setVisibility(View.GONE);
@@ -1083,6 +1087,25 @@ public class CashierActivity extends AppCompatActivity {
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             statusText.setVisibility(View.GONE);
         }, 3000);
+    }
+    
+    /**
+     * Open refund manager activity.
+     */
+    private void openRefundManager() {
+        int boothId = getIntent().getIntExtra("booth_id", 0);
+        if (boothId == 0 && currentBooth != null) {
+            boothId = currentBooth.getId();
+        }
+        
+        if (boothId <= 0) {
+            showError("摊位信息未加载，无法打开退款管理");
+            return;
+        }
+        
+        Intent intent = new Intent(this, RefundManagerActivity.class);
+        intent.putExtra("booth_id", boothId);
+        startActivity(intent);
     }
     
     /**

@@ -149,3 +149,13 @@ class SignatureVerificationError(SignatureError):
             message="Signature verification failed",
             error_code="SIGNATURE_INVALID"
         )
+
+
+class BusinessLogicError(BusinessException):
+    """业务逻辑错误异常"""
+    
+    def __init__(self, message: str, error_code: str = "BUSINESS_LOGIC_ERROR"):
+        super().__init__(
+            message=message,
+            error_code=error_code
+        )

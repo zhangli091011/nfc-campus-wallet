@@ -48,7 +48,8 @@ def get_current_user(
             algorithms=[settings.jwt_algorithm]
         )
         
-        user_id: int = payload.get("sub")
+        # Support both 'sub' and 'user_id' claim names
+        user_id = payload.get("sub") or payload.get("user_id")
         if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -61,7 +62,9 @@ def get_current_user(
             detail="Token has expired"
         )
     
-    except jwt.JWTError:
+    except (jwt.InvalidTokenError, jwt.PyJWTError, Exception) as e:
+        if isinstance(e, HTTPException):
+            raise
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials"

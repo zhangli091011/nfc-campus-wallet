@@ -1,0 +1,449 @@
+/**
+ * 央行宏观经济与信用风险看板 - 风控中心深色主题
+ * 配色：深黑 (#0d0d1a, #141428) + 红黄绿三色水位警示
+ */
+
+.credit-dashboard {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #0d0d1a 0%, #141428 50%, #0a0a18 100%);
+  padding: 0;
+  overflow-x: hidden;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #e0e0e0;
+}
+
+/* ========== 顶部标题栏 ========== */
+.cd-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 32px;
+  background: linear-gradient(180deg, rgba(20, 20, 40, 0.98) 0%, rgba(13, 13, 26, 0.95) 100%);
+  border-bottom: 2px solid rgba(231, 76, 60, 0.4);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+}
+
+.cd-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cd-header-icon {
+  font-size: 32px;
+  color: #e74c3c;
+  filter: drop-shadow(0 0 8px rgba(231, 76, 60, 0.6));
+}
+
+.cd-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #e74c3c 0%, #f39c12 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 2px;
+}
+
+.cd-risk-badge {
+  padding: 4px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.cd-risk-safe {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.4);
+}
+
+.cd-risk-warning {
+  background: rgba(243, 156, 18, 0.15);
+  color: #f39c12;
+  border: 1px solid rgba(243, 156, 18, 0.4);
+  animation: badge-pulse 2s infinite;
+}
+
+.cd-risk-critical {
+  background: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+  border: 1px solid rgba(231, 76, 60, 0.6);
+  animation: badge-pulse 1s infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.cd-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.cd-btn-refresh {
+  color: #888 !important;
+  font-size: 18px !important;
+}
+
+.cd-btn-refresh:hover {
+  color: #e74c3c !important;
+}
+
+.cd-btn-export {
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+}
+
+.cd-clock {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e74c3c;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  text-shadow: 0 0 8px rgba(231, 76, 60, 0.5);
+}
+
+/* ========== 核心数据卡片 ========== */
+.cd-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 24px 32px;
+}
+
+.cd-metric-card {
+  background: rgba(20, 20, 40, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.cd-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.cd-metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.cd-metric-m2::before { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+.cd-metric-fee::before { background: linear-gradient(90deg, #2ecc71, #27ae60); }
+.cd-metric-penetration::before { background: linear-gradient(90deg, #f39c12, #e67e22); }
+.cd-metric-disbursed::before { background: linear-gradient(90deg, #3498db, #2980b9); }
+
+.cd-metric-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.cd-metric-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.cd-dot-red { background: #e74c3c; box-shadow: 0 0 6px #e74c3c; }
+.cd-dot-green { background: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
+.cd-dot-yellow { background: #f39c12; box-shadow: 0 0 6px #f39c12; }
+.cd-dot-blue { background: #3498db; box-shadow: 0 0 6px #3498db; }
+
+.cd-metric-value {
+  font-size: 36px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.cd-value-critical {
+  color: #e74c3c;
+  text-shadow: 0 0 12px rgba(231, 76, 60, 0.8);
+}
+
+.cd-value-green {
+  color: #2ecc71;
+  text-shadow: 0 0 8px rgba(46, 204, 113, 0.5);
+}
+
+.cd-value-yellow {
+  color: #f39c12;
+  text-shadow: 0 0 8px rgba(243, 156, 18, 0.5);
+}
+
+.cd-value-blue {
+  color: #3498db;
+  text-shadow: 0 0 8px rgba(52, 152, 219, 0.5);
+}
+
+.cd-metric-sub {
+  font-size: 12px;
+  color: #666;
+}
+
+.cd-metric-limit {
+  color: #555;
+  margin-left: 4px;
+}
+
+.cd-util-safe { color: #2ecc71; font-weight: 600; }
+.cd-util-warning { color: #f39c12; font-weight: 600; }
+.cd-util-critical { color: #e74c3c; font-weight: 700; }
+
+/* 进度条 */
+.cd-metric-bar {
+  margin-top: 12px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cd-metric-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s ease;
+}
+
+.cd-bar-safe { background: linear-gradient(90deg, #2ecc71, #27ae60); }
+.cd-bar-warning { background: linear-gradient(90deg, #f39c12, #e67e22); }
+.cd-bar-critical { background: linear-gradient(90deg, #e74c3c, #c0392b); animation: bar-glow 1.5s infinite; }
+
+@keyframes bar-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(231, 76, 60, 0.6); }
+  50% { box-shadow: 0 0 12px rgba(231, 76, 60, 1); }
+}
+
+/* 闪烁效果 */
+.cd-blink .cd-metric-value {
+  animation: blink-red 1s infinite;
+}
+
+@keyframes blink-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ========== 图表区 ========== */
+.cd-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 20px;
+  padding: 0 32px 24px;
+}
+
+.cd-chart-card {
+  background: rgba(20, 20, 40, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.cd-chart-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #c0c0c0;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cd-chart-icon {
+  font-size: 16px;
+}
+
+.cd-chart-container {
+  width: 100%;
+  height: 320px;
+}
+
+/* ========== 表格区 ========== */
+.cd-table-section {
+  padding: 0 32px 32px;
+}
+
+.cd-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.cd-table-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0;
+}
+
+.cd-table-legend {
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: #888;
+}
+
+.cd-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 表格深色主题覆盖 */
+.cd-table .ant-table {
+  background: rgba(20, 20, 40, 0.7) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+.cd-table .ant-table-thead > tr > th {
+  background: rgba(30, 30, 50, 0.9) !important;
+  color: #888 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600 !important;
+}
+
+.cd-table .ant-table-tbody > tr {
+  background: transparent !important;
+  transition: all 0.2s ease;
+}
+
+.cd-table .ant-table-tbody > tr:hover > td {
+  background: rgba(231, 76, 60, 0.05) !important;
+}
+
+.cd-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+  color: #c0c0c0 !important;
+}
+
+.cd-table .ant-table-cell-row-hover {
+  background: rgba(231, 76, 60, 0.05) !important;
+}
+
+/* 表格单元格样式 */
+.cell-text {
+  color: #c0c0c0;
+}
+
+.cell-text-highlight {
+  color: #fff;
+  font-weight: 600;
+}
+
+.cell-text-dim {
+  color: #777;
+  font-size: 12px;
+}
+
+.amount-critical {
+  color: #e74c3c;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  font-size: 15px;
+}
+
+.amount-warning {
+  color: #f39c12;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+.amount-safe {
+  color: #c0c0c0;
+  font-family: 'Courier New', monospace;
+}
+
+/* ========== 响应式 ========== */
+@media (max-width: 1400px) {
+  .cd-metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .cd-charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .cd-metrics-row {
+    grid-template-columns: 1fr;
+  }
+  .cd-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* ========== 滚动条 ========== */
+.credit-dashboard ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.credit-dashboard ::-webkit-scrollbar-track {
+  background: rgba(20, 20, 40, 0.5);
+}
+
+.credit-dashboard ::-webkit-scrollbar-thumb {
+  background: rgba(231, 76, 60, 0.4);
+  border-radius: 3px;
+}
+
+.credit-dashboard ::-webkit-scrollbar-thumb:hover {
+  background: rgba(231, 76, 60, 0.7);
+}
+
+/* ========== Ant Design 覆盖 ========== */
+.cd-table .ant-table-column-sorter {
+  color: #555 !important;
+}
+
+.cd-table .ant-table-column-sorter-up.active,
+.cd-table .ant-table-column-sorter-down.active {
+  color: #e74c3c !important;
+}
+
+.cd-table .ant-spin-dot-item {
+  background-color: #e74c3c !important;
+}
+
+.cd-table .ant-empty-description {
+  color: #555 !important;
+}
+
+.cd-table .ant-table-placeholder {
+  background: transparent !important;
+}
+
+.cd-table .ant-table-placeholder:hover > td {
+  background: transparent !important;
+}

@@ -111,7 +111,7 @@ const RefundApproval = () => {
       key: 'amount',
       width: 120,
       render: (amount: number) => (
-        <span style={{ color: '#ff4d4f' }}>-¥{(amount / 100).toFixed(2)}</span>
+        <span style={{ color: '#ff4d4f' }}>-¥{amount.toFixed(2)}</span>
       ),
     },
     {
@@ -234,7 +234,7 @@ const RefundApproval = () => {
               <p>
                 金额：¥
                 {selectedTransaction
-                  ? (selectedTransaction.amount / 100).toFixed(2)
+                  ? selectedTransaction.amount.toFixed(2)
                   : '0.00'}
               </p>
               <p>卡号：{selectedTransaction?.card_uid}</p>

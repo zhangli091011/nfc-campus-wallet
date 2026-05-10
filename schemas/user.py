@@ -17,6 +17,7 @@ class UserRole(str, Enum):
     booth_cashier = "booth_cashier"
     issuer = "issuer"
     reviewer = "reviewer"
+    bank_clerk = "bank_clerk"  # 投资办理员（官方中央银行）
 
 
 class UserStatus(str, Enum):

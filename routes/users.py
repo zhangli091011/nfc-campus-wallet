@@ -260,6 +260,182 @@ async def get_user(
         )
 
 
+@router.patch("/users/{user_id}/booth", response_model=UserResponse)
+async def update_user_booth(
+    user_id: int,
+    booth_id: Optional[int] = Query(None, description="New booth ID (null to unassign)"),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    更新用户关联的摊位。
+    
+    仅 super_admin 可以更新用户摊位。
+    如果用户角色不是 booth_cashier，会自动将角色改为 booth_cashier。
+    如果 booth_id 为 null，则取消摊位关联并将角色改为 event_admin。
+    
+    Path Parameters:
+        - user_id: 用户ID
+    
+    Query Parameters:
+        - booth_id: 新摊位ID（null 表示取消关联）
+    
+    Returns:
+        UserResponse: 更新后的用户信息
+    """
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user(user_id)
+        
+        if booth_id is not None:
+            # 验证摊位存在
+            from models.booth import Booth
+            booth = db.query(Booth).filter(Booth.id == booth_id).first()
+            if booth is None:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "BOOTH_NOT_FOUND",
+                        "message": f"Booth with id {booth_id} not found"
+                    }
+                )
+            user.booth_id = booth_id
+            # bank_clerk 是特殊角色，分配摊位时不改变其角色
+            if user.role != 'bank_clerk':
+                user.role = 'booth_cashier'
+        else:
+            user.booth_id = None
+            # 如果取消摊位关联且当前是 booth_cashier，改为 event_admin
+            # bank_clerk 取消摊位关联时保持角色不变
+            if user.role == 'booth_cashier':
+                user.role = 'event_admin'
+        
+        db.commit()
+        db.refresh(user)
+        
+        logger.info(
+            f"User booth updated: id={user_id}, username='{user.username}', "
+            f"booth_id={booth_id}, updated_by={current_user.username}"
+        )
+        
+        return UserResponse.model_validate(user)
+    
+    except UserNotFoundError as e:
+        return JSONResponse(
+            status_code=404,
+            content={"error_code": e.error_code, "message": e.message}
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Unexpected error in user booth update: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "An internal error occurred."}
+        )
+
+
+@router.patch("/users/{user_id}/role", response_model=UserResponse)
+async def update_user_role(
+    user_id: int,
+    role: str = Query(..., description="New role (super_admin/event_admin/booth_cashier/issuer/reviewer/bank_clerk)"),
+    booth_id: Optional[int] = Query(None, description="Booth ID (required for booth_cashier)"),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    更新用户角色。
+    
+    仅 super_admin 可以更新用户角色。
+    如果新角色是 booth_cashier，必须同时提供 booth_id。
+    如果新角色不是 booth_cashier，booth_id 将被清除。
+    
+    Path Parameters:
+        - user_id: 用户ID
+    
+    Query Parameters:
+        - role: 新角色
+        - booth_id: 摊位ID（booth_cashier 必填）
+    
+    Returns:
+        UserResponse: 更新后的用户信息
+    """
+    try:
+        valid_roles = ['super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer', 'bank_clerk']
+        if role not in valid_roles:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "INVALID_ROLE",
+                    "message": f"Invalid role '{role}'. Must be one of: {', '.join(valid_roles)}"
+                }
+            )
+        
+        user_service = UserService(db)
+        user = user_service.get_user(user_id)
+        
+        # 不允许修改自己的角色
+        if user.id == current_user.id:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "CANNOT_CHANGE_OWN_ROLE",
+                    "message": "Cannot change your own role"
+                }
+            )
+        
+        # booth_cashier 需要 booth_id
+        if role == 'booth_cashier':
+            if booth_id is None:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "BOOTH_ID_REQUIRED",
+                        "message": "booth_id is required for booth_cashier role"
+                    }
+                )
+            from models.booth import Booth
+            booth = db.query(Booth).filter(Booth.id == booth_id).first()
+            if booth is None:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "BOOTH_NOT_FOUND",
+                        "message": f"Booth with id {booth_id} not found"
+                    }
+                )
+            user.booth_id = booth_id
+        else:
+            # 非 booth_cashier 角色清除 booth_id
+            user.booth_id = None
+        
+        old_role = user.role
+        user.role = role
+        db.commit()
+        db.refresh(user)
+        
+        logger.info(
+            f"User role updated: id={user_id}, username='{user.username}', "
+            f"old_role='{old_role}', new_role='{role}', updated_by={current_user.username}"
+        )
+        
+        return UserResponse.model_validate(user)
+    
+    except UserNotFoundError as e:
+        return JSONResponse(
+            status_code=404,
+            content={"error_code": e.error_code, "message": e.message}
+        )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Unexpected error in user role update: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "An internal error occurred."}
+        )
+
+
 @router.patch("/users/{user_id}/status", response_model=UserResponse)
 async def update_user_status(
     user_id: int,

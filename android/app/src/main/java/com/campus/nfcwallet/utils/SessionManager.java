@@ -78,4 +78,15 @@ public class SessionManager {
         }
         return null;
     }
+    
+    /**
+     * Get event ID from user info.
+     */
+    public int getEventId() {
+        UserInfo userInfo = getUserInfo();
+        if (userInfo != null && userInfo.getEventId() != null) {
+            return userInfo.getEventId();
+        }
+        return 0;
+    }
 }

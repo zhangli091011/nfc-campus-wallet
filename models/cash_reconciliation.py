@@ -93,15 +93,15 @@ class CashReconciliation(Base):
     
     @property
     def expected_cash_yuan(self) -> float:
-        """预期现金金额（元）"""
-        return self.expected_cash / 100.0
+        """预期现金金额（元）- 值已为元"""
+        return float(self.expected_cash)
     
     @property
     def actual_cash_yuan(self) -> float:
-        """实际现金金额（元）"""
-        return self.actual_cash / 100.0
+        """实际现金金额（元）- 值已为元"""
+        return float(self.actual_cash)
     
     @property
     def diff_amount_yuan(self) -> float:
-        """差额（元）"""
-        return self.diff_amount / 100.0
+        """差额（元）- 值已为元"""
+        return float(self.diff_amount)

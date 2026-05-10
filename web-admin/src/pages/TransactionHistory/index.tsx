@@ -133,7 +133,7 @@ const TransactionHistory = () => {
         const color = record.type === 'pay' ? '#ff4d4f' : '#52c41a'
         return (
           <span style={{ color }}>
-            {sign}¥{(amount / 100).toFixed(2)}
+            {sign}¥{amount.toFixed(2)}
           </span>
         )
       },
@@ -143,14 +143,14 @@ const TransactionHistory = () => {
       dataIndex: 'balance_before',
       key: 'balance_before',
       width: 120,
-      render: (balance: number) => `¥${(balance / 100).toFixed(2)}`,
+      render: (balance: number) => `¥${balance.toFixed(2)}`,
     },
     {
       title: '交易后余额',
       dataIndex: 'balance_after',
       key: 'balance_after',
       width: 120,
-      render: (balance: number) => `¥${(balance / 100).toFixed(2)}`,
+      render: (balance: number) => `¥${balance.toFixed(2)}`,
     },
     {
       title: '卡号',

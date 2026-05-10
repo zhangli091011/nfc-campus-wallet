@@ -2,11 +2,13 @@
 Transaction ORM model for NFC Campus E-Wallet System.
 
 Represents all transaction types in ledger append-only mode.
+All amounts stored in 元 (yuan) as DECIMAL(12,2).
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, CheckConstraint, Numeric
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+from decimal import Decimal
 import enum
 
 from core.database import Base
@@ -14,13 +16,16 @@ from core.database import Base
 
 class TransactionType(enum.Enum):
     """Transaction type enumeration for ledger mode."""
-    recharge = "recharge"  # 充值
-    pay = "pay"            # 支付
-    refund = "refund"      # 退款
-    adjust = "adjust"      # 调整
-    issue = "issue"        # 发卡
-    void = "void"          # 作废
-    expire = "expire"      # 过期
+    recharge = "recharge"      # 充值
+    pay = "pay"                # 支付
+    refund = "refund"          # 退款
+    adjust = "adjust"          # 调整
+    issue = "issue"            # 发卡
+    void = "void"              # 作废
+    expire = "expire"          # 过期
+    loan_issue = "loan_issue"  # 发放垫资（名义本金入账）
+    loan_fee = "loan_fee"      # 扣除手续费
+    stock_buy = "stock_buy"    # 购买股票
 
 
 class Transaction(Base):
@@ -29,22 +34,21 @@ class Transaction(Base):
     
     账本追加模式：所有交易都是追加记录，不可修改。
     每条记录包含交易前后余额，形成完整的审计链。
+    所有金额以"元"为单位。
     
     Attributes:
         id: Auto-incrementing primary key
         uid: Reference to user who performed transaction
-        card_uid: Card UID (compatible with uid field)
-        type: Transaction type (recharge/pay/refund/adjust/issue/void/expire)
-        amount: Transaction amount in cents (always positive, 单位：分)
-        balance_before: Account balance before transaction (单位：分)
-        balance_after: Account balance after transaction (单位：分)
-        merchant_id: Optional merchant identifier for payment transactions
-        related_txn_id: Related transaction ID (for refunds, adjustments)
+        card_uid: Card UID
+        type: Transaction type
+        amount: Transaction amount in yuan (元, always positive)
+        balance_before: Account balance before transaction (元)
+        balance_after: Account balance after transaction (元)
+        merchant_id: Optional merchant identifier
+        related_txn_id: Related transaction ID (for refunds)
         remark: Optional transaction remark
-        operator_id: Optional operator ID (for admin operations)
+        operator_id: Optional operator ID
         created_at: Transaction timestamp
-        user: Relationship to User record
-        related_transaction: Relationship to related transaction
     """
     __tablename__ = 'transactions'
     
@@ -53,7 +57,7 @@ class Transaction(Base):
     # User identification (legacy)
     uid = Column(
         String(32),
-        nullable=True,  # 改为可选，兼容旧数据
+        nullable=True,
         index=True
     )
     card_uid = Column(String(32), nullable=True, index=True)
@@ -78,11 +82,14 @@ class Transaction(Base):
         index=True
     )
     
-    # Transaction details
+    # Transaction details - amounts in 元 (yuan)
     type = Column(String(20), nullable=False)
-    amount = Column(Integer, nullable=False, comment='金额（分）')
-    balance_before = Column(Integer, nullable=False, default=0, comment='交易前余额（分）')
-    balance_after = Column(Integer, nullable=False, comment='交易后余额（分）')
+    amount = Column(Numeric(12, 2), nullable=False, comment='金额（元）')
+    balance_before = Column(
+        Numeric(12, 2), nullable=False, default=Decimal('0.00'),
+        comment='交易前余额（元）'
+    )
+    balance_after = Column(Numeric(12, 2), nullable=False, comment='交易后余额（元）')
     
     # Optional fields
     merchant_id = Column(String(64), nullable=True, index=True)
@@ -125,8 +132,6 @@ class Transaction(Base):
     )
     
     # Relationships
-    # Legacy user relationship removed - incompatible with booth management User model
-    # user = relationship("User", back_populates="transactions", primaryjoin="foreign(Transaction.uid) == User.uid")
     event = relationship("Event", back_populates="transactions")
     participant = relationship("Participant", back_populates="transactions")
     account = relationship("Account", back_populates="transactions")
@@ -154,7 +159,7 @@ class Transaction(Base):
     # Table constraints
     __table_args__ = (
         CheckConstraint(
-            "type IN ('recharge', 'pay', 'refund', 'adjust', 'issue', 'void', 'expire')",
+            "type IN ('recharge', 'pay', 'refund', 'adjust', 'issue', 'void', 'expire', 'loan_issue', 'loan_fee', 'stock_buy')",
             name='chk_transaction_type'
         ),
         CheckConstraint('amount > 0', name='chk_amount_positive'),
@@ -165,21 +170,20 @@ class Transaction(Base):
     def __repr__(self):
         return (
             f"<Transaction(id={self.id}, uid='{self.uid}', type='{self.type}', "
-            f"amount={self.amount}, balance_before={self.balance_before}, "
-            f"balance_after={self.balance_after})>"
+            f"amount={self.amount}, balance: {self.balance_before} → {self.balance_after})>"
         )
     
     @property
     def amount_yuan(self) -> float:
-        """Get amount in yuan (元)."""
-        return self.amount / 100.0
+        """Get amount as float (backward compatibility)."""
+        return float(self.amount)
     
     @property
     def balance_before_yuan(self) -> float:
-        """Get balance_before in yuan (元)."""
-        return self.balance_before / 100.0
+        """Get balance_before as float."""
+        return float(self.balance_before)
     
     @property
     def balance_after_yuan(self) -> float:
-        """Get balance_after in yuan (元)."""
-        return self.balance_after / 100.0
+        """Get balance_after as float."""
+        return float(self.balance_after)
