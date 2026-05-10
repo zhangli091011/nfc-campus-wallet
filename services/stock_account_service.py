@@ -77,7 +77,7 @@ class StockAccountService:
         
         # 实名认证校验（投资操作需要实名）
         if not participant.is_verified:
-            raise ValidationError(f"参与者 {participant.name} 未完成实名认证（需填写班级或学号），无法进行投资操作")
+            raise ValidationError(f"该卡片持卡人处于实名审核中，请先到管理后台完成实名审核后再进行投资操作")
         
         # 2. 查询摊位
         booth = self.db.query(Booth).filter(Booth.id == booth_id).first()
@@ -212,7 +212,7 @@ class StockAccountService:
         
         # 实名认证校验（投资操作需要实名）
         if not participant.is_verified:
-            raise ValidationError(f"参与者 {participant.name} 未完成实名认证（需填写班级或学号），无法进行投资操作")
+            raise ValidationError(f"该卡片持卡人处于实名审核中，请先到管理后台完成实名审核后再进行投资操作")
         
         # 2. 查询摊位
         booth = self.db.query(Booth).filter(Booth.id == booth_id).first()

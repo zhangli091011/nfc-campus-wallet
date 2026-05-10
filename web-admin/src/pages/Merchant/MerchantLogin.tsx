@@ -4,6 +4,7 @@ import { Form, Input, Button, Card, message } from 'antd'
 import { UserOutlined, LockOutlined, ShopOutlined } from '@ant-design/icons'
 import { merchantLogin } from '@/services/merchant'
 import { setToken } from '@/utils/auth'
+import './merchant-mobile.css'
 
 const MERCHANT_KEY = 'nfc_merchant_info'
 
@@ -52,15 +53,8 @@ const MerchantLogin = () => {
   }
 
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    }}>
+    <div className="merchant-auth-mobile">
       <Card
-        style={{ width: 420, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
         title={
           <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 'bold' }}>
             <ShopOutlined style={{ marginRight: 8 }} />

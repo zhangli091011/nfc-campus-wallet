@@ -5,6 +5,7 @@ import { UserOutlined, LockOutlined, ShopOutlined, TeamOutlined } from '@ant-des
 import { merchantRegister } from '@/services/merchant'
 import { setToken } from '@/utils/auth'
 import { setMerchantInfo } from './MerchantLogin'
+import './merchant-mobile.css'
 
 const MerchantRegister = () => {
   const [loading, setLoading] = useState(false)
@@ -39,15 +40,8 @@ const MerchantRegister = () => {
   }
 
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    }}>
+    <div className="merchant-auth-mobile">
       <Card
-        style={{ width: 460, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
         title={
           <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 'bold' }}>
             <ShopOutlined style={{ marginRight: 8 }} />

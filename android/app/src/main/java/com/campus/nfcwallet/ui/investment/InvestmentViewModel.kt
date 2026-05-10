@@ -96,7 +96,7 @@ class InvestmentViewModel(
                         uiState = uiState.copy(
                             isLoading = false,
                             cardUid = null,
-                            errorMessage = "该卡片持有者未完成实名认证（需填写班级或学号），无法进行投资操作",
+                            errorMessage = "该卡片持卡人处于实名审核中，请先到管理后台完成审核后再进行投资操作",
                         )
                         currentParticipant = null
                         return

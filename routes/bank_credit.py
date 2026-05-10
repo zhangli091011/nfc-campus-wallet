@@ -253,7 +253,7 @@ async def issue_loan(
         if not participant.is_verified:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"参与者 {participant.name} 未完成实名认证（需填写班级或学号），无法办理信用垫资"
+                detail=f"该卡片持卡人处于实名审核中，请先到管理后台完成实名审核后再办理信用垫资"
             )
 
         # ── 4. 获取信贷配置 ──

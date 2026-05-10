@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Card, Descriptions, Button, Modal, Form, Input, message, Tag, Spin } from 'antd'
 import { EditOutlined, ShopOutlined } from '@ant-design/icons'
-import { getMerchantBooth, updateMerchantBooth, type MerchantBoothInfo } from '@/services/merchant'
+import {
+  getMerchantBooth,
+  updateMerchantBooth,
+  type MerchantBoothInfo,
+} from '@/services/merchant'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import dayjs from 'dayjs'
+import './merchant-mobile.css'
 
 const MerchantBooth = () => {
   const [booth, setBooth] = useState<MerchantBoothInfo | null>(null)
@@ -10,6 +16,7 @@ const MerchantBooth = () => {
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [form] = Form.useForm()
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     loadBooth()
@@ -87,12 +94,22 @@ const MerchantBooth = () => {
           </span>
         }
         extra={
-          <Button type="primary" icon={<EditOutlined />} onClick={handleEdit}>
+          <Button
+            type="primary"
+            icon={<EditOutlined />}
+            onClick={handleEdit}
+            size={isMobile ? 'small' : 'middle'}
+          >
             编辑
           </Button>
         }
       >
-        <Descriptions column={{ xs: 1, sm: 2 }} bordered>
+        <Descriptions
+          column={isMobile ? 1 : { xs: 1, sm: 2 }}
+          bordered
+          size={isMobile ? 'small' : 'default'}
+          labelStyle={isMobile ? { width: 90 } : undefined}
+        >
           <Descriptions.Item label="商铺名称">{booth.booth_name}</Descriptions.Item>
           <Descriptions.Item label="班级">{booth.class_name}</Descriptions.Item>
           <Descriptions.Item label="状态">
@@ -117,6 +134,8 @@ const MerchantBooth = () => {
         confirmLoading={editLoading}
         okText="保存"
         cancelText="取消"
+        width={isMobile ? '94%' : 520}
+        centered
       >
         <Form form={form} layout="vertical">
           <Form.Item

@@ -1,18 +1,26 @@
 import { useState, useEffect } from 'react'
-import { Card, Row, Col, Statistic, Table, Tag, Spin, message } from 'antd'
+import { Card, Row, Col, Statistic, Table, Tag, Spin, message, Empty } from 'antd'
 import {
   DollarOutlined,
   RiseOutlined,
   ShoppingCartOutlined,
   CalendarOutlined,
 } from '@ant-design/icons'
-import { getMerchantIncome, getMerchantTransactions, type MerchantIncomeStats, type MerchantTransaction } from '@/services/merchant'
+import {
+  getMerchantIncome,
+  getMerchantTransactions,
+  type MerchantIncomeStats,
+  type MerchantTransaction,
+} from '@/services/merchant'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import dayjs from 'dayjs'
+import './merchant-mobile.css'
 
 const MerchantDashboard = () => {
   const [income, setIncome] = useState<MerchantIncomeStats | null>(null)
   const [transactions, setTransactions] = useState<MerchantTransaction[]>([])
   const [loading, setLoading] = useState(true)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     loadData()
@@ -35,26 +43,15 @@ const MerchantDashboard = () => {
   }
 
   const columns = [
-    {
-      title: '交易ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 80,
-    },
+    { title: '交易ID', dataIndex: 'id', key: 'id', width: 80 },
     {
       title: '类型',
       dataIndex: 'type',
       key: 'type',
       width: 80,
       render: (type: string) => {
-        const colorMap: Record<string, string> = {
-          pay: 'green',
-          refund: 'red',
-        }
-        const labelMap: Record<string, string> = {
-          pay: '收款',
-          refund: '退款',
-        }
+        const colorMap: Record<string, string> = { pay: 'green', refund: 'red' }
+        const labelMap: Record<string, string> = { pay: '收款', refund: '退款' }
         return <Tag color={colorMap[type] || 'default'}>{labelMap[type] || type}</Tag>
       },
     },
@@ -91,10 +88,49 @@ const MerchantDashboard = () => {
     )
   }
 
+  const renderMobileTxnList = () => {
+    if (transactions.length === 0) {
+      return <Empty description="暂无交易记录" />
+    }
+    return (
+      <div>
+        {transactions.map((t) => {
+          const isRefund = t.type === 'refund'
+          const amountColor = isRefund ? '#cf1322' : '#3f8600'
+          return (
+            <div key={t.id} className="merchant-mobile-list-item">
+              <div className="merchant-mobile-list-item-header">
+                <span>
+                  <Tag color={isRefund ? 'red' : 'green'} style={{ marginRight: 8 }}>
+                    {isRefund ? '退款' : '收款'}
+                  </Tag>
+                  <span style={{ fontSize: 12, color: '#8c8c8c' }}>#{t.id}</span>
+                </span>
+                <span style={{ color: amountColor, fontSize: 16 }}>
+                  {isRefund ? '-' : '+'}¥{t.amount.toFixed(2)}
+                </span>
+              </div>
+              {t.product_name && (
+                <div className="merchant-mobile-list-item-row">
+                  <span className="label">商品</span>
+                  <span className="value">{t.product_name}</span>
+                </div>
+              )}
+              <div className="merchant-mobile-list-item-row">
+                <span className="label">时间</span>
+                <span className="value">{dayjs(t.created_at).format('MM-DD HH:mm:ss')}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
+      <Row gutter={[12, 12]}>
+        <Col xs={12} sm={12} lg={6}>
           <Card>
             <Statistic
               title="总收入"
@@ -106,7 +142,7 @@ const MerchantDashboard = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} sm={12} lg={6}>
           <Card>
             <Statistic
               title="总交易笔数"
@@ -116,7 +152,7 @@ const MerchantDashboard = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} sm={12} lg={6}>
           <Card>
             <Statistic
               title="今日收入"
@@ -128,7 +164,7 @@ const MerchantDashboard = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} sm={12} lg={6}>
           <Card>
             <Statistic
               title="今日交易"
@@ -140,15 +176,19 @@ const MerchantDashboard = () => {
         </Col>
       </Row>
 
-      <Card title="最近交易" style={{ marginTop: 24 }}>
-        <Table
-          columns={columns}
-          dataSource={transactions}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          locale={{ emptyText: '暂无交易记录' }}
-        />
+      <Card title="最近交易" style={{ marginTop: isMobile ? 12 : 24 }}>
+        {isMobile ? (
+          renderMobileTxnList()
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={transactions}
+            rowKey="id"
+            pagination={false}
+            size="small"
+            locale={{ emptyText: '暂无交易记录' }}
+          />
+        )}
       </Card>
     </div>
   )

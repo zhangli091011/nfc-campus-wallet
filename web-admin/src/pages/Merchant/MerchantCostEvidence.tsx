@@ -19,6 +19,7 @@ import {
   Popconfirm,
   Typography,
   Empty,
+  Pagination,
 } from 'antd'
 import {
   UploadOutlined,
@@ -37,8 +38,10 @@ import {
   type CostEvidence,
   type CostEvidenceStats,
 } from '@/services/merchant'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { getToken } from '@/utils/auth'
 import dayjs from 'dayjs'
+import './merchant-mobile.css'
 
 const { Text } = Typography
 const { TextArea } = Input
@@ -86,6 +89,7 @@ const MerchantCostEvidence = () => {
   const [filterStatus, setFilterStatus] = useState<string | undefined>()
   const [form] = Form.useForm()
   const [fileList, setFileList] = useState<UploadFile[]>([])
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     loadEvidences()
@@ -128,7 +132,6 @@ const MerchantCostEvidence = () => {
         return
       }
 
-      // 获取真实的 File 对象
       const rawFile = (fileList[0].originFileObj || fileList[0]) as File
       if (!rawFile || !(rawFile instanceof File || rawFile instanceof Blob)) {
         message.error('文件无效，请重新选择')
@@ -181,10 +184,9 @@ const MerchantCostEvidence = () => {
   }
 
   const handlePreview = (record: CostEvidence) => {
+    const token = getToken()
+    const url = `/api/merchant/cost-evidence/${record.id}/file`
     if (record.mime_type.startsWith('image/')) {
-      // 对于图片，通过 fetch 获取 blob URL 来预览
-      const token = getToken()
-      const url = `/api/merchant/cost-evidence/${record.id}/file`
       fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -196,9 +198,6 @@ const MerchantCostEvidence = () => {
         })
         .catch(() => message.error('预览失败'))
     } else {
-      // PDF 或其他文件，通过 fetch 下载
-      const token = getToken()
-      const url = `/api/merchant/cost-evidence/${record.id}/file`
       fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -232,7 +231,6 @@ const MerchantCostEvidence = () => {
         message.error('文件大小不能超过 10MB')
         return Upload.LIST_IGNORE
       }
-      // 构造符合 UploadFile 格式的对象，确保 originFileObj 指向真实 File
       const uploadFile: UploadFile = {
         uid: file.uid || `${Date.now()}`,
         name: file.name,
@@ -242,7 +240,7 @@ const MerchantCostEvidence = () => {
         originFileObj: file as any,
       }
       setFileList([uploadFile])
-      return false // 阻止自动上传
+      return false
     },
     fileList,
     onRemove: () => {
@@ -271,7 +269,9 @@ const MerchantCostEvidence = () => {
           ) : (
             <FilePdfOutlined style={{ color: '#ff4d4f' }} />
           )}
-          <Text ellipsis style={{ maxWidth: 150 }}>{text}</Text>
+          <Text ellipsis style={{ maxWidth: 150 }}>
+            {text}
+          </Text>
         </Space>
       ),
     },
@@ -280,9 +280,7 @@ const MerchantCostEvidence = () => {
       dataIndex: 'category',
       key: 'category',
       width: 100,
-      render: (category: string) => (
-        <Tag>{categoryLabelMap[category] || category}</Tag>
-      ),
+      render: (category: string) => <Tag>{categoryLabelMap[category] || category}</Tag>,
     },
     {
       title: '金额',
@@ -348,11 +346,99 @@ const MerchantCostEvidence = () => {
     },
   ]
 
+  const renderMobileList = () => {
+    if (loading) {
+      return <div style={{ textAlign: 'center', padding: 30 }}>加载中...</div>
+    }
+    if (evidences.length === 0) {
+      return <Empty description="暂无凭据记录" />
+    }
+    return (
+      <div>
+        {evidences.map((ev) => (
+          <div key={ev.id} className="merchant-mobile-list-item">
+            <div className="merchant-mobile-list-item-header">
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, maxWidth: '60%' }}>
+                {ev.mime_type.startsWith('image/') ? (
+                  <FileImageOutlined style={{ color: '#1890ff' }} />
+                ) : (
+                  <FilePdfOutlined style={{ color: '#ff4d4f' }} />
+                )}
+                <Text ellipsis style={{ maxWidth: '100%' }}>
+                  {ev.filename}
+                </Text>
+              </span>
+              <Tag color={statusColorMap[ev.status] || 'default'}>
+                {statusLabelMap[ev.status] || ev.status}
+              </Tag>
+            </div>
+            <div className="merchant-mobile-list-item-row">
+              <span className="label">类别</span>
+              <span className="value">
+                <Tag>{categoryLabelMap[ev.category] || ev.category}</Tag>
+              </span>
+            </div>
+            {ev.amount != null && (
+              <div className="merchant-mobile-list-item-row">
+                <span className="label">金额</span>
+                <span className="value" style={{ color: '#f5576c', fontWeight: 600 }}>
+                  ¥{ev.amount.toFixed(2)}
+                </span>
+              </div>
+            )}
+            <div className="merchant-mobile-list-item-row">
+              <span className="label">大小</span>
+              <span className="value">{formatFileSize(ev.file_size)}</span>
+            </div>
+            <div className="merchant-mobile-list-item-row">
+              <span className="label">上传时间</span>
+              <span className="value">{dayjs(ev.created_at).format('MM-DD HH:mm')}</span>
+            </div>
+            <div className="merchant-mobile-list-item-actions">
+              <Button
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => handlePreview(ev)}
+              >
+                查看
+              </Button>
+              {ev.status === 'pending' && (
+                <Popconfirm
+                  title="确定删除该凭据？"
+                  onConfirm={() => handleDelete(ev.id)}
+                  okText="确定"
+                  cancelText="取消"
+                >
+                  <Button size="small" danger icon={<DeleteOutlined />}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              )}
+            </div>
+          </div>
+        ))}
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Pagination
+            current={currentPage}
+            pageSize={pageSize}
+            total={totalCount}
+            onChange={(p) => setCurrentPage(p)}
+            showSizeChanger={false}
+            simple
+          />
+          <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 6 }}>
+            共 {totalCount} 条
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       {/* 统计卡片 */}
       {stats && (
-        <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Row gutter={[12, 12]} style={{ marginBottom: isMobile ? 12 : 24 }}>
           <Col xs={12} sm={6}>
             <Card size="small">
               <Statistic title="凭据总数" value={stats.total_count} suffix="份" />
@@ -397,59 +483,99 @@ const MerchantCostEvidence = () => {
           <Button
             type="primary"
             icon={<PlusOutlined />}
+            size={isMobile ? 'small' : 'middle'}
             onClick={() => setUploadModalVisible(true)}
           >
-            上传凭据
+            {isMobile ? '上传' : '上传凭据'}
           </Button>
         }
       >
         {/* 筛选 */}
-        <Space style={{ marginBottom: 16 }}>
-          <Select
-            placeholder="按类别筛选"
-            allowClear
-            style={{ width: 140 }}
-            value={filterCategory}
-            onChange={(val) => {
-              setFilterCategory(val)
-              setCurrentPage(1)
-            }}
-            options={categoryOptions}
-          />
-          <Select
-            placeholder="按状态筛选"
-            allowClear
-            style={{ width: 120 }}
-            value={filterStatus}
-            onChange={(val) => {
-              setFilterStatus(val)
-              setCurrentPage(1)
-            }}
-            options={[
-              { value: 'pending', label: '待审核' },
-              { value: 'approved', label: '已通过' },
-              { value: 'rejected', label: '已驳回' },
-            ]}
-          />
-        </Space>
+        {isMobile ? (
+          <Row gutter={8} style={{ marginBottom: 12 }}>
+            <Col span={12}>
+              <Select
+                placeholder="类别"
+                allowClear
+                style={{ width: '100%' }}
+                value={filterCategory}
+                onChange={(val) => {
+                  setFilterCategory(val)
+                  setCurrentPage(1)
+                }}
+                options={categoryOptions}
+              />
+            </Col>
+            <Col span={12}>
+              <Select
+                placeholder="状态"
+                allowClear
+                style={{ width: '100%' }}
+                value={filterStatus}
+                onChange={(val) => {
+                  setFilterStatus(val)
+                  setCurrentPage(1)
+                }}
+                options={[
+                  { value: 'pending', label: '待审核' },
+                  { value: 'approved', label: '已通过' },
+                  { value: 'rejected', label: '已驳回' },
+                ]}
+              />
+            </Col>
+          </Row>
+        ) : (
+          <Space style={{ marginBottom: 16 }}>
+            <Select
+              placeholder="按类别筛选"
+              allowClear
+              style={{ width: 140 }}
+              value={filterCategory}
+              onChange={(val) => {
+                setFilterCategory(val)
+                setCurrentPage(1)
+              }}
+              options={categoryOptions}
+            />
+            <Select
+              placeholder="按状态筛选"
+              allowClear
+              style={{ width: 120 }}
+              value={filterStatus}
+              onChange={(val) => {
+                setFilterStatus(val)
+                setCurrentPage(1)
+              }}
+              options={[
+                { value: 'pending', label: '待审核' },
+                { value: 'approved', label: '已通过' },
+                { value: 'rejected', label: '已驳回' },
+              ]}
+            />
+          </Space>
+        )}
 
-        <Table
-          columns={columns}
-          dataSource={evidences}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            current: currentPage,
-            pageSize,
-            total: totalCount,
-            onChange: (page) => setCurrentPage(page),
-            showTotal: (total) => `共 ${total} 条`,
-            showSizeChanger: false,
-          }}
-          locale={{
-            emptyText: <Empty description="暂无凭据记录" />,
-          }}
-        />
+        {isMobile ? (
+          renderMobileList()
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={evidences}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              current: currentPage,
+              pageSize,
+              total: totalCount,
+              onChange: (page) => setCurrentPage(page),
+              showTotal: (total) => `共 ${total} 条`,
+              showSizeChanger: false,
+            }}
+            locale={{
+              emptyText: <Empty description="暂无凭据记录" />,
+            }}
+          />
+        )}
       </Card>
 
       {/* 上传弹窗 */}
@@ -465,7 +591,8 @@ const MerchantCostEvidence = () => {
         confirmLoading={uploading}
         okText="上传"
         cancelText="取消"
-        width={500}
+        width={isMobile ? '94%' : 500}
+        centered
       >
         <Form form={form} layout="vertical">
           <Form.Item

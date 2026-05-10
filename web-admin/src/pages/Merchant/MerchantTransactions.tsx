@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Table, Card, Tag, DatePicker, Space, message } from 'antd'
+import { Table, Card, Tag, DatePicker, Space, message, Empty, Pagination } from 'antd'
 import { getMerchantTransactions, type MerchantTransaction } from '@/services/merchant'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import dayjs from 'dayjs'
+import './merchant-mobile.css'
 
 const { RangePicker } = DatePicker
 
@@ -12,6 +14,7 @@ const MerchantTransactions = () => {
   const [page, setPage] = useState(1)
   const [pageSize] = useState(20)
   const [dateRange, setDateRange] = useState<[string, string] | null>(null)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     loadTransactions()
@@ -47,31 +50,32 @@ const MerchantTransactions = () => {
     setPage(1)
   }
 
+  const typeLabel = (type: string) => {
+    const labelMap: Record<string, string> = {
+      pay: '收款',
+      refund: '退款',
+      recharge: '充值',
+    }
+    return labelMap[type] || type
+  }
+
+  const typeColor = (type: string) => {
+    const colorMap: Record<string, string> = {
+      pay: 'green',
+      refund: 'red',
+      recharge: 'blue',
+    }
+    return colorMap[type] || 'default'
+  }
+
   const columns = [
-    {
-      title: '交易ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 80,
-    },
+    { title: '交易ID', dataIndex: 'id', key: 'id', width: 80 },
     {
       title: '类型',
       dataIndex: 'type',
       key: 'type',
       width: 80,
-      render: (type: string) => {
-        const colorMap: Record<string, string> = {
-          pay: 'green',
-          refund: 'red',
-          recharge: 'blue',
-        }
-        const labelMap: Record<string, string> = {
-          pay: '收款',
-          refund: '退款',
-          recharge: '充值',
-        }
-        return <Tag color={colorMap[type] || 'default'}>{labelMap[type] || type}</Tag>
-      },
+      render: (type: string) => <Tag color={typeColor(type)}>{typeLabel(type)}</Tag>,
     },
     {
       title: '金额（元）',
@@ -111,31 +115,112 @@ const MerchantTransactions = () => {
     },
   ]
 
+  const renderMobileList = () => {
+    if (loading) {
+      return <div style={{ textAlign: 'center', padding: 30 }}>加载中...</div>
+    }
+    if (transactions.length === 0) {
+      return <Empty description="暂无交易记录" />
+    }
+    return (
+      <div>
+        {transactions.map((t) => {
+          const isRefund = t.type === 'refund'
+          const amountColor = isRefund ? '#cf1322' : '#3f8600'
+          const amountPrefix = isRefund ? '-' : '+'
+          return (
+            <div key={t.id} className="merchant-mobile-list-item">
+              <div className="merchant-mobile-list-item-header">
+                <span>
+                  <Tag color={typeColor(t.type)} style={{ marginRight: 8 }}>
+                    {typeLabel(t.type)}
+                  </Tag>
+                  <span style={{ fontSize: 13, color: '#8c8c8c' }}>#{t.id}</span>
+                </span>
+                <span style={{ color: amountColor, fontSize: 16 }}>
+                  {amountPrefix}¥{t.amount.toFixed(2)}
+                </span>
+              </div>
+              {t.product_name && (
+                <div className="merchant-mobile-list-item-row">
+                  <span className="label">商品</span>
+                  <span className="value">{t.product_name}</span>
+                </div>
+              )}
+              {t.remark && (
+                <div className="merchant-mobile-list-item-row">
+                  <span className="label">备注</span>
+                  <span className="value">{t.remark}</span>
+                </div>
+              )}
+              <div className="merchant-mobile-list-item-row">
+                <span className="label">时间</span>
+                <span className="value">
+                  {dayjs(t.created_at).format('YYYY-MM-DD HH:mm:ss')}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Pagination
+            current={page}
+            pageSize={pageSize}
+            total={totalCount}
+            onChange={(p) => setPage(p)}
+            showSizeChanger={false}
+            size="small"
+            simple
+          />
+          <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 6 }}>
+            共 {totalCount} 条记录
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <Card
       title="交易记录"
       extra={
-        <Space>
-          <RangePicker onChange={handleDateChange} />
-        </Space>
+        !isMobile && (
+          <Space>
+            <RangePicker onChange={handleDateChange} />
+          </Space>
+        )
       }
     >
-      <Table
-        columns={columns}
-        dataSource={transactions}
-        rowKey="id"
-        loading={loading}
-        pagination={{
-          current: page,
-          pageSize,
-          total: totalCount,
-          onChange: (p) => setPage(p),
-          showTotal: (total) => `共 ${total} 条记录`,
-          showSizeChanger: false,
-        }}
-        locale={{ emptyText: '暂无交易记录' }}
-        size="middle"
-      />
+      {isMobile && (
+        <div style={{ marginBottom: 12 }}>
+          <RangePicker
+            onChange={handleDateChange}
+            style={{ width: '100%' }}
+            inputReadOnly
+          />
+        </div>
+      )}
+
+      {isMobile ? (
+        renderMobileList()
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={transactions}
+          rowKey="id"
+          loading={loading}
+          pagination={{
+            current: page,
+            pageSize,
+            total: totalCount,
+            onChange: (p) => setPage(p),
+            showTotal: (total) => `共 ${total} 条记录`,
+            showSizeChanger: false,
+          }}
+          locale={{ emptyText: '暂无交易记录' }}
+          size="middle"
+        />
+      )}
     </Card>
   )
 }

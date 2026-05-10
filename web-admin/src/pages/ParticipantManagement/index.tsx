@@ -11,15 +11,17 @@ import {
   message,
   Tag,
 } from 'antd'
-import { PlusOutlined, EditOutlined, DollarOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DollarOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import {
   getParticipants,
   createParticipant,
   updateParticipant,
+  verifyParticipant,
   recharge,
   type Participant,
   type CreateParticipantRequest,
   type UpdateParticipantRequest,
+  type VerifyParticipantRequest,
   type RechargeRequest,
 } from '@/services/participant'
 import { getEvents, type Event } from '@/services/event'
@@ -31,11 +33,14 @@ const ParticipantManagement = () => {
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false)
+  const [verifyModalVisible, setVerifyModalVisible] = useState(false)
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null)
   const [rechargingParticipant, setRechargingParticipant] = useState<Participant | null>(null)
+  const [verifyingParticipant, setVerifyingParticipant] = useState<Participant | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<number>()
   const [form] = Form.useForm()
   const [rechargeForm] = Form.useForm()
+  const [verifyForm] = Form.useForm()
 
   useEffect(() => {
     loadEvents()
@@ -99,6 +104,39 @@ const ParticipantManagement = () => {
     setRechargingParticipant(record)
     rechargeForm.resetFields()
     setRechargeModalVisible(true)
+  }
+
+  const handleVerify = (record: Participant) => {
+    setVerifyingParticipant(record)
+    verifyForm.resetFields()
+    verifyForm.setFieldsValue({
+      name: record.is_verified ? record.name : '',
+      class_name: record.class_name || '',
+      student_no: record.student_no || record.student_id || '',
+    })
+    setVerifyModalVisible(true)
+  }
+
+  const handleVerifySubmit = async () => {
+    if (!verifyingParticipant) return
+    try {
+      const values = await verifyForm.validateFields()
+      if (!values.class_name?.trim() && !values.student_no?.trim()) {
+        message.error('班级与学号至少填写一项才能完成实名审核')
+        return
+      }
+      const data: VerifyParticipantRequest = {
+        name: values.name,
+        class_name: values.class_name,
+        student_no: values.student_no,
+      }
+      await verifyParticipant(verifyingParticipant.id, data)
+      message.success('实名审核通过')
+      setVerifyModalVisible(false)
+      loadParticipants()
+    } catch (error) {
+      // 错误已处理
+    }
   }
 
   const handleSubmit = async () => {
@@ -168,13 +206,16 @@ const ParticipantManagement = () => {
       dataIndex: 'display_name',
       key: 'display_name',
       render: (text: string, record: any) => (
-        record.is_verified ? text : <span style={{ color: '#999' }}>{record.card_uid}（未实名）</span>
+        record.is_verified
+          ? <span>{text || record.name}</span>
+          : <Tag color="warning">审核中</Tag>
       ),
     },
     {
       title: '学号',
-      dataIndex: 'student_id',
-      key: 'student_id',
+      dataIndex: 'student_no',
+      key: 'student_no',
+      render: (text: string, record: any) => text || record.student_id || '-',
     },
     {
       title: '班级',
@@ -208,9 +249,20 @@ const ParticipantManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 260,
       render: (_: any, record: Participant) => (
         <Space>
+          {!record.is_verified && (
+            <Button
+              type="link"
+              size="small"
+              icon={<SafetyCertificateOutlined />}
+              onClick={() => handleVerify(record)}
+              style={{ color: '#fa8c16' }}
+            >
+              审核
+            </Button>
+          )}
           {selectedEventId && (
             <Button
               type="link"
@@ -336,6 +388,41 @@ const ParticipantManagement = () => {
 
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={3} placeholder="请输入备注" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="实名审核"
+        open={verifyModalVisible}
+        onOk={handleVerifySubmit}
+        onCancel={() => setVerifyModalVisible(false)}
+        okText="通过审核"
+        width={500}
+      >
+        <Form form={verifyForm} layout="vertical">
+          <Form.Item label="卡号">
+            <Input value={verifyingParticipant?.card_uid} disabled />
+          </Form.Item>
+
+          <Form.Item
+            name="name"
+            label="姓名"
+            rules={[{ required: true, message: '请输入姓名' }]}
+          >
+            <Input placeholder="请输入真实姓名" />
+          </Form.Item>
+
+          <Form.Item
+            name="class_name"
+            label="班级"
+            extra="班级与学号至少填写一项"
+          >
+            <Input placeholder="请输入班级" />
+          </Form.Item>
+
+          <Form.Item name="student_no" label="学号">
+            <Input placeholder="请输入学号" />
           </Form.Item>
         </Form>
       </Modal>
