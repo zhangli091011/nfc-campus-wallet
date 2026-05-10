@@ -80,3 +80,6 @@ coverage.xml
 *.tmp
 *.bak
 *.swp
+
+# Uploads
+uploads/

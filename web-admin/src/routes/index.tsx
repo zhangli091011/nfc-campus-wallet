@@ -23,10 +23,26 @@ import {
 } from '@/pages/Reports'
 import BankCreditDashboard from '@/pages/BankCreditDashboard'
 import MacroEconomyDashboard from '@/pages/MacroEconomyDashboard'
+import {
+  MerchantLogin,
+  MerchantRegister,
+  MerchantLayout,
+  MerchantDashboard,
+  MerchantBooth,
+  MerchantProducts,
+  MerchantTransactions,
+  MerchantCostEvidence,
+  isMerchantAuthenticated,
+} from '@/pages/Merchant'
 
 // 路由守卫组件
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated() ? <>{children}</> : <Navigate to="/login" replace />
+}
+
+// 商户路由守卫
+const MerchantPrivateRoute = ({ children }: { children: React.ReactNode }) => {
+  return isMerchantAuthenticated() ? <>{children}</> : <Navigate to="/merchant/login" replace />
 }
 
 const AppRoutes = () => {
@@ -95,6 +111,25 @@ const AppRoutes = () => {
         <Route path="reports/product-leaderboard" element={<ProductLeaderboard />} />
         <Route path="reports/audit-logs" element={<AuditLogs />} />
         <Route path="reports/export" element={<ExportPage />} />
+      </Route>
+
+      {/* 商户系统 */}
+      <Route path="/merchant/login" element={<MerchantLogin />} />
+      <Route path="/merchant/register" element={<MerchantRegister />} />
+      <Route
+        path="/merchant"
+        element={
+          <MerchantPrivateRoute>
+            <MerchantLayout />
+          </MerchantPrivateRoute>
+        }
+      >
+        <Route index element={<Navigate to="/merchant/dashboard" replace />} />
+        <Route path="dashboard" element={<MerchantDashboard />} />
+        <Route path="booth" element={<MerchantBooth />} />
+        <Route path="products" element={<MerchantProducts />} />
+        <Route path="transactions" element={<MerchantTransactions />} />
+        <Route path="cost-evidence" element={<MerchantCostEvidence />} />
       </Route>
 
       {/* 404 */}

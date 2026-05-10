@@ -8,8 +8,10 @@ and sets up routes and middleware.
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import logging
+import os
 
 # 更新导入路径 - 使用 core 模块
 from core.config import load_settings, get_settings
@@ -165,6 +167,12 @@ def create_app() -> FastAPI:
     app.include_router(bank_credit_router, tags=["bank-credit"])
     app.include_router(bank_credit_legacy_router, tags=["bank-credit-legacy"])
     
+    # Merchant system (商户自主注册与管理)
+    from routes.merchant import router as merchant_router
+    from routes.cost_evidence import router as cost_evidence_router
+    app.include_router(merchant_router, tags=["merchant"])
+    app.include_router(cost_evidence_router, tags=["merchant-cost-evidence"])
+    
     # Refund monitoring system (退款监控与审计)
     from routes.refund_monitor import router as refund_monitor_router
     app.include_router(refund_monitor_router, tags=["refund-monitor"])
@@ -178,6 +186,11 @@ def create_app() -> FastAPI:
     async def health_check():
         """Health check endpoint."""
         return {"status": "healthy", "service": "nfc-campus-wallet"}
+    
+    # Mount uploads directory for static file serving
+    uploads_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
     
     logger.info(f"Application initialized on {settings.server_host}:{settings.server_port}")
     
