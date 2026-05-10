@@ -60,6 +60,15 @@ object InvestmentColors {
 // ============================================================================
 data class BoothOption(val id: Int, val name: String, val className: String)
 
+data class HoldingInfo(
+    val boothId: Int,
+    val boothName: String,
+    val className: String,
+    val shares: Int,
+    val currentPrice: Double,
+    val marketValue: Double,
+)
+
 data class InvestmentUiState(
     val cardUid: String? = null,
     val participantName: String? = null,
@@ -70,6 +79,11 @@ data class InvestmentUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val successMessage: String? = null,
+    // 卖出相关
+    val currentTab: Int = 0,  // 0=买入, 1=卖出
+    val holdings: List<HoldingInfo> = emptyList(),
+    val selectedHolding: HoldingInfo? = null,
+    val sellSharesInput: String = "",
 )
 
 // ============================================================================
@@ -84,9 +98,14 @@ fun InvestmentScreen(
     onConfirmInvestment: () -> Unit,
     onDismissMessage: () -> Unit,
     onLogout: () -> Unit = {},
+    onTabChanged: (Int) -> Unit = {},
+    onHoldingSelected: (HoldingInfo) -> Unit = {},
+    onSellSharesChanged: (String) -> Unit = {},
+    onConfirmSell: () -> Unit = {},
 ) {
     val pricePerShare = 10.0
     val totalAmount = state.sharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
+    val sellTotal = state.sellSharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
 
     Scaffold(
         containerColor = InvestmentColors.Background,
@@ -120,9 +139,21 @@ fun InvestmentScreen(
                 )
             }
 
-            // 投资表单（卡片读取后显示）
+            // 买入/卖出 Tab 切换
             AnimatedVisibility(
                 visible = state.participantName != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                TradeTabRow(
+                    selectedTab = state.currentTab,
+                    onTabSelected = onTabChanged,
+                )
+            }
+
+            // 买入表单
+            AnimatedVisibility(
+                visible = state.participantName != null && state.currentTab == 0,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
             ) {
@@ -137,9 +168,9 @@ fun InvestmentScreen(
                 )
             }
 
-            // 确认投资按钮
+            // 确认买入按钮
             AnimatedVisibility(
-                visible = state.participantName != null,
+                visible = state.participantName != null && state.currentTab == 0,
                 enter = fadeIn() + expandVertically(),
             ) {
                 ConfirmButton(
@@ -149,6 +180,41 @@ fun InvestmentScreen(
                             totalAmount <= state.accountBalance,
                     isLoading = state.isLoading,
                     onClick = onConfirmInvestment,
+                    label = "确认买入",
+                )
+            }
+
+            // 卖出表单
+            AnimatedVisibility(
+                visible = state.participantName != null && state.currentTab == 1,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                SellFormCard(
+                    holdings = state.holdings,
+                    selectedHolding = state.selectedHolding,
+                    sellSharesInput = state.sellSharesInput,
+                    pricePerShare = pricePerShare,
+                    sellTotal = sellTotal,
+                    onHoldingSelected = onHoldingSelected,
+                    onSellSharesChanged = onSellSharesChanged,
+                )
+            }
+
+            // 确认卖出按钮
+            AnimatedVisibility(
+                visible = state.participantName != null && state.currentTab == 1,
+                enter = fadeIn() + expandVertically(),
+            ) {
+                ConfirmButton(
+                    enabled = !state.isLoading &&
+                            state.selectedHolding != null &&
+                            state.sellSharesInput.toIntOrNull()?.let { it > 0 } == true &&
+                            (state.sellSharesInput.toIntOrNull() ?: 0) <= (state.selectedHolding?.shares ?: 0),
+                    isLoading = state.isLoading,
+                    onClick = onConfirmSell,
+                    label = "确认抛售",
+                    isSell = true,
                 )
             }
 
@@ -660,7 +726,12 @@ private fun ConfirmButton(
     enabled: Boolean,
     isLoading: Boolean,
     onClick: () -> Unit,
+    label: String = "确认投资",
+    isSell: Boolean = false,
 ) {
+    val bgColor = if (isSell) Color(0xFFFF6B35) else InvestmentColors.Gold
+    val bgColorDim = if (isSell) Color(0xFF8C3A1D) else InvestmentColors.GoldDim
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -669,11 +740,7 @@ private fun ConfirmButton(
             .background(
                 if (enabled) {
                     Brush.horizontalGradient(
-                        colors = listOf(
-                            InvestmentColors.GoldDim,
-                            InvestmentColors.Gold,
-                            InvestmentColors.GoldDim,
-                        )
+                        colors = listOf(bgColorDim, bgColor, bgColorDim)
                     )
                 } else {
                     SolidColor(InvestmentColors.SurfaceElevated)
@@ -681,7 +748,7 @@ private fun ConfirmButton(
             )
             .border(
                 width = 1.dp,
-                color = if (enabled) InvestmentColors.Gold else InvestmentColors.TextDim,
+                color = if (enabled) bgColor else InvestmentColors.TextDim,
                 shape = RoundedCornerShape(12.dp),
             )
             .clickable(enabled = enabled && !isLoading) { onClick() },
@@ -696,19 +763,303 @@ private fun ConfirmButton(
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = if (isSell) Icons.Default.TrendingDown else Icons.Default.Check,
                     contentDescription = null,
                     tint = if (enabled) InvestmentColors.Background else InvestmentColors.TextDim,
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "确认投资",
+                    text = label,
                     style = TextStyle(
                         color = if (enabled) InvestmentColors.Background else InvestmentColors.TextDim,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 4.sp,
                     ),
+                )
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 买入/卖出 Tab 切换
+// ============================================================================
+@Composable
+private fun TradeTabRow(
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(InvestmentColors.SurfaceDeep)
+            .border(1.dp, InvestmentColors.BorderGold, RoundedCornerShape(10.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        // 买入 Tab
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    if (selectedTab == 0) InvestmentColors.Gold else Color.Transparent
+                )
+                .clickable { onTabSelected(0) }
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "买入",
+                style = TextStyle(
+                    color = if (selectedTab == 0) InvestmentColors.Background else InvestmentColors.TextSecondary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                ),
+            )
+        }
+        // 卖出 Tab
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    if (selectedTab == 1) Color(0xFFFF6B35) else Color.Transparent
+                )
+                .clickable { onTabSelected(1) }
+                .padding(vertical = 12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "卖出",
+                style = TextStyle(
+                    color = if (selectedTab == 1) InvestmentColors.Background else InvestmentColors.TextSecondary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                ),
+            )
+        }
+    }
+}
+
+// ============================================================================
+// 卖出表单
+// ============================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SellFormCard(
+    holdings: List<HoldingInfo>,
+    selectedHolding: HoldingInfo?,
+    sellSharesInput: String,
+    pricePerShare: Double,
+    sellTotal: Double,
+    onHoldingSelected: (HoldingInfo) -> Unit,
+    onSellSharesChanged: (String) -> Unit,
+) {
+    TechCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+        ) {
+            SectionLabel(text = "选择持仓")
+            Spacer(Modifier.height(8.dp))
+
+            if (holdings.isEmpty()) {
+                Text(
+                    text = "暂无持仓股票",
+                    style = TextStyle(
+                        color = InvestmentColors.TextDim,
+                        fontSize = 14.sp,
+                    ),
+                    modifier = Modifier.padding(vertical = 16.dp),
+                )
+            } else {
+                HoldingDropdown(
+                    holdings = holdings,
+                    selectedHolding = selectedHolding,
+                    onHoldingSelected = onHoldingSelected,
+                )
+
+                if (selectedHolding != null) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(InvestmentColors.Background)
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = "可卖出",
+                            style = TextStyle(color = InvestmentColors.TextDim, fontSize = 12.sp),
+                        )
+                        Text(
+                            text = "${selectedHolding.shares} 股",
+                            style = TextStyle(
+                                color = InvestmentColors.SuccessGreen,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+                SectionLabel(text = "卖出股数")
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = sellSharesInput,
+                    onValueChange = { newVal ->
+                        if (newVal.all { it.isDigit() } && newVal.length <= 6) {
+                            onSellSharesChanged(newVal)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text("请输入卖出股数", color = InvestmentColors.TextDim)
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = InvestmentColors.TextPrimary,
+                        unfocusedTextColor = InvestmentColors.TextPrimary,
+                        focusedBorderColor = Color(0xFFFF6B35),
+                        unfocusedBorderColor = InvestmentColors.BorderGold,
+                        cursorColor = Color(0xFFFF6B35),
+                        focusedContainerColor = InvestmentColors.Background,
+                        unfocusedContainerColor = InvestmentColors.Background,
+                    ),
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                // 卖出总额显示
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(InvestmentColors.Background)
+                        .border(1.dp, InvestmentColors.BorderGold, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            "当前股价",
+                            style = TextStyle(color = InvestmentColors.TextDim, fontSize = 10.sp),
+                        )
+                        Text(
+                            String.format("¥%.2f / 股", pricePerShare),
+                            style = TextStyle(color = InvestmentColors.TextSecondary, fontSize = 13.sp),
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "预计到账",
+                            style = TextStyle(
+                                color = Color(0xFF8C3A1D),
+                                fontSize = 10.sp,
+                                letterSpacing = 1.sp,
+                            ),
+                        )
+                        Text(
+                            String.format("¥%.2f", sellTotal),
+                            style = TextStyle(
+                                color = Color(0xFFFF6B35),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HoldingDropdown(
+    holdings: List<HoldingInfo>,
+    selectedHolding: HoldingInfo?,
+    onHoldingSelected: (HoldingInfo) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        OutlinedTextField(
+            value = selectedHolding?.let { "${it.boothName} (${it.shares}股)" } ?: "",
+            onValueChange = {},
+            readOnly = true,
+            placeholder = {
+                Text("请选择要卖出的持仓", color = InvestmentColors.TextDim)
+            },
+            trailingIcon = {
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = Color(0xFFFF6B35),
+                )
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = InvestmentColors.TextPrimary,
+                unfocusedTextColor = InvestmentColors.TextPrimary,
+                focusedBorderColor = Color(0xFFFF6B35),
+                unfocusedBorderColor = InvestmentColors.BorderGold,
+                focusedContainerColor = InvestmentColors.Background,
+                unfocusedContainerColor = InvestmentColors.Background,
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(InvestmentColors.SurfaceElevated),
+        ) {
+            holdings.forEach { holding ->
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column {
+                                Text(
+                                    holding.boothName,
+                                    color = InvestmentColors.TextPrimary,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    holding.className,
+                                    color = InvestmentColors.TextDim,
+                                    fontSize = 11.sp,
+                                )
+                            }
+                            Text(
+                                "${holding.shares}股",
+                                color = InvestmentColors.SuccessGreen,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    },
+                    onClick = {
+                        onHoldingSelected(holding)
+                        expanded = false
+                    },
                 )
             }
         }

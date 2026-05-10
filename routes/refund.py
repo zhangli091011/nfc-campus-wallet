@@ -230,7 +230,7 @@ async def process_refund(
                 Participant.id == original_txn.participant_id
             ).first()
             if participant:
-                participant_name = participant.name
+                participant_name = participant.display_name
 
         audit_detail = (
             f"退款成功: txn_id={original_txn.id} -> refund_txn_id={refund_txn.id}, "

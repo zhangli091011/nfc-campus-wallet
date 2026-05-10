@@ -85,6 +85,13 @@ class BankTellerViewModel(
                         )
                         return
                     }
+                    if (!participant.isVerified) {
+                        uiState = uiState.copy(
+                            errorMessage = "该卡片持有者未完成实名认证（需填写班级或学号），无法办理信用垫资",
+                            cardUid = null,
+                        )
+                        return
+                    }
                     uiState = uiState.copy(
                         participantName = participant.name,
                         participantId = participant.id,

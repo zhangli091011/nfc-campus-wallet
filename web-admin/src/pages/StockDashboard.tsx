@@ -49,6 +49,9 @@ interface MarketStats {
   total_investors: number;
   total_booths: number;
   is_settled: boolean;
+  total_sold_orders?: number;
+  total_sold_shares?: number;
+  total_sold_amount?: number;
 }
 
 const StockDashboard: React.FC = () => {
@@ -384,10 +387,16 @@ const StockDashboard: React.FC = () => {
                 valueStyle={{ color: '#50C878', fontSize: 32 }}
               />
               <Statistic
-                title={<span className="stat-title">订单总数</span>}
+                title={<span className="stat-title">买入订单</span>}
                 value={marketStats?.total_orders || 0}
                 suffix="笔"
                 valueStyle={{ color: '#9370DB', fontSize: 32 }}
+              />
+              <Statistic
+                title={<span className="stat-title">抛售订单</span>}
+                value={marketStats?.total_sold_orders || 0}
+                suffix="笔"
+                valueStyle={{ color: '#FF6B35', fontSize: 32 }}
               />
             </Space>
           </Card>

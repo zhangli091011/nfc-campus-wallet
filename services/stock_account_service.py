@@ -75,6 +75,10 @@ class StockAccountService:
         if not participant.is_active():
             raise ValidationError(f"参与者状态异常: {participant.status}")
         
+        # 实名认证校验（投资操作需要实名）
+        if not participant.is_verified:
+            raise ValidationError(f"参与者 {participant.name} 未完成实名认证（需填写班级或学号），无法进行投资操作")
+        
         # 2. 查询摊位
         booth = self.db.query(Booth).filter(Booth.id == booth_id).first()
         if not booth:
@@ -205,6 +209,10 @@ class StockAccountService:
         
         if not participant.is_active():
             raise ValidationError(f"参与者状态异常: {participant.status}")
+        
+        # 实名认证校验（投资操作需要实名）
+        if not participant.is_verified:
+            raise ValidationError(f"参与者 {participant.name} 未完成实名认证（需填写班级或学号），无法进行投资操作")
         
         # 2. 查询摊位
         booth = self.db.query(Booth).filter(Booth.id == booth_id).first()
@@ -634,14 +642,22 @@ class StockAccountService:
             StockOrder.event_id == event_id
         ).all()
         
-        total_investment = sum(float(o.total_amount) for o in orders)
+        # 买入订单统计
+        buy_orders = [o for o in orders if o.status in ('holding', 'settled')]
+        total_investment = sum(float(o.total_amount) for o in buy_orders)
         fee_rate = Decimal('0.05')
         global_pool = Decimal(str(total_investment)) * (1 - fee_rate)
         fee_collected = Decimal(str(total_investment)) * fee_rate
         
-        total_investors = len(set(o.participant_id for o in orders))
-        total_booths = len(set(o.booth_id for o in orders))
+        total_investors = len(set(o.participant_id for o in buy_orders))
+        total_booths = len(set(o.booth_id for o in buy_orders))
         is_settled = any(o.status == 'settled' for o in orders)
+        
+        # 抛售订单统计
+        sold_orders = [o for o in orders if o.status == 'sold']
+        total_sold_orders = len(sold_orders)
+        total_sold_shares = sum(o.shares for o in sold_orders)
+        total_sold_amount = sum(float(o.settlement_amount) for o in sold_orders if o.settlement_amount)
         
         return {
             'event_id': event_id,
@@ -651,10 +667,13 @@ class StockAccountService:
             'global_pool_yuan': float(global_pool),
             'fee_collected': float(fee_collected),
             'fee_collected_yuan': float(fee_collected),
-            'total_orders': len(orders),
+            'total_orders': len(buy_orders),
             'total_investors': total_investors,
             'total_booths': total_booths,
-            'is_settled': is_settled
+            'is_settled': is_settled,
+            'total_sold_orders': total_sold_orders,
+            'total_sold_shares': total_sold_shares,
+            'total_sold_amount': total_sold_amount,
         }
     
     def get_booth_stock_stats(self, booth_id: int, event_id: int) -> Dict:

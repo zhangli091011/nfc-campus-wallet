@@ -36,6 +36,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False, index=True)
     booth_id = Column(Integer, ForeignKey('booths.id', ondelete='SET NULL'), nullable=True, index=True)
+    staff_name = Column(String(50), nullable=True, default=None)
     status = Column(String(20), nullable=False, default='active')
     created_at = Column(
         DateTime,
@@ -64,7 +65,7 @@ class User(Base):
     # Table constraints
     __table_args__ = (
         CheckConstraint(
-            "role IN ('super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer', 'bank_clerk')",
+            "role IN ('super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer', 'bank_clerk', 'merchant')",
             name='chk_user_role'
         ),
         CheckConstraint(
@@ -91,6 +92,10 @@ class User(Base):
     def is_bank_clerk(self) -> bool:
         """Check if user is a bank clerk (investment counter operator)."""
         return self.role == 'bank_clerk'
+    
+    def is_merchant(self) -> bool:
+        """Check if user is a merchant (self-registered booth owner)."""
+        return self.role == 'merchant'
     
     def is_admin(self) -> bool:
         """Check if user is an admin (super_admin or event_admin)."""

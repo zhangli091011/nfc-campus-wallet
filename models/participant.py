@@ -75,6 +75,29 @@ class Participant(Base):
         ),
     )
     
+    @property
+    def is_verified(self) -> bool:
+        """
+        判断参与者是否已实名认证。
+        实名条件：name 非空 且 (class_name 或 student_no 至少填写一项)
+        """
+        if not self.name or not self.name.strip():
+            return False
+        has_class = self.class_name and self.class_name.strip()
+        has_student_no = self.student_no and self.student_no.strip()
+        return bool(has_class or has_student_no)
+
+    @property
+    def display_name(self) -> str:
+        """
+        获取显示名称。
+        已实名：返回真实姓名
+        未实名：返回卡号（card_uid）
+        """
+        if self.is_verified:
+            return self.name
+        return self.card_uid
+
     def __repr__(self):
         return (
             f"<Participant(id={self.id}, name='{self.name}', "

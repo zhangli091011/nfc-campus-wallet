@@ -165,8 +165,11 @@ const ParticipantManagement = () => {
     },
     {
       title: '姓名',
-      dataIndex: 'name',
-      key: 'name',
+      dataIndex: 'display_name',
+      key: 'display_name',
+      render: (text: string, record: any) => (
+        record.is_verified ? text : <span style={{ color: '#999' }}>{record.card_uid}（未实名）</span>
+      ),
     },
     {
       title: '学号',

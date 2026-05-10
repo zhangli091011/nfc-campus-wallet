@@ -14,13 +14,18 @@ import com.campus.nfcwallet.models.Product;
 import com.campus.nfcwallet.models.RechargeRequest;
 import com.campus.nfcwallet.models.RefundRequest;
 import com.campus.nfcwallet.models.RefundResponse;
+import com.campus.nfcwallet.models.SetStaffNameRequest;
+import com.campus.nfcwallet.models.SetStaffNameResponse;
 import com.campus.nfcwallet.models.Stock;
 import com.campus.nfcwallet.models.StockBuyRequest;
 import com.campus.nfcwallet.models.StockBuyResponse;
 import com.campus.nfcwallet.models.StockHolding;
+import com.campus.nfcwallet.models.StockHoldingInfo;
 import com.campus.nfcwallet.models.StockOrderResponse;
 import com.campus.nfcwallet.models.StockPurchaseRequest;
 import com.campus.nfcwallet.models.StockPurchaseResponse;
+import com.campus.nfcwallet.models.StockSellRequest;
+import com.campus.nfcwallet.models.StockSellResponse;
 import com.campus.nfcwallet.models.Transaction;
 import com.campus.nfcwallet.models.TransactionHistoryResponse;
 import com.campus.nfcwallet.models.TransactionResponse;
@@ -67,6 +72,21 @@ public interface WalletAPIService {
      */
     @GET("auth/me")
     Call<UserInfo> getCurrentUser(@Header("Authorization") String authorization);
+    
+    /**
+     * Set staff name (first login).
+     * 
+     * POST /auth/set-staff-name
+     * 
+     * @param authorization Authorization header (Bearer token)
+     * @param request Staff name request body
+     * @return Set staff name response
+     */
+    @POST("auth/set-staff-name")
+    Call<SetStaffNameResponse> setStaffName(
+        @Header("Authorization") String authorization,
+        @Body SetStaffNameRequest request
+    );
     
     // ==================== Events ====================
     

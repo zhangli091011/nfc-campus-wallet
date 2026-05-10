@@ -12,7 +12,7 @@ import logging
 from core.database import get_db
 from core.security import get_current_user
 from services.auth_service import AuthService, AuthenticationError
-from schemas.user import UserLogin, TokenResponse, UserResponse
+from schemas.user import UserLogin, TokenResponse, UserResponse, SetStaffNameRequest, SetStaffNameResponse
 from models.user import User
 
 logger = logging.getLogger(__name__)
@@ -160,6 +160,74 @@ async def get_current_user_info(
     except Exception as e:
         logger.error(
             f"Unexpected error in get current user: {str(e)}",
+            exc_info=True
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error_code": "INTERNAL_ERROR",
+                "message": "An internal error occurred. Please try again later."
+            }
+        )
+
+
+@router.post("/auth/set-staff-name", response_model=SetStaffNameResponse)
+async def set_staff_name(
+    request: SetStaffNameRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    设置工作人员姓名（首次登录时调用）。
+    
+    工作人员首次通过安卓端登录时，需要输入真实姓名。
+    姓名设置后将用于显示和记录。
+    
+    Headers:
+        - Authorization: Bearer <jwt_token>
+    
+    Request Body:
+        - staff_name: 工作人员真实姓名（1-50字符）
+    
+    Returns:
+        SetStaffNameResponse: 设置成功的确认信息
+        
+    Error Responses:
+        401: 未认证
+        400: 姓名无效
+        500: 内部服务器错误
+    """
+    try:
+        staff_name = request.staff_name.strip()
+        
+        if not staff_name:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "INVALID_STAFF_NAME",
+                    "message": "工作人员姓名不能为空"
+                }
+            )
+        
+        # Update staff_name in database
+        current_user.staff_name = staff_name
+        db.commit()
+        db.refresh(current_user)
+        
+        logger.info(
+            f"Staff name set: user_id={current_user.id}, "
+            f"username='{current_user.username}', staff_name='{staff_name}'"
+        )
+        
+        return SetStaffNameResponse(
+            message="Staff name set successfully",
+            staff_name=staff_name
+        )
+    
+    except Exception as e:
+        db.rollback()
+        logger.error(
+            f"Error setting staff name: {str(e)}",
             exc_info=True
         )
         return JSONResponse(

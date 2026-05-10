@@ -72,6 +72,10 @@ class InvestmentComposeActivity : ComponentActivity() {
                     onConfirmInvestment = viewModel::onConfirmInvestment,
                     onDismissMessage = viewModel::onDismissMessage,
                     onLogout = { logout() },
+                    onTabChanged = viewModel::onTabChanged,
+                    onHoldingSelected = viewModel::onHoldingSelected,
+                    onSellSharesChanged = viewModel::onSellSharesChanged,
+                    onConfirmSell = viewModel::onConfirmSell,
                 )
             }
         }

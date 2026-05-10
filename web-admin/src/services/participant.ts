@@ -5,8 +5,11 @@ export interface Participant {
   card_uid: string
   name: string
   student_id?: string
+  student_no?: string
   class_name?: string
   status: 'active' | 'inactive' | 'blocked'
+  is_verified?: boolean
+  display_name?: string
   created_at: string
 }
 
@@ -14,14 +17,22 @@ export interface CreateParticipantRequest {
   card_uid: string
   name: string
   student_id?: string
+  student_no?: string
   class_name?: string
 }
 
 export interface UpdateParticipantRequest {
   name?: string
   student_id?: string
+  student_no?: string
   class_name?: string
   status?: 'active' | 'inactive' | 'blocked'
+}
+
+export interface VerifyParticipantRequest {
+  name: string
+  class_name?: string
+  student_no?: string
 }
 
 export interface RechargeRequest {
@@ -54,6 +65,11 @@ export const createParticipant = (data: CreateParticipantRequest) => {
 
 // 更新参与者
 export const updateParticipant = (id: number, data: UpdateParticipantRequest) => {
+  return request.patch<any, Participant>(`/participants/${id}`, data)
+}
+
+// 实名认证审核（补全姓名/班级/学号，实名校验自动通过）
+export const verifyParticipant = (id: number, data: VerifyParticipantRequest) => {
   return request.patch<any, Participant>(`/participants/${id}`, data)
 }
 

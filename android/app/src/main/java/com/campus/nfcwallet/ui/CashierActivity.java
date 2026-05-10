@@ -951,7 +951,7 @@ public class CashierActivity extends AppCompatActivity {
         
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("新卡片");
-        builder.setMessage("卡片 " + cardUid + " 未绑定，是否创建新参与者？");
+        builder.setMessage("卡片 " + cardUid + " 未绑定，是否创建新参与者？\n（消费充值无须实名，如需办理贷款/投资请填写完整信息）");
         
         // Create input layout
         LinearLayout layout = new LinearLayout(this);
@@ -960,17 +960,17 @@ public class CashierActivity extends AppCompatActivity {
         
         // Name input
         final EditText nameInput = new EditText(this);
-        nameInput.setHint("姓名（必填）");
+        nameInput.setHint("姓名（可选，不填则使用卡号）");
         layout.addView(nameInput);
         
         // Class name input
         final EditText classInput = new EditText(this);
-        classInput.setHint("班级（可选）");
+        classInput.setHint("班级（可选，实名认证需填写）");
         layout.addView(classInput);
         
         // Student number input
         final EditText studentNoInput = new EditText(this);
-        studentNoInput.setHint("学号（可选）");
+        studentNoInput.setHint("学号（可选，实名认证需填写）");
         layout.addView(studentNoInput);
         
         builder.setView(layout);
@@ -980,9 +980,9 @@ public class CashierActivity extends AppCompatActivity {
             String className = classInput.getText().toString().trim();
             String studentNo = studentNoInput.getText().toString().trim();
             
+            // 姓名为空时使用卡号作为默认名称
             if (name.isEmpty()) {
-                showError("姓名不能为空");
-                return;
+                name = cardUid;
             }
             
             createParticipant(cardUid, name, className, studentNo);

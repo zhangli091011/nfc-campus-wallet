@@ -148,6 +148,9 @@ class StockMarketStatsResponse(BaseModel):
     total_investors: int
     total_booths: int
     is_settled: bool
+    total_sold_orders: int = 0  # 抛售订单数
+    total_sold_shares: int = 0  # 抛售总股数
+    total_sold_amount: float = 0.0  # 抛售总金额（元）
 
 
 class BoothStockStatsResponse(BaseModel):

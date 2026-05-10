@@ -69,6 +69,25 @@ public class SessionManager {
     }
     
     /**
+     * Update stored user info (e.g., after setting staff name).
+     */
+    public void updateUserInfo(UserInfo userInfo) {
+        editor.putString(KEY_USER_INFO, gson.toJson(userInfo));
+        editor.apply();
+    }
+    
+    /**
+     * Get staff name from stored user info.
+     */
+    public String getStaffName() {
+        UserInfo userInfo = getUserInfo();
+        if (userInfo != null) {
+            return userInfo.getStaffName();
+        }
+        return null;
+    }
+    
+    /**
      * Get authorization header value.
      */
     public String getAuthHeader() {

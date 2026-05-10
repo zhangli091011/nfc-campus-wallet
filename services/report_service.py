@@ -668,10 +668,10 @@ class ReportService:
         Returns:
             AuditLogItem: 审计日志项
         """
-        # 获取参与者姓名
+        # 获取参与者姓名（未实名用户显示卡号）
         participant_name = None
         if transaction.participant:
-            participant_name = transaction.participant.name
+            participant_name = transaction.participant.display_name
         
         # 获取摊位名称
         booth_name = None

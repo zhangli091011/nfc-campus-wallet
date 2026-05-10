@@ -13,6 +13,9 @@ import com.campus.nfcwallet.models.BoothInfo
 import com.campus.nfcwallet.models.ParticipantInfo
 import com.campus.nfcwallet.models.StockBuyRequest
 import com.campus.nfcwallet.models.StockBuyResponse
+import com.campus.nfcwallet.models.StockHoldingInfo
+import com.campus.nfcwallet.models.StockSellRequest
+import com.campus.nfcwallet.models.StockSellResponse
 import com.campus.nfcwallet.utils.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,7 +26,9 @@ import retrofit2.Response
 /**
  * 投资办理 ViewModel
  *
- * 简化版：直接从主账户余额购买股票，不再有独立投资币账户。
+ * 支持买入和卖出股票。
+ * 买入：直接从主账户余额购买股票。
+ * 卖出：以当前股价抛售持仓，资金返回主账户。
  * 所有金额以"元"为单位。
  */
 class InvestmentViewModel(
@@ -87,10 +92,20 @@ class InvestmentViewModel(
             ) {
                 if (response.isSuccessful && response.body() != null) {
                     currentParticipant = response.body()
+                    if (!currentParticipant!!.isVerified) {
+                        uiState = uiState.copy(
+                            isLoading = false,
+                            cardUid = null,
+                            errorMessage = "该卡片持有者未完成实名认证（需填写班级或学号），无法进行投资操作",
+                        )
+                        currentParticipant = null
+                        return
+                    }
                     uiState = uiState.copy(
                         participantName = "${currentParticipant!!.name} (${currentParticipant!!.className ?: "-"})",
                     )
                     loadBalance(uid)
+                    loadHoldings(uid)
                 } else {
                     uiState = uiState.copy(
                         isLoading = false,
@@ -142,6 +157,45 @@ class InvestmentViewModel(
     }
 
     // -------------------------------------------------------------
+    // 加载持仓信息
+    // -------------------------------------------------------------
+    private fun loadHoldings(uid: String) {
+        val token = sessionManager.authHeader ?: return
+        apiService.getStockHoldingsByCard(token, uid, eventId).enqueue(object : Callback<List<StockHoldingInfo>> {
+            override fun onResponse(
+                call: Call<List<StockHoldingInfo>>,
+                response: Response<List<StockHoldingInfo>>,
+            ) {
+                if (response.isSuccessful && response.body() != null) {
+                    val holdings = response.body()!!.map {
+                        HoldingInfo(
+                            boothId = it.boothId,
+                            boothName = it.boothName,
+                            className = it.className ?: "",
+                            shares = it.shares,
+                            currentPrice = it.currentPrice,
+                            marketValue = it.marketValue,
+                        )
+                    }
+                    uiState = uiState.copy(holdings = holdings)
+                }
+            }
+
+            override fun onFailure(call: Call<List<StockHoldingInfo>>, t: Throwable) {
+                Log.e(TAG, "加载持仓失败", t)
+                // 非关键错误，不阻塞流程
+            }
+        })
+    }
+
+    // -------------------------------------------------------------
+    // Tab 切换
+    // -------------------------------------------------------------
+    fun onTabChanged(tab: Int) {
+        uiState = uiState.copy(currentTab = tab)
+    }
+
+    // -------------------------------------------------------------
     // 表单变更
     // -------------------------------------------------------------
     fun onBoothSelected(booth: BoothOption) {
@@ -150,6 +204,14 @@ class InvestmentViewModel(
 
     fun onSharesChanged(shares: String) {
         uiState = uiState.copy(sharesInput = shares)
+    }
+
+    fun onHoldingSelected(holding: HoldingInfo) {
+        uiState = uiState.copy(selectedHolding = holding, sellSharesInput = "")
+    }
+
+    fun onSellSharesChanged(shares: String) {
+        uiState = uiState.copy(sellSharesInput = shares)
     }
 
     fun onDismissMessage() {
@@ -197,6 +259,8 @@ class InvestmentViewModel(
                         selectedBooth = null,
                         successMessage = "✓ 投资成功：${body.boothName} ${body.shares}股，扣款¥%.2f".format(body.totalAmountYuan),
                     )
+                    // 刷新持仓
+                    loadHoldings(uid)
                 } else {
                     uiState = uiState.copy(
                         isLoading = false,
@@ -207,6 +271,61 @@ class InvestmentViewModel(
 
             override fun onFailure(call: Call<StockBuyResponse>, t: Throwable) {
                 Log.e(TAG, "购买股票失败", t)
+                uiState = uiState.copy(isLoading = false, errorMessage = "网络错误: ${t.message}")
+            }
+        })
+    }
+
+    // -------------------------------------------------------------
+    // 确认抛售：以当前股价卖出
+    // -------------------------------------------------------------
+    fun onConfirmSell() {
+        val uid = uiState.cardUid ?: return
+        val holding = uiState.selectedHolding ?: return
+        val shares = uiState.sellSharesInput.toIntOrNull() ?: return
+        if (shares <= 0) return
+
+        if (shares > holding.shares) {
+            uiState = uiState.copy(errorMessage = "卖出股数不能超过持仓数量(${holding.shares}股)")
+            return
+        }
+
+        uiState = uiState.copy(isLoading = true, errorMessage = null)
+
+        viewModelScope.launch(Dispatchers.IO) {
+            performSellStock(uid, holding.boothId, shares)
+        }
+    }
+
+    private fun performSellStock(uid: String, boothId: Int, shares: Int) {
+        val token = sessionManager.authHeader ?: run {
+            uiState = uiState.copy(isLoading = false, errorMessage = "登录已过期，请重新登录")
+            return
+        }
+        val request = StockSellRequest(uid, eventId, boothId, shares)
+        apiService.sellStock(token, request).enqueue(object : Callback<StockSellResponse> {
+            override fun onResponse(call: Call<StockSellResponse>, response: Response<StockSellResponse>) {
+                if (response.isSuccessful && response.body() != null) {
+                    val body = response.body()!!
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        accountBalance = body.newBalanceYuan,
+                        sellSharesInput = "",
+                        selectedHolding = null,
+                        successMessage = "✓ 抛售成功：${body.boothName} ${body.sharesSold}股，到账¥%.2f".format(body.totalAmountYuan),
+                    )
+                    // 刷新持仓
+                    loadHoldings(uid)
+                } else {
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        errorMessage = "抛售失败: ${APIClient.getErrorMessage(response)}",
+                    )
+                }
+            }
+
+            override fun onFailure(call: Call<StockSellResponse>, t: Throwable) {
+                Log.e(TAG, "抛售股票失败", t)
                 uiState = uiState.copy(isLoading = false, errorMessage = "网络错误: ${t.message}")
             }
         })

@@ -24,6 +24,9 @@ public class ParticipantInfo {
     @SerializedName("status")
     private String status;
     
+    @SerializedName("is_verified")
+    private boolean isVerified;
+    
     @SerializedName("created_at")
     private String createdAt;
     
@@ -53,6 +56,10 @@ public class ParticipantInfo {
     
     public String getCreatedAt() {
         return createdAt;
+    }
+    
+    public boolean isVerified() {
+        return isVerified;
     }
     
     public boolean isActive() {

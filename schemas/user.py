@@ -18,6 +18,7 @@ class UserRole(str, Enum):
     issuer = "issuer"
     reviewer = "reviewer"
     bank_clerk = "bank_clerk"  # 投资办理员（官方中央银行）
+    merchant = "merchant"  # 商户（自主注册管理商铺）
 
 
 class UserStatus(str, Enum):
@@ -60,6 +61,7 @@ class UserResponse(BaseModel):
     username: str
     role: str
     booth_id: Optional[int]
+    staff_name: Optional[str] = None
     status: str
     created_at: datetime
     
@@ -71,6 +73,7 @@ class UserResponse(BaseModel):
                 "username": "cashier01",
                 "role": "booth_cashier",
                 "booth_id": 1,
+                "staff_name": "张三",
                 "status": "active",
                 "created_at": "2024-02-01T10:00:00Z"
             }
@@ -122,5 +125,31 @@ class BalanceResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "balance": 100.50
+            }
+        }
+
+
+class SetStaffNameRequest(BaseModel):
+    """Schema for setting staff name on first login."""
+    staff_name: str = Field(..., min_length=1, max_length=50, description="工作人员真实姓名")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "staff_name": "张三"
+            }
+        }
+
+
+class SetStaffNameResponse(BaseModel):
+    """Schema for set staff name response."""
+    message: str
+    staff_name: str
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Staff name set successfully",
+                "staff_name": "张三"
             }
         }

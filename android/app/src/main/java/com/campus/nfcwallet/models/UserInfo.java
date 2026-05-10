@@ -24,6 +24,9 @@ public class UserInfo {
     @SerializedName("status")
     private String status;
     
+    @SerializedName("staff_name")
+    private String staffName;
+    
     @SerializedName("created_at")
     private String createdAt;
     
@@ -49,6 +52,18 @@ public class UserInfo {
     
     public String getStatus() {
         return status;
+    }
+    
+    public String getStaffName() {
+        return staffName;
+    }
+    
+    public void setStaffName(String staffName) {
+        this.staffName = staffName;
+    }
+    
+    public boolean isStaffNameRequired() {
+        return staffName == null || staffName.trim().isEmpty();
     }
     
     public String getCreatedAt() {

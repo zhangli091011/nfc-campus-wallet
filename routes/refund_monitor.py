@@ -365,12 +365,12 @@ async def get_refund_details(
                 if booth:
                     booth_name = booth.name
 
-            # 获取参与者名称
+            # 获取参与者名称（未实名用户显示卡号）
             participant_name = None
             if txn.participant_id:
                 participant = db.query(Participant).filter(Participant.id == txn.participant_id).first()
                 if participant:
-                    participant_name = participant.name
+                    participant_name = participant.display_name
 
             # 获取操作员名称
             operator_name = None

@@ -403,7 +403,10 @@ async def get_market_stats(
             total_orders=stats['total_orders'],
             total_investors=stats['total_investors'],
             total_booths=stats['total_booths'],
-            is_settled=stats['is_settled']
+            is_settled=stats['is_settled'],
+            total_sold_orders=stats.get('total_sold_orders', 0),
+            total_sold_shares=stats.get('total_sold_shares', 0),
+            total_sold_amount=stats.get('total_sold_amount', 0.0),
         )
     
     except Exception as e:

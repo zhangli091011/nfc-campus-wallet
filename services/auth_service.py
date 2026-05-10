@@ -175,6 +175,7 @@ class AuthService:
                 "username": user.username,
                 "role": user.role,
                 "booth_id": user.booth_id,
+                "staff_name": user.staff_name,
                 "status": user.status,
                 "created_at": user.created_at
             }

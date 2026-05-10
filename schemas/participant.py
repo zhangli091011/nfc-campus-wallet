@@ -96,6 +96,8 @@ class ParticipantResponse(BaseModel):
     student_no: Optional[str]
     card_uid: str
     status: str
+    is_verified: bool = False
+    display_name: str = ""
     created_at: datetime
     updated_at: datetime
     
@@ -109,6 +111,8 @@ class ParticipantResponse(BaseModel):
                 "student_no": "2024001",
                 "card_uid": "A1B2C3D4",
                 "status": "active",
+                "is_verified": True,
+                "display_name": "张三",
                 "created_at": "2024-02-01T10:00:00Z",
                 "updated_at": "2024-02-01T10:00:00Z"
             }
