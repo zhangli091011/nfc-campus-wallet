@@ -16,10 +16,10 @@ public class Product {
     private String name;
     
     @SerializedName("price")
-    private int price; // Price in cents
+    private double price; // Price in yuan (元)
     
     @SerializedName("cost_price")
-    private Integer costPrice; // Cost price in cents
+    private Double costPrice; // Cost price in yuan (元)
     
     @SerializedName("stock")
     private Integer stock;
@@ -42,15 +42,15 @@ public class Product {
         return name;
     }
     
-    public int getPrice() {
+    public double getPrice() {
         return price;
     }
     
     public double getPriceInYuan() {
-        return price / 100.0;
+        return price;
     }
     
-    public Integer getCostPrice() {
+    public Double getCostPrice() {
         return costPrice;
     }
     

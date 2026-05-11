@@ -13,8 +13,8 @@ class ProductCreate(BaseModel):
     """Schema for creating a new product."""
     booth_id: int = Field(..., description="Booth ID the product belongs to")
     name: str = Field(..., min_length=1, max_length=100, description="Product name")
-    price: int = Field(..., ge=0, description="Selling price in cents (分)")
-    cost_price: Optional[int] = Field(None, ge=0, description="Cost price in cents (分)")
+    price: float = Field(..., ge=0, description="Selling price in yuan (元)")
+    cost_price: Optional[float] = Field(None, ge=0, description="Cost price in yuan (元)")
     stock: Optional[int] = Field(None, ge=0, description="Stock quantity (null means unlimited)")
     
     @field_validator("price")
@@ -56,8 +56,8 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     """Schema for updating a product."""
     name: Optional[str] = Field(None, min_length=1, max_length=100, description="Product name")
-    price: Optional[int] = Field(None, ge=0, description="Selling price in cents (分)")
-    cost_price: Optional[int] = Field(None, ge=0, description="Cost price in cents (分)")
+    price: Optional[float] = Field(None, ge=0, description="Selling price in yuan (元)")
+    cost_price: Optional[float] = Field(None, ge=0, description="Cost price in yuan (元)")
     stock: Optional[int] = Field(None, ge=0, description="Stock quantity")
     enabled: Optional[bool] = Field(None, description="Whether product is enabled for sale")
     
@@ -102,8 +102,8 @@ class ProductResponse(BaseModel):
     id: int
     booth_id: int
     name: str
-    price: int
-    cost_price: Optional[int]
+    price: float = Field(description="Selling price in yuan (元)")
+    cost_price: Optional[float] = Field(None, description="Cost price in yuan (元)")
     stock: Optional[int]
     enabled: bool
     created_at: datetime
@@ -115,8 +115,8 @@ class ProductResponse(BaseModel):
                 "id": 1,
                 "booth_id": 1,
                 "name": "奶茶",
-                "price": 500,
-                "cost_price": 300,
+                "price": 5.00,
+                "cost_price": 3.00,
                 "stock": 100,
                 "enabled": True,
                 "created_at": "2024-03-01T08:00:00Z"

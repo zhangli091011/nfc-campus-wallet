@@ -109,8 +109,7 @@ async def get_balance(
             
             # 查询账户余额
             account_service = AccountService(db)
-            balance_cents = account_service.get_account_balance(participant.id, event_id)
-            balance_yuan = balance_cents / 100.0
+            balance_yuan = account_service.get_account_balance(participant.id, event_id)
             
             logger.info(
                 f"Balance query successful (event mode): event_id={event_id}, "
@@ -118,7 +117,7 @@ async def get_balance(
                 f"balance={balance_yuan} yuan"
             )
             
-            return {"balance": balance_yuan}
+            return {"balance": float(balance_yuan)}
         
         # 传统模式（向后兼容）
         else:

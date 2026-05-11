@@ -47,17 +47,20 @@ class RefundResponse(BaseModel):
     original_transaction_id: int
     participant_id: Optional[int]
     participant_name: Optional[str]
-    refund_amount: int
+    refund_amount: float
     refund_amount_yuan: float
-    balance_before: int
+    balance_before: float
     balance_before_yuan: float
-    balance_after: int
+    balance_after: float
     balance_after_yuan: float
     booth_id: Optional[int]
     booth_name: Optional[str]
     reason: str
     operator_name: str
     created_at: str
+    # 兼容安卓端字段名
+    refunded_amount: Optional[float] = None
+    new_balance: Optional[float] = None
 
 
 # ============================================================================
@@ -234,11 +237,11 @@ async def process_refund(
 
         audit_detail = (
             f"退款成功: txn_id={original_txn.id} -> refund_txn_id={refund_txn.id}, "
-            f"金额={refund_amount/100:.2f}元, "
+            f"金额={float(refund_amount):.2f}元, "
             f"参与者={participant_name or 'N/A'}(card={original_txn.card_uid}), "
             f"摊位={booth_name or 'N/A'}, "
             f"原因={req.reason}, "
-            f"余额: {balance_before/100:.2f} -> {balance_after/100:.2f}元"
+            f"余额: {float(balance_before):.2f} -> {float(balance_after):.2f}元"
         )
         _write_audit_log(
             db=db,
@@ -275,7 +278,10 @@ async def process_refund(
             booth_name=booth_name,
             reason=req.reason,
             operator_name=current_user.username,
-            created_at=datetime.now(timezone.utc).isoformat()
+            created_at=datetime.now(timezone.utc).isoformat(),
+            # 兼容安卓端
+            refunded_amount=float(refund_amount),
+            new_balance=float(balance_after),
         )
 
     except HTTPException:

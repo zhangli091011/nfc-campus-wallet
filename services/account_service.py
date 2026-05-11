@@ -81,7 +81,7 @@ class AccountService:
         if account is not None:
             logger.debug(
                 f"Account found: participant_id={participant_id}, "
-                f"event_id={event_id}, balance={account.balance} cents"
+                f"event_id={event_id}, balance={account.balance} yuan"
             )
             return account
         
@@ -154,7 +154,7 @@ class AccountService:
         self,
         participant_id: int,
         event_id: int
-    ) -> int:
+    ) -> float:
         """
         查询账户余额。
         
@@ -163,7 +163,7 @@ class AccountService:
             event_id: 活动ID
             
         Returns:
-            int: 账户余额（分），如果账户不存在则返回 0
+            float: 账户余额（元），如果账户不存在则返回 0
         """
         account = self.get_account(participant_id, event_id)
         
@@ -172,13 +172,13 @@ class AccountService:
                 f"Account not found, returning balance 0: participant_id={participant_id}, "
                 f"event_id={event_id}"
             )
-            return 0
+            return 0.0
         
         logger.debug(
             f"Account balance: participant_id={participant_id}, "
-            f"event_id={event_id}, balance={account.balance} cents"
+            f"event_id={event_id}, balance={account.balance} yuan"
         )
-        return account.balance
+        return float(account.balance)
     
     def list_participant_accounts(
         self,

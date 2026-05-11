@@ -58,8 +58,8 @@ class IssueLoanRequest(BaseModel):
     """放贷请求"""
     event_id: int = Field(..., description="活动ID")
     card_uid: str = Field(..., min_length=1, max_length=32, description="NFC卡片UID")
-    nominal_amount: Optional[int] = Field(None, description="名义借款金额（分）")
-    principal_amount: Optional[int] = Field(None, description="名义借款金额 - 兼容安卓端字段名")
+    nominal_amount: Optional[float] = Field(None, description="名义借款金额（元）")
+    principal_amount: Optional[float] = Field(None, description="名义借款金额 - 兼容安卓端字段名（元）")
     remark: Optional[str] = Field(None, max_length=255, description="备注（如借条编号）")
     # 允许安卓端发送的额外字段（timestamp, signature）
     timestamp: Optional[int] = Field(None, exclude=True)
@@ -77,20 +77,20 @@ class IssueLoanResponse(BaseModel):
     participant_id: int
     participant_name: str
     card_uid: str
-    nominal_amount: int
+    nominal_amount: float
     nominal_amount_yuan: float
     fee_rate: float
-    fee_amount: int
+    fee_amount: float
     fee_amount_yuan: float
-    actual_grant: int
+    actual_grant: float
     actual_grant_yuan: float
-    balance_before: int
+    balance_before: float
     balance_before_yuan: float
-    balance_after: int
+    balance_after: float
     balance_after_yuan: float
-    credit_borrowed_total: int
+    credit_borrowed_total: float
     credit_borrowed_total_yuan: float
-    credit_fee_paid_total: int
+    credit_fee_paid_total: float
     credit_fee_paid_total_yuan: float
     loan_issue_txn_id: int
     loan_fee_txn_id: int
@@ -99,7 +99,7 @@ class IssueLoanResponse(BaseModel):
     # 兼容安卓端字段名
     disbursed_amount: Optional[float] = None
     new_balance: Optional[float] = None
-    principal_amount: Optional[int] = None
+    principal_amount: Optional[float] = None
     message: Optional[str] = None
 
 

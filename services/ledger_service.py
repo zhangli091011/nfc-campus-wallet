@@ -24,21 +24,21 @@ logger = logging.getLogger(__name__)
 
 class LedgerEntry:
     """
-    账本条目结果\xe3\x80\x82
+    账本条目结果。
     
     Attributes:
         transaction_id: 交易ID
-        balance_before: 交易前余额（分）
-        balance_after: 交易后余额（分）
-        amount: 交易金额（分\xef\xbc\x9a
+        balance_before: 交易前余额（元）
+        balance_after: 交易后余额（元）
+        amount: 交易金额（元）
     """
     
     def __init__(
         self,
         transaction_id: int,
-        balance_before: int,
-        balance_after: int,
-        amount: int
+        balance_before,
+        balance_after,
+        amount
     ):
         self.transaction_id = transaction_id
         self.balance_before = balance_before
@@ -47,17 +47,17 @@ class LedgerEntry:
     
     @property
     def balance_before_yuan(self) -> float:
-        """交易前余额（元）- 值已为元"""
+        """交易前余额（元）"""
         return float(self.balance_before)
     
     @property
     def balance_after_yuan(self) -> float:
-        """交易后余额（元）- 值已为元"""
+        """交易后余额（元）"""
         return float(self.balance_after)
     
     @property
     def amount_yuan(self) -> float:
-        """交易金额（元\xef\xbc\x9a 值已为元"""
+        """交易金额（元）"""
         return float(self.amount)
 
 
@@ -81,17 +81,20 @@ class LedgerService:
         """
         self.db = db_session
     
-    def _yuan_to_cents(self, yuan: float) -> int:
+    def _yuan_to_cents(self, yuan: float) -> float:
         """
-        将元转换为分\xe3\x80\x82
+        金额处理（元）。
+        
+        数据库已统一使用元为单位（DECIMAL(12,2)），无需转换为分。
+        保留方法名以兼容调用方，但实际不再乘以100。
         
         Args:
-            yuan: 金额（元\xef\xbc\x9a
+            yuan: 金额（元）
             
         Returns:
-            金额（分\xef\xbc\x9a
+            金额（元），保留两位小数
         """
-        return int(round(yuan * 100))
+        return round(yuan, 2)
     
     def _acquire_user_lock(self, uid: str) -> User:
         """

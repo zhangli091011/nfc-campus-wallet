@@ -42,7 +42,11 @@ public class CartItem {
         return product.getPriceInYuan() * quantity;
     }
     
+    /**
+     * Get total price in cents (分) for payment API.
+     * Since price is now in yuan, multiply by 100 to get cents.
+     */
     public int getTotalPriceInCents() {
-        return product.getPrice() * quantity;
+        return (int) Math.round(product.getPrice() * 100) * quantity;
     }
 }

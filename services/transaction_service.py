@@ -29,17 +29,17 @@ class TransactionResult:
     
     Attributes:
         success: 交易是否成功
-        new_balance: 交易后余额（分）
+        new_balance: 交易后余额（元）
         transaction_id: 交易记录ID
-        balance_before: 交易前余额（分，可选）
+        balance_before: 交易前余额（元，可选）
     """
     
     def __init__(
         self,
         success: bool,
-        new_balance: int,
+        new_balance,
         transaction_id: Optional[int] = None,
-        balance_before: Optional[int] = None
+        balance_before=None
     ):
         self.success = success
         self.new_balance = new_balance
@@ -48,12 +48,12 @@ class TransactionResult:
     
     @property
     def new_balance_yuan(self) -> float:
-        """交易后余额（元）- 值已为元"""
+        """交易后余额（元）"""
         return float(self.new_balance)
     
     @property
     def balance_before_yuan(self) -> Optional[float]:
-        """交易前余额（元）- 值已为元"""
+        """交易前余额（元）"""
         if self.balance_before is not None:
             return float(self.balance_before)
         return None
@@ -119,7 +119,7 @@ class TransactionService:
             logger.info(
                 f"Payment successful: uid={uid}, amount={amount_yuan} yuan, "
                 f"txn_id={ledger_entry.transaction_id}, "
-                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} cents"
+                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} yuan"
             )
             
             return TransactionResult(
@@ -177,7 +177,7 @@ class TransactionService:
             logger.info(
                 f"Recharge successful: uid={uid}, amount={amount_yuan} yuan, "
                 f"txn_id={ledger_entry.transaction_id}, "
-                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} cents"
+                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} yuan"
             )
             
             return TransactionResult(
@@ -260,9 +260,9 @@ class TransactionService:
                 result.append({
                     'id': txn.id,
                     'type': txn.type,
-                    'amount': txn.amount,  # 返回分，前端负责转换
-                    'balance_before': txn.balance_before,  # 返回分
-                    'balance_after': txn.balance_after,  # 返回分
+                    'amount': txn.amount,  # 金额（元）
+                    'balance_before': txn.balance_before,  # 交易前余额（元）
+                    'balance_after': txn.balance_after,  # 交易后余额（元）
                     'merchant_id': txn.merchant_id,
                     'related_txn_id': txn.related_txn_id,
                     'remark': txn.remark,
@@ -348,7 +348,7 @@ class TransactionService:
                 f"Event recharge successful: event_id={event_id}, card_uid={card_uid}, "
                 f"participant_id={participant.id}, amount={amount_yuan} yuan, "
                 f"txn_id={ledger_entry.transaction_id}, "
-                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} cents"
+                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} yuan"
             )
             
             return TransactionResult(
@@ -430,7 +430,7 @@ class TransactionService:
                 f"Event payment successful: event_id={event_id}, card_uid={card_uid}, "
                 f"participant_id={participant.id}, amount={amount_yuan} yuan, "
                 f"txn_id={ledger_entry.transaction_id}, "
-                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} cents"
+                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} yuan"
             )
             
             return TransactionResult(
@@ -517,9 +517,9 @@ class TransactionService:
                 txn_dict = {
                     'id': txn.id,
                     'type': txn.type,
-                    'amount': txn.amount,  # 返回分，前端负责转换
-                    'balance_before': txn.balance_before,  # 返回分
-                    'balance_after': txn.balance_after,  # 返回分
+                    'amount': txn.amount,  # 金额（元）
+                    'balance_before': txn.balance_before,  # 交易前余额（元）
+                    'balance_after': txn.balance_after,  # 交易后余额（元）
                     'participant_id': txn.participant_id,
                     'card_uid': txn.card_uid,
                     'booth_id': txn.booth_id if hasattr(txn, 'booth_id') else None,  # 安全访问
@@ -749,7 +749,7 @@ class TransactionService:
                 f"Booth payment successful: event_id={event_id}, card_uid={card_uid}, "
                 f"booth_id={booth_id}, product_id={product_id}, operator_id={operator_id}, "
                 f"amount={amount_yuan} yuan, txn_id={ledger_entry.transaction_id}, "
-                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} cents"
+                f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after} yuan"
             )
             
             return TransactionResult(
@@ -858,9 +858,9 @@ class TransactionService:
                 result.append({
                     'id': txn.id,
                     'type': txn.type,
-                    'amount': txn.amount,  # 返回分，前端负责转换
-                    'balance_before': txn.balance_before,  # 返回分
-                    'balance_after': txn.balance_after,  # 返回分
+                    'amount': txn.amount,  # 金额（元）
+                    'balance_before': txn.balance_before,  # 交易前余额（元）
+                    'balance_after': txn.balance_after,  # 交易后余额（元）
                     'participant_id': txn.participant_id,
                     'card_uid': txn.card_uid,
                     'booth_id': txn.booth_id,
