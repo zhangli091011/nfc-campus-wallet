@@ -81,20 +81,22 @@ class LedgerService:
         """
         self.db = db_session
     
-    def _yuan_to_cents(self, yuan: float) -> float:
+    def _yuan_to_cents(self, yuan: float):
         """
         金额处理（元）。
         
         数据库已统一使用元为单位（DECIMAL(12,2)），无需转换为分。
         保留方法名以兼容调用方，但实际不再乘以100。
+        返回 Decimal 以兼容数据库 DECIMAL 类型的运算。
         
         Args:
             yuan: 金额（元）
             
         Returns:
-            金额（元），保留两位小数
+            Decimal 金额（元），保留两位小数
         """
-        return round(yuan, 2)
+        from decimal import Decimal, ROUND_HALF_UP
+        return Decimal(str(yuan)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     def _acquire_user_lock(self, uid: str) -> User:
         """
