@@ -133,7 +133,7 @@ const MerchantCostEvidence = () => {
       }
 
       const rawFile = (fileList[0].originFileObj || fileList[0]) as File
-      if (!rawFile || !(rawFile instanceof File || rawFile instanceof Blob)) {
+      if (!rawFile || !(rawFile instanceof Blob)) {
         message.error('文件无效，请重新选择')
         return
       }

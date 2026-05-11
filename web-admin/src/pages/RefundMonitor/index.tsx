@@ -52,7 +52,7 @@ const RefundMonitor = () => {
   const [detailTotal, setDetailTotal] = useState(0)
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEventId, setSelectedEventId] = useState<number>()
-  const [loading, setLoading] = useState(false)
+  const [_loading, setLoading] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [reasonFilter, setReasonFilter] = useState<string>()
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 })

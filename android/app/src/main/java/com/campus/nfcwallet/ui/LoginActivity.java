@@ -12,6 +12,8 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.material.textfield.TextInputEditText;
+
 import com.campus.nfcwallet.R;
 import com.campus.nfcwallet.api.APIClient;
 import com.campus.nfcwallet.api.WalletAPIService;

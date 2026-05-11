@@ -9,7 +9,6 @@ import {
   Statistic,
   Row,
   Col,
-  Modal,
   Image,
   message,
   Popconfirm,
