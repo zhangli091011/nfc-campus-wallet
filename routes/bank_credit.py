@@ -96,6 +96,11 @@ class IssueLoanResponse(BaseModel):
     loan_fee_txn_id: int
     operator_name: str
     created_at: str
+    # 兼容安卓端字段名
+    disbursed_amount: Optional[float] = None
+    new_balance: Optional[float] = None
+    principal_amount: Optional[int] = None
+    message: Optional[str] = None
 
 
 class LoanRecord(BaseModel):
@@ -325,9 +330,9 @@ async def issue_loan(
         # if global_borrowed + req.nominal_amount > max_total:
         #     raise HTTPException(...)
 
-        # ── 8. 计算手续费和实际到账 ──
-        fee_amount = int(math.floor(nominal_amount * fee_rate))
-        actual_grant = nominal_amount - fee_amount
+        # ── 8. 计算手续费和实际到账（金额单位：元） ──
+        fee_amount = round(float(nominal_amount) * fee_rate, 2)
+        actual_grant = float(nominal_amount) - fee_amount
 
         # ── 9. 悲观锁锁定账户行 (SELECT ... FOR UPDATE) ──
         locked_account = db.query(Account).filter(
@@ -355,7 +360,7 @@ async def issue_loan(
             balance_before=balance_before,
             balance_after=balance_before + nominal_amount,
             merchant_id=None,
-            remark=f"银行垫资发放：名义本金 {nominal_amount/100:.2f} 元",
+            remark=f"银行垫资发放：名义本金 {nominal_amount:.2f} 元",
             operator_id=str(current_user.id)
         )
         db.add(txn_loan_issue)
@@ -374,7 +379,7 @@ async def issue_loan(
             balance_before=balance_after_issue,
             balance_after=balance_after_issue - fee_amount,
             merchant_id=None,
-            remark=f"银行垫资手续费：{fee_rate*100:.1f}% = {fee_amount/100:.2f} 元",
+            remark=f"银行垫资手续费：{fee_rate*100:.1f}% = {fee_amount:.2f} 元",
             operator_id=str(current_user.id)
         )
         db.add(txn_loan_fee)
@@ -411,9 +416,9 @@ async def issue_loan(
         # ── 13. 审计日志 ──
         audit_detail = (
             f"放贷成功: participant={participant.name}(card={req.card_uid}), "
-            f"本金={nominal_amount/100:.2f}元, 手续费={fee_amount/100:.2f}元, "
-            f"实际到账={actual_grant/100:.2f}元, "
-            f"余额: {balance_before/100:.2f} -> {balance_after/100:.2f}元"
+            f"本金={nominal_amount:.2f}元, 手续费={fee_amount:.2f}元, "
+            f"实际到账={actual_grant:.2f}元, "
+            f"余额: {float(balance_before):.2f} -> {float(balance_after):.2f}元"
         )
         _write_audit_log(
             db=db,
@@ -442,24 +447,29 @@ async def issue_loan(
             participant_name=participant.name,
             card_uid=req.card_uid,
             nominal_amount=nominal_amount,
-            nominal_amount_yuan=nominal_amount / 1,
+            nominal_amount_yuan=float(nominal_amount),
             fee_rate=fee_rate,
             fee_amount=fee_amount,
-            fee_amount_yuan=fee_amount / 1,
+            fee_amount_yuan=float(fee_amount),
             actual_grant=actual_grant,
-            actual_grant_yuan=actual_grant / 1,
+            actual_grant_yuan=float(actual_grant),
             balance_before=balance_before,
-            balance_before_yuan=balance_before / 1,
+            balance_before_yuan=float(balance_before),
             balance_after=balance_after,
-            balance_after_yuan=balance_after / 1,
+            balance_after_yuan=float(balance_after),
             credit_borrowed_total=locked_account.credit_borrowed,
-            credit_borrowed_total_yuan=locked_account.credit_borrowed / 1,
+            credit_borrowed_total_yuan=float(locked_account.credit_borrowed),
             credit_fee_paid_total=locked_account.credit_fee_paid,
-            credit_fee_paid_total_yuan=locked_account.credit_fee_paid / 1,
+            credit_fee_paid_total_yuan=float(locked_account.credit_fee_paid),
             loan_issue_txn_id=txn_loan_issue.id,
             loan_fee_txn_id=txn_loan_fee.id,
             operator_name=current_user.username,
-            created_at=datetime.now(timezone.utc).isoformat()
+            created_at=datetime.now(timezone.utc).isoformat(),
+            # 兼容安卓端
+            disbursed_amount=float(actual_grant),
+            new_balance=float(balance_after),
+            principal_amount=nominal_amount,
+            message=f"放贷成功：实际到账 {actual_grant} 元"
         )
 
     except HTTPException:
