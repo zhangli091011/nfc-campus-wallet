@@ -249,12 +249,9 @@ async def issue_loan(
                 detail=f"参与者 {participant.name} 状态异常({participant.status})，无法借款"
             )
 
-        # ── 实名认证校验 ──
-        if not participant.is_verified:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"该卡片持卡人处于实名审核中，请先到管理后台完成实名审核后再办理信用垫资"
-            )
+        # ── 实名认证校验（已取消，输入后直接可用） ──
+        # if not participant.is_verified:
+        #     raise HTTPException(...)
 
         # ── 4. 获取信贷配置 ──
         config = _get_credit_config(db, req.event_id)
@@ -283,7 +280,7 @@ async def issue_loan(
             db.add(account)
             db.flush()  # 获取 account.id
 
-        # ── 6. 校验单人借款额度 ──
+        # ── 6. 校验单人借款额度（已取消限制，允许任意金额） ──
         existing_borrowed = db.execute(
             text("""SELECT COALESCE(SUM(principal_amount), 0) as total
                     FROM bank_loans
@@ -291,17 +288,11 @@ async def issue_loan(
             {"pid": participant.id, "eid": req.event_id}
         ).mappings().first()["total"]
 
-        if existing_borrowed + req.nominal_amount > max_per_person:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"超出单人借款上限：已借 {existing_borrowed/100:.2f} 元，"
-                    f"本次申请 {req.nominal_amount/100:.2f} 元，"
-                    f"上限 {max_per_person/100:.2f} 元"
-                )
-            )
+        # 不再限制单人借款上限
+        # if existing_borrowed + req.nominal_amount > max_per_person:
+        #     raise HTTPException(...)
 
-        # ── 7. 校验全场总额度 ──
+        # ── 7. 校验全场总额度（已取消限制） ──
         global_borrowed = db.execute(
             text("""SELECT COALESCE(SUM(principal_amount), 0) as total
                     FROM bank_loans
@@ -309,14 +300,9 @@ async def issue_loan(
             {"eid": req.event_id}
         ).mappings().first()["total"]
 
-        if global_borrowed + req.nominal_amount > max_total:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"全场信贷额度不足：已借 {global_borrowed/100:.2f} 元，"
-                    f"上限 {max_total/100:.2f} 元"
-                )
-            )
+        # 不再限制全场总额度
+        # if global_borrowed + req.nominal_amount > max_total:
+        #     raise HTTPException(...)
 
         # ── 8. 计算手续费和实际到账 ──
         fee_amount = int(math.floor(req.nominal_amount * fee_rate))
