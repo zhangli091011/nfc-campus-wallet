@@ -58,14 +58,15 @@ class IssueLoanRequest(BaseModel):
     """放贷请求"""
     event_id: int = Field(..., description="活动ID")
     card_uid: str = Field(..., min_length=1, max_length=32, description="NFC卡片UID")
-    nominal_amount: Optional[int] = Field(None, gt=0, description="名义借款金额（分）")
-    principal_amount: Optional[int] = Field(None, gt=0, description="名义借款金额（分）- 兼容安卓端字段名")
+    nominal_amount: Optional[int] = Field(None, description="名义借款金额（分）")
+    principal_amount: Optional[int] = Field(None, description="名义借款金额 - 兼容安卓端字段名")
     remark: Optional[str] = Field(None, max_length=255, description="备注（如借条编号）")
+    # 允许安卓端发送的额外字段（timestamp, signature）
+    timestamp: Optional[int] = Field(None, exclude=True)
+    signature: Optional[str] = Field(None, exclude=True)
 
-    @property
-    def effective_amount(self) -> int:
-        """获取有效金额（兼容两种字段名）"""
-        return self.nominal_amount or self.principal_amount or 0
+    class Config:
+        extra = "allow"
 
 
 class IssueLoanResponse(BaseModel):
@@ -238,6 +239,7 @@ async def issue_loan(
 
     # ── 1.5 解析金额（兼容 nominal_amount 和 principal_amount 两种字段名） ──
     nominal_amount = req.nominal_amount or req.principal_amount
+    logger.info(f"[LOAN_REQUEST] card_uid={req.card_uid}, nominal_amount={req.nominal_amount}, principal_amount={req.principal_amount}, resolved={nominal_amount}")
     if not nominal_amount or nominal_amount <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
