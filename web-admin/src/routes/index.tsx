@@ -11,6 +11,7 @@ import TransactionHistory from '@/pages/TransactionHistory'
 import RefundApproval from '@/pages/RefundApproval'
 import RefundMonitor from '@/pages/RefundMonitor'
 import UserManagement from '@/pages/UserManagement'
+import CostEvidenceReview from '@/pages/CostEvidenceReview'
 import StockDashboard from '@/pages/StockDashboard'
 import InvestmentManagement from '@/pages/Investment'
 import {
@@ -99,6 +100,7 @@ const AppRoutes = () => {
         <Route path="transactions" element={<TransactionHistory />} />
         <Route path="refunds" element={<RefundApproval />} />
         <Route path="refund-monitor" element={<RefundMonitor />} />
+        <Route path="cost-evidence-review" element={<CostEvidenceReview />} />
         <Route path="users" element={<UserManagement />} />
         
         {/* 投资管理 */}

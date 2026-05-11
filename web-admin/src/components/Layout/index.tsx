@@ -22,6 +22,7 @@ import {
   DollarCircleOutlined,
   BankOutlined,
   AlertOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons'
 import { getUser, clearAuth, isSuperAdmin } from '@/utils/auth'
 import type { MenuProps } from 'antd'
@@ -78,6 +79,11 @@ const Layout = () => {
       key: '/refund-monitor',
       icon: <AlertOutlined />,
       label: '退款监控',
+    },
+    {
+      key: '/cost-evidence-review',
+      icon: <FileTextOutlined />,
+      label: '凭据审核',
     },
     {
       key: 'reports',

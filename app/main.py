@@ -169,9 +169,10 @@ def create_app() -> FastAPI:
     
     # Merchant system (商户自主注册与管理)
     from routes.merchant import router as merchant_router
-    from routes.cost_evidence import router as cost_evidence_router
+    from routes.cost_evidence import router as cost_evidence_router, admin_router as cost_evidence_admin_router
     app.include_router(merchant_router, tags=["merchant"])
     app.include_router(cost_evidence_router, tags=["merchant-cost-evidence"])
+    app.include_router(cost_evidence_admin_router, tags=["admin-cost-evidence"])
     
     # Refund monitoring system (退款监控与审计)
     from routes.refund_monitor import router as refund_monitor_router

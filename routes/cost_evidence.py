@@ -7,6 +7,7 @@ Cost Evidence routes for Merchant System.
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Form, status
 from fastapi.responses import JSONResponse, FileResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, timezone
 import logging
@@ -540,4 +541,402 @@ async def get_cost_evidence_stats(
         return JSONResponse(
             status_code=500,
             content={"error_code": "INTERNAL_ERROR", "message": "获取统计信息失败"}
+        )
+
+
+# ============================================================================
+# 管理员审核端点
+# ============================================================================
+
+admin_router = APIRouter(prefix="/admin/cost-evidence", tags=["admin-cost-evidence"])
+
+
+class ReviewRequest(BaseModel):
+    """审核请求模型"""
+    action: str = Field(..., description="审核动作: approve/reject")
+    remark: Optional[str] = Field(None, max_length=500, description="审核备注")
+
+
+@admin_router.get("")
+async def admin_list_cost_evidences(
+    booth_id: Optional[int] = Query(None, description="按商铺ID筛选"),
+    category: Optional[str] = Query(None, description="按类别筛选"),
+    status_filter: Optional[str] = Query(None, alias="status", description="按状态筛选"),
+    limit: int = Query(50, ge=1, le=200, description="返回记录数限制"),
+    offset: int = Query(0, ge=0, description="偏移量"),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取所有商户的成本凭据列表。
+
+    支持按商铺、类别、状态筛选。
+
+    需要 super_admin 或 event_admin 角色。
+    """
+    try:
+        from sqlalchemy import func
+
+        query = db.query(CostEvidence)
+
+        if booth_id is not None:
+            query = query.filter(CostEvidence.booth_id == booth_id)
+
+        if category and category in VALID_CATEGORIES:
+            query = query.filter(CostEvidence.category == category)
+
+        if status_filter and status_filter in ('pending', 'approved', 'rejected'):
+            query = query.filter(CostEvidence.status == status_filter)
+
+        total_count = query.count()
+
+        evidences = query.order_by(
+            CostEvidence.created_at.desc()
+        ).limit(limit).offset(offset).all()
+
+        evidence_list = []
+        for ev in evidences:
+            # 获取商铺信息
+            booth = db.query(Booth).filter(Booth.id == ev.booth_id).first()
+            booth_name = booth.name if booth else "未知"
+            class_name = booth.class_name if booth else "未知"
+
+            evidence_list.append({
+                "id": ev.id,
+                "booth_id": ev.booth_id,
+                "booth_name": booth_name,
+                "class_name": class_name,
+                "uploader_id": ev.uploader_id,
+                "filename": ev.filename,
+                "file_size": ev.file_size,
+                "mime_type": ev.mime_type,
+                "category": ev.category,
+                "amount": float(ev.amount) if ev.amount else None,
+                "description": ev.description,
+                "status": ev.status,
+                "reviewed_by": ev.reviewed_by,
+                "reviewed_at": ev.reviewed_at.isoformat() if ev.reviewed_at else None,
+                "created_at": ev.created_at.isoformat() if ev.created_at else None
+            })
+
+        return {
+            "evidences": evidence_list,
+            "total_count": total_count
+        }
+
+    except Exception as e:
+        logger.error(f"Admin list cost evidences error: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "获取凭据列表失败"}
+        )
+
+
+@admin_router.get("/stats")
+async def admin_cost_evidence_stats(
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取全局成本凭据统计。
+
+    返回待审核数量、各状态统计、各类别统计。
+    """
+    try:
+        from sqlalchemy import func
+
+        # 按状态统计
+        status_stats = db.query(
+            CostEvidence.status,
+            func.count(CostEvidence.id).label('count'),
+            func.coalesce(func.sum(CostEvidence.amount), 0).label('total_amount')
+        ).group_by(CostEvidence.status).all()
+
+        # 按类别统计
+        category_stats = db.query(
+            CostEvidence.category,
+            func.count(CostEvidence.id).label('count'),
+            func.coalesce(func.sum(CostEvidence.amount), 0).label('total_amount')
+        ).group_by(CostEvidence.category).all()
+
+        # 总计
+        total = db.query(
+            func.count(CostEvidence.id).label('total_count'),
+            func.coalesce(func.sum(CostEvidence.amount), 0).label('total_amount')
+        ).first()
+
+        pending_count = next(
+            (s.count for s in status_stats if s.status == 'pending'), 0
+        )
+
+        return {
+            "total_count": total.total_count if total else 0,
+            "total_amount": float(total.total_amount) if total and total.total_amount else 0,
+            "pending_count": pending_count,
+            "by_status": [
+                {
+                    "status": stat.status,
+                    "count": stat.count,
+                    "total_amount": float(stat.total_amount) if stat.total_amount else 0
+                }
+                for stat in status_stats
+            ],
+            "by_category": [
+                {
+                    "category": stat.category,
+                    "count": stat.count,
+                    "total_amount": float(stat.total_amount) if stat.total_amount else 0
+                }
+                for stat in category_stats
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Admin cost evidence stats error: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "获取统计信息失败"}
+        )
+
+
+@admin_router.get("/{evidence_id}")
+async def admin_get_cost_evidence(
+    evidence_id: int,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取单个凭据详情。
+    """
+    try:
+        evidence = db.query(CostEvidence).filter(CostEvidence.id == evidence_id).first()
+
+        if evidence is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error_code": "EVIDENCE_NOT_FOUND", "message": "凭据不存在"}
+            )
+
+        booth = db.query(Booth).filter(Booth.id == evidence.booth_id).first()
+
+        return {
+            "id": evidence.id,
+            "booth_id": evidence.booth_id,
+            "booth_name": booth.name if booth else "未知",
+            "class_name": booth.class_name if booth else "未知",
+            "uploader_id": evidence.uploader_id,
+            "filename": evidence.filename,
+            "stored_filename": evidence.stored_filename,
+            "file_size": evidence.file_size,
+            "mime_type": evidence.mime_type,
+            "category": evidence.category,
+            "amount": float(evidence.amount) if evidence.amount else None,
+            "description": evidence.description,
+            "status": evidence.status,
+            "reviewed_by": evidence.reviewed_by,
+            "reviewed_at": evidence.reviewed_at.isoformat() if evidence.reviewed_at else None,
+            "created_at": evidence.created_at.isoformat() if evidence.created_at else None
+        }
+
+    except Exception as e:
+        logger.error(f"Admin get cost evidence error: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "获取凭据详情失败"}
+        )
+
+
+@admin_router.get("/{evidence_id}/file")
+async def admin_download_cost_evidence_file(
+    evidence_id: int,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员下载/查看凭据文件。
+    """
+    try:
+        evidence = db.query(CostEvidence).filter(CostEvidence.id == evidence_id).first()
+
+        if evidence is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error_code": "EVIDENCE_NOT_FOUND", "message": "凭据不存在"}
+            )
+
+        if not os.path.exists(evidence.file_path):
+            return JSONResponse(
+                status_code=404,
+                content={"error_code": "FILE_NOT_FOUND", "message": "凭据文件不存在"}
+            )
+
+        return FileResponse(
+            path=evidence.file_path,
+            filename=evidence.filename,
+            media_type=evidence.mime_type
+        )
+
+    except Exception as e:
+        logger.error(f"Admin download cost evidence error: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "下载凭据失败"}
+        )
+
+
+@admin_router.post("/{evidence_id}/review")
+async def admin_review_cost_evidence(
+    evidence_id: int,
+    request: ReviewRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员审核成本凭据（通过/驳回）。
+
+    Request Body:
+        - action: 审核动作 (approve/reject)
+        - remark: 审核备注（可选）
+
+    需要 super_admin 或 event_admin 角色。
+    """
+    try:
+        if request.action not in ('approve', 'reject'):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "INVALID_ACTION",
+                    "message": "无效的审核动作，可选值: approve, reject"
+                }
+            )
+
+        evidence = db.query(CostEvidence).filter(CostEvidence.id == evidence_id).first()
+
+        if evidence is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error_code": "EVIDENCE_NOT_FOUND", "message": "凭据不存在"}
+            )
+
+        if evidence.status != 'pending':
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "ALREADY_REVIEWED",
+                    "message": f"该凭据已被审核（当前状态: {evidence.status}）"
+                }
+            )
+
+        # 更新状态
+        new_status = 'approved' if request.action == 'approve' else 'rejected'
+        evidence.status = new_status
+        evidence.reviewed_by = current_user.id
+        evidence.reviewed_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(evidence)
+
+        logger.info(
+            f"Cost evidence reviewed: id={evidence_id}, action={request.action}, "
+            f"reviewer={current_user.username}"
+        )
+
+        booth = db.query(Booth).filter(Booth.id == evidence.booth_id).first()
+
+        return {
+            "id": evidence.id,
+            "booth_id": evidence.booth_id,
+            "booth_name": booth.name if booth else "未知",
+            "filename": evidence.filename,
+            "category": evidence.category,
+            "amount": float(evidence.amount) if evidence.amount else None,
+            "status": evidence.status,
+            "reviewed_by": evidence.reviewed_by,
+            "reviewed_at": evidence.reviewed_at.isoformat() if evidence.reviewed_at else None,
+            "message": f"凭据已{'通过' if request.action == 'approve' else '驳回'}"
+        }
+
+    except Exception as e:
+        logger.error(f"Admin review cost evidence error: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "审核操作失败"}
+        )
+
+
+@admin_router.post("/batch-review")
+async def admin_batch_review_cost_evidences(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员批量审核成本凭据。
+
+    Request Body:
+        - ids: 凭据ID列表
+        - action: 审核动作 (approve/reject)
+
+    需要 super_admin 或 event_admin 角色。
+    """
+    try:
+        ids = request.get("ids", [])
+        action = request.get("action", "")
+
+        if not ids or not isinstance(ids, list):
+            return JSONResponse(
+                status_code=400,
+                content={"error_code": "INVALID_IDS", "message": "请提供凭据ID列表"}
+            )
+
+        if action not in ('approve', 'reject'):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "INVALID_ACTION",
+                    "message": "无效的审核动作，可选值: approve, reject"
+                }
+            )
+
+        new_status = 'approved' if action == 'approve' else 'rejected'
+        now = datetime.now(timezone.utc)
+
+        updated_count = db.query(CostEvidence).filter(
+            CostEvidence.id.in_(ids),
+            CostEvidence.status == 'pending'
+        ).update(
+            {
+                CostEvidence.status: new_status,
+                CostEvidence.reviewed_by: current_user.id,
+                CostEvidence.reviewed_at: now
+            },
+            synchronize_session='fetch'
+        )
+
+        db.commit()
+
+        logger.info(
+            f"Batch review cost evidences: action={action}, "
+            f"requested={len(ids)}, updated={updated_count}, "
+            f"reviewer={current_user.username}"
+        )
+
+        return {
+            "action": action,
+            "requested_count": len(ids),
+            "updated_count": updated_count,
+            "message": f"已{'通过' if action == 'approve' else '驳回'} {updated_count} 条凭据"
+        }
+
+    except Exception as e:
+        logger.error(f"Admin batch review error: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "批量审核失败"}
         )
