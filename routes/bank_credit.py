@@ -58,8 +58,14 @@ class IssueLoanRequest(BaseModel):
     """放贷请求"""
     event_id: int = Field(..., description="活动ID")
     card_uid: str = Field(..., min_length=1, max_length=32, description="NFC卡片UID")
-    nominal_amount: int = Field(..., gt=0, description="名义借款金额（分）")
+    nominal_amount: Optional[int] = Field(None, gt=0, description="名义借款金额（分）")
+    principal_amount: Optional[int] = Field(None, gt=0, description="名义借款金额（分）- 兼容安卓端字段名")
     remark: Optional[str] = Field(None, max_length=255, description="备注（如借条编号）")
+
+    @property
+    def effective_amount(self) -> int:
+        """获取有效金额（兼容两种字段名）"""
+        return self.nominal_amount or self.principal_amount or 0
 
 
 class IssueLoanResponse(BaseModel):
@@ -225,6 +231,14 @@ async def issue_loan(
             detail="仅银行柜员(bank_clerk)或超级管理员可执行放贷操作"
         )
 
+    # ── 1.5 解析金额（兼容 nominal_amount 和 principal_amount 两种字段名） ──
+    nominal_amount = req.nominal_amount or req.principal_amount
+    if not nominal_amount or nominal_amount <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="借款金额必须大于0"
+        )
+
     try:
         # ── 2. 验证活动存在 ──
         event = db.query(Event).filter(Event.id == req.event_id).first()
@@ -305,8 +319,8 @@ async def issue_loan(
         #     raise HTTPException(...)
 
         # ── 8. 计算手续费和实际到账 ──
-        fee_amount = int(math.floor(req.nominal_amount * fee_rate))
-        actual_grant = req.nominal_amount - fee_amount
+        fee_amount = int(math.floor(nominal_amount * fee_rate))
+        actual_grant = nominal_amount - fee_amount
 
         # ── 9. 悲观锁锁定账户行 (SELECT ... FOR UPDATE) ──
         locked_account = db.query(Account).filter(
@@ -330,18 +344,18 @@ async def issue_loan(
             participant_id=participant.id,
             account_id=locked_account.id,
             type="loan_issue",
-            amount=req.nominal_amount,
+            amount=nominal_amount,
             balance_before=balance_before,
-            balance_after=balance_before + req.nominal_amount,
+            balance_after=balance_before + nominal_amount,
             merchant_id=None,
-            remark=f"银行垫资发放：名义本金 {req.nominal_amount/100:.2f} 元",
+            remark=f"银行垫资发放：名义本金 {nominal_amount/100:.2f} 元",
             operator_id=str(current_user.id)
         )
         db.add(txn_loan_issue)
         db.flush()
 
         # 10b. loan_fee 流水：记录手续费扣除 (-fee_amount)
-        balance_after_issue = balance_before + req.nominal_amount
+        balance_after_issue = balance_before + nominal_amount
         txn_loan_fee = Transaction(
             uid=None,
             card_uid=req.card_uid,
@@ -362,7 +376,7 @@ async def issue_loan(
         # ── 11. 更新账户余额 ──
         balance_after = balance_before + actual_grant
         locked_account.balance = balance_after
-        locked_account.credit_borrowed = locked_account.credit_borrowed + req.nominal_amount
+        locked_account.credit_borrowed = locked_account.credit_borrowed + nominal_amount
         locked_account.credit_fee_paid = locked_account.credit_fee_paid + fee_amount
 
         # ── 12. 写入 bank_loans 记录 ──
@@ -375,7 +389,7 @@ async def issue_loan(
                 "eid": req.event_id,
                 "pid": participant.id,
                 "oid": current_user.id,
-                "principal": req.nominal_amount,
+                "principal": nominal_amount,
                 "rate": fee_rate,
                 "fee": fee_amount,
                 "disbursed": actual_grant,
@@ -390,7 +404,7 @@ async def issue_loan(
         # ── 13. 审计日志 ──
         audit_detail = (
             f"放贷成功: participant={participant.name}(card={req.card_uid}), "
-            f"本金={req.nominal_amount/100:.2f}元, 手续费={fee_amount/100:.2f}元, "
+            f"本金={nominal_amount/100:.2f}元, 手续费={fee_amount/100:.2f}元, "
             f"实际到账={actual_grant/100:.2f}元, "
             f"余额: {balance_before/100:.2f} -> {balance_after/100:.2f}元"
         )
@@ -407,7 +421,7 @@ async def issue_loan(
 
         logger.info(
             f"[LOAN_ISSUED] event={req.event_id}, participant={participant.name}, "
-            f"card_uid={req.card_uid}, nominal={req.nominal_amount}, "
+            f"card_uid={req.card_uid}, nominal={nominal_amount}, "
             f"fee={fee_amount}, actual={actual_grant}, "
             f"balance: {balance_before} -> {balance_after}, "
             f"operator={current_user.username}"
@@ -420,8 +434,8 @@ async def issue_loan(
             participant_id=participant.id,
             participant_name=participant.name,
             card_uid=req.card_uid,
-            nominal_amount=req.nominal_amount,
-            nominal_amount_yuan=req.nominal_amount / 1,
+            nominal_amount=nominal_amount,
+            nominal_amount_yuan=nominal_amount / 1,
             fee_rate=fee_rate,
             fee_amount=fee_amount,
             fee_amount_yuan=fee_amount / 1,
