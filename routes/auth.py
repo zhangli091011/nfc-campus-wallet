@@ -174,7 +174,6 @@ async def get_current_user_info(
 @router.post("/auth/set-staff-name", response_model=SetStaffNameResponse)
 async def set_staff_name(
     request: SetStaffNameRequest,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -183,18 +182,18 @@ async def set_staff_name(
     工作人员首次通过安卓端登录时，需要输入真实姓名。
     姓名设置后将用于显示和记录。
     
-    Headers:
-        - Authorization: Bearer <jwt_token>
+    此接口无需认证，通过 user_id 标识用户。
     
     Request Body:
         - staff_name: 工作人员真实姓名（1-50字符）
+        - user_id: 用户ID
     
     Returns:
         SetStaffNameResponse: 设置成功的确认信息
         
     Error Responses:
-        401: 未认证
-        400: 姓名无效
+        400: 姓名无效 / 缺少 user_id
+        404: 用户不存在
         500: 内部服务器错误
     """
     try:
@@ -209,14 +208,34 @@ async def set_staff_name(
                 }
             )
         
+        if not request.user_id:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "MISSING_USER_ID",
+                    "message": "缺少 user_id 参数"
+                }
+            )
+        
+        # 查找用户
+        user = db.query(User).filter(User.id == request.user_id).first()
+        if user is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error_code": "USER_NOT_FOUND",
+                    "message": "用户不存在"
+                }
+            )
+        
         # Update staff_name in database
-        current_user.staff_name = staff_name
+        user.staff_name = staff_name
         db.commit()
-        db.refresh(current_user)
+        db.refresh(user)
         
         logger.info(
-            f"Staff name set: user_id={current_user.id}, "
-            f"username='{current_user.username}', staff_name='{staff_name}'"
+            f"Staff name set: user_id={user.id}, "
+            f"username='{user.username}', staff_name='{staff_name}'"
         )
         
         return SetStaffNameResponse(

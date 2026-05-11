@@ -132,11 +132,13 @@ class BalanceResponse(BaseModel):
 class SetStaffNameRequest(BaseModel):
     """Schema for setting staff name on first login."""
     staff_name: str = Field(..., min_length=1, max_length=50, description="工作人员真实姓名")
+    user_id: Optional[int] = Field(None, description="用户ID（无需认证时使用）")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "staff_name": "张三"
+                "staff_name": "张三",
+                "user_id": 1
             }
         }
 
