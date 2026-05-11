@@ -154,19 +154,24 @@ class CreditConfig(BaseModel):
 # ============================================================================
 
 def _get_credit_config(db: Session, event_id: int) -> dict:
-    """获取信贷配置，如果不存在则返回默认值"""
-    config_row = db.execute(
-        text("SELECT * FROM bank_credit_config WHERE event_id = :eid"),
-        {"eid": event_id}
-    ).mappings().first()
+    """获取信贷配置，如果表不存在或无记录则返回默认值"""
+    try:
+        config_row = db.execute(
+            text("SELECT * FROM bank_credit_config WHERE event_id = :eid"),
+            {"eid": event_id}
+        ).mappings().first()
 
-    if config_row:
-        return {
-            "fee_rate": float(config_row["fee_rate"]),
-            "max_total_credit": config_row["max_total_credit"],
-            "max_per_person": config_row["max_per_person"],
-            "is_enabled": bool(config_row["is_enabled"]),
-        }
+        if config_row:
+            return {
+                "fee_rate": float(config_row["fee_rate"]),
+                "max_total_credit": config_row["max_total_credit"],
+                "max_per_person": config_row["max_per_person"],
+                "is_enabled": bool(config_row["is_enabled"]),
+            }
+    except Exception:
+        # 表不存在或查询失败，使用默认值
+        pass
+
     return {
         "fee_rate": DEFAULT_FEE_RATE,
         "max_total_credit": DEFAULT_MAX_TOTAL_CREDIT,
