@@ -17,13 +17,8 @@ import com.campus.nfcwallet.api.APIClient;
 import com.campus.nfcwallet.api.WalletAPIService;
 import com.campus.nfcwallet.models.LoginRequest;
 import com.campus.nfcwallet.models.LoginResponse;
-import com.campus.nfcwallet.models.SetStaffNameRequest;
-import com.campus.nfcwallet.models.SetStaffNameResponse;
-import com.campus.nfcwallet.models.UserInfo;
 import com.campus.nfcwallet.utils.ErrorHandler;
 import com.campus.nfcwallet.utils.SessionManager;
-import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.TextInputLayout;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -62,13 +57,7 @@ public class LoginActivity extends AppCompatActivity {
         
         // Check if already logged in
         if (sessionManager.isLoggedIn()) {
-            // Check if staff name still needs to be set
-            UserInfo userInfo = sessionManager.getUserInfo();
-            if (userInfo != null && userInfo.isStaffNameRequired()) {
-                showStaffNameDialog();
-            } else {
-                navigateToCashier();
-            }
+            navigateToCashier();
             return;
         }
         
@@ -119,12 +108,8 @@ public class LoginActivity extends AppCompatActivity {
                     Log.i(TAG, "Login successful: " + loginResponse.getUser().getUsername());
                     
                     // Check if staff name needs to be set (first login)
-                    UserInfo user = loginResponse.getUser();
-                    if (user.isStaffNameRequired()) {
-                        showStaffNameDialog();
-                    } else {
-                        navigateToCashier();
-                    }
+                    // Staff name dialog will be shown after navigation to main screen
+                    navigateToCashier();
                 } else {
                     String errorMessage = APIClient.getErrorMessage(response);
                     String detailedError = ErrorHandler.getDetailedErrorMessage(response);
@@ -174,98 +159,5 @@ public class LoginActivity extends AppCompatActivity {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
-    }
-    
-    /**
-     * Show dialog for staff to enter their real name on first login.
-     * This dialog cannot be dismissed without entering a name.
-     */
-    private void showStaffNameDialog() {
-        // Create input layout
-        TextInputLayout inputLayout = new TextInputLayout(this);
-        inputLayout.setHint("请输入您的真实姓名");
-        inputLayout.setPadding(48, 16, 48, 0);
-        
-        TextInputEditText nameInput = new TextInputEditText(inputLayout.getContext());
-        nameInput.setMaxLines(1);
-        inputLayout.addView(nameInput);
-        
-        AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("首次登录 - 设置姓名")
-            .setMessage("请输入您的真实姓名，该姓名将用于系统记录和显示。")
-            .setView(inputLayout)
-            .setCancelable(false)
-            .setPositiveButton("确认", null) // Set null to override later
-            .create();
-        
-        dialog.show();
-        
-        // Override positive button to prevent dismiss on empty input
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            String staffName = nameInput.getText() != null ? 
-                nameInput.getText().toString().trim() : "";
-            
-            if (staffName.isEmpty()) {
-                nameInput.setError("姓名不能为空");
-                nameInput.requestFocus();
-                return;
-            }
-            
-            if (staffName.length() > 50) {
-                nameInput.setError("姓名不能超过50个字符");
-                nameInput.requestFocus();
-                return;
-            }
-            
-            // Submit staff name to server
-            submitStaffName(staffName, dialog);
-        });
-    }
-    
-    /**
-     * Submit staff name to the server.
-     */
-    private void submitStaffName(String staffName, AlertDialog dialog) {
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
-        
-        SetStaffNameRequest request = new SetStaffNameRequest(staffName);
-        String authHeader = sessionManager.getAuthHeader();
-        
-        Call<SetStaffNameResponse> call = apiService.setStaffName(authHeader, request);
-        call.enqueue(new Callback<SetStaffNameResponse>() {
-            @Override
-            public void onResponse(Call<SetStaffNameResponse> call, Response<SetStaffNameResponse> response) {
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
-                
-                if (response.isSuccessful() && response.body() != null) {
-                    // Update local session with staff name
-                    UserInfo userInfo = sessionManager.getUserInfo();
-                    if (userInfo != null) {
-                        userInfo.setStaffName(response.body().getStaffName());
-                        sessionManager.updateUserInfo(userInfo);
-                    }
-                    
-                    Log.i(TAG, "Staff name set successfully: " + staffName);
-                    Toast.makeText(LoginActivity.this, 
-                        "姓名设置成功：" + staffName, Toast.LENGTH_SHORT).show();
-                    
-                    dialog.dismiss();
-                    navigateToCashier();
-                } else {
-                    String errorMessage = APIClient.getErrorMessage(response);
-                    Toast.makeText(LoginActivity.this, 
-                        "设置失败：" + errorMessage, Toast.LENGTH_LONG).show();
-                    Log.e(TAG, "Set staff name failed: " + errorMessage);
-                }
-            }
-            
-            @Override
-            public void onFailure(Call<SetStaffNameResponse> call, Throwable t) {
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
-                Toast.makeText(LoginActivity.this, 
-                    "网络错误，请重试", Toast.LENGTH_LONG).show();
-                Log.e(TAG, "Set staff name network error", t);
-            }
-        });
     }
 }
