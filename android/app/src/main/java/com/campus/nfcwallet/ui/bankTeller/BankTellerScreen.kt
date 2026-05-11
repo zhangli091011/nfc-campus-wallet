@@ -352,36 +352,77 @@ private fun CardHolderInfoSection(cardUid: String, participantName: String) {
 }
 
 // ============================================================================
-// 放款金额选择
+// 放款金额输入（自由输入，无金额限制）
 // ============================================================================
 @Composable
 private fun AmountSelectionSection(
     selectedAmount: Int?,
     onAmountSelected: (Int) -> Unit,
 ) {
-    val amounts = listOf(50, 100, 150, 200)
+    var inputText by remember { mutableStateOf(selectedAmount?.toString() ?: "") }
+    val quickAmounts = listOf(50, 100, 200, 500)
 
     BankCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            SectionLabel("放款金额选择")
+            SectionLabel("放款金额")
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "仅限预设面额，禁止自由输入",
+                text = "输入任意金额（元），扣除5%手续费后到账",
                 color = BankColors.TextDim,
                 fontSize = 11.sp,
             )
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 自由输入框
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = { value ->
+                    // 只允许数字
+                    val filtered = value.filter { it.isDigit() }
+                    inputText = filtered
+                    val amount = filtered.toIntOrNull()
+                    if (amount != null && amount > 0) {
+                        onAmountSelected(amount)
+                    }
+                },
+                label = { Text("金额（元）") },
+                placeholder = { Text("请输入放款金额") },
+                prefix = { Text("¥ ", color = BankColors.Platinum, fontWeight = FontWeight.Bold) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = BankColors.PlatinumBright,
+                    unfocusedTextColor = BankColors.TextPrimary,
+                    focusedBorderColor = BankColors.Platinum,
+                    unfocusedBorderColor = BankColors.BorderPlatinum,
+                    focusedLabelColor = BankColors.Platinum,
+                    unfocusedLabelColor = BankColors.TextDim,
+                    cursorColor = BankColors.Platinum,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 快捷金额按钮
+            Text(
+                text = "快捷选择",
+                color = BankColors.TextDim,
+                fontSize = 11.sp,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                amounts.forEach { amount ->
+                quickAmounts.forEach { amount ->
                     val isSelected = selectedAmount == amount
                     AmountChip(
                         amount = amount,
                         isSelected = isSelected,
-                        onClick = { onAmountSelected(amount) },
+                        onClick = {
+                            inputText = amount.toString()
+                            onAmountSelected(amount)
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }

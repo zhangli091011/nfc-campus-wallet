@@ -85,13 +85,7 @@ class BankTellerViewModel(
                         )
                         return
                     }
-                    if (!participant.isVerified) {
-                        uiState = uiState.copy(
-                            errorMessage = "该卡片持卡人处于实名审核中，请先到管理后台完成审核后再办理信用垫资",
-                            cardUid = null,
-                        )
-                        return
-                    }
+                    // 实名审核限制已取消，无需检查 isVerified
                     uiState = uiState.copy(
                         participantName = participant.name,
                         participantId = participant.id,
