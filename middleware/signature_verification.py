@@ -61,7 +61,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
         self.time_window = self.settings.timestamp_window
         
         # Endpoints that bypass authentication
-        self.bypass_paths = {"/health", "/docs", "/redoc", "/openapi.json", "/transactions", "/leaderboard", "/bank/issue_loan", "/bank/dashboard"}
+        self.bypass_paths = {"/health", "/docs", "/redoc", "/openapi.json", "/transactions", "/leaderboard", "/bank/issue_loan", "/bank/dashboard", "/bank/repay_loan", "/bank/return_card"}
         # Path prefixes that bypass authentication (for JWT-authenticated endpoints)
         self.bypass_prefixes = [
             "/booths", "/products", "/auth", "/events", "/participants",

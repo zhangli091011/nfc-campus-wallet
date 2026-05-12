@@ -358,4 +358,87 @@ class BankTellerViewModel(
     fun onDepositCardToggle(checked: Boolean) {
         uiState = uiState.copy(useDepositCard = checked)
     }
+
+    // -----------------------------------------------------------------
+    // 还款操作
+    // -----------------------------------------------------------------
+    fun onRepayLoan(amount: Int) {
+        val cardUid = uiState.cardUid ?: return
+        val token = sessionManager.authHeader ?: return
+        if (uiState.isLoading) return
+
+        uiState = uiState.copy(isLoading = true, errorMessage = null)
+
+        val requestData = HashMap<String, Any>()
+        requestData["event_id"] = eventId
+        requestData["card_uid"] = cardUid
+        requestData["amount"] = amount
+        requestData["remark"] = "银行柜员操作还款"
+
+        apiService.repayLoan(token, requestData).enqueue(object : Callback<Map<String, Any>> {
+            override fun onResponse(call: Call<Map<String, Any>>, response: Response<Map<String, Any>>) {
+                if (response.isSuccessful && response.body() != null) {
+                    val result = response.body()!!
+                    val repaid = (result["repaid_amount"] as? Double) ?: amount.toDouble()
+                    val remaining = (result["remaining_debt"] as? Double) ?: 0.0
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        isSuccess = true,
+                        resultDisbursedAmount = repaid,
+                        resultNewBalance = (result["balance_after"] as? Double) ?: 0.0,
+                    )
+                    Log.i(TAG, "还款成功: ¥$repaid, 剩余债务: ¥$remaining")
+                } else {
+                    val errorMsg = APIClient.getErrorMessage(response) ?: "还款失败"
+                    uiState = uiState.copy(isLoading = false, errorMessage = errorMsg)
+                }
+            }
+
+            override fun onFailure(call: Call<Map<String, Any>>, t: Throwable) {
+                Log.e(TAG, "还款请求失败", t)
+                uiState = uiState.copy(isLoading = false, errorMessage = "网络错误: ${t.message}")
+            }
+        })
+    }
+
+    // -----------------------------------------------------------------
+    // 退卡操作
+    // -----------------------------------------------------------------
+    fun onReturnCard() {
+        val cardUid = uiState.cardUid ?: return
+        val token = sessionManager.authHeader ?: return
+        if (uiState.isLoading) return
+
+        uiState = uiState.copy(isLoading = true, errorMessage = null)
+
+        val requestData = HashMap<String, Any>()
+        requestData["event_id"] = eventId
+        requestData["card_uid"] = cardUid
+        requestData["refund_balance"] = true
+        requestData["remark"] = "银行柜员操作退卡"
+
+        apiService.returnCard(token, requestData).enqueue(object : Callback<Map<String, Any>> {
+            override fun onResponse(call: Call<Map<String, Any>>, response: Response<Map<String, Any>>) {
+                if (response.isSuccessful && response.body() != null) {
+                    val result = response.body()!!
+                    val refunded = (result["balance_refunded"] as? Double) ?: 0.0
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        isSuccess = true,
+                        resultDisbursedAmount = refunded,
+                        resultNewBalance = 0.0,
+                    )
+                    Log.i(TAG, "退卡成功: 退还 ¥$refunded")
+                } else {
+                    val errorMsg = APIClient.getErrorMessage(response) ?: "退卡失败"
+                    uiState = uiState.copy(isLoading = false, errorMessage = errorMsg)
+                }
+            }
+
+            override fun onFailure(call: Call<Map<String, Any>>, t: Throwable) {
+                Log.e(TAG, "退卡请求失败", t)
+                uiState = uiState.copy(isLoading = false, errorMessage = "网络错误: ${t.message}")
+            }
+        })
+    }
 }

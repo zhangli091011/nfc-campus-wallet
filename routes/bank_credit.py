@@ -537,7 +537,295 @@ async def create_loan_legacy(
 
 
 # ============================================================================
-# Dashboard: GET /api/bank/dashboard/{event_id}
+# Repayment: POST /bank/repay_loan
+# ============================================================================
+
+class RepayLoanRequest(BaseModel):
+    """还款请求"""
+    event_id: int = Field(..., description="活动ID")
+    card_uid: str = Field(..., min_length=1, max_length=32, description="NFC卡片UID")
+    amount: float = Field(..., gt=0, description="还款金额（元）")
+    remark: Optional[str] = Field(None, max_length=255, description="备注")
+    # 兼容安卓端
+    timestamp: Optional[int] = Field(None, exclude=True)
+    signature: Optional[str] = Field(None, exclude=True)
+
+    class Config:
+        extra = "allow"
+
+
+class RepayLoanResponse(BaseModel):
+    """还款响应"""
+    success: bool
+    message: str
+    participant_id: int
+    participant_name: str
+    repaid_amount: float
+    remaining_debt: float
+    balance_before: float
+    balance_after: float
+    loans_cleared: int
+
+
+@router.post("/repay_loan", response_model=RepayLoanResponse)
+async def repay_loan(
+    req: RepayLoanRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    贷款还款接口。
+
+    流程：
+    1. 通过 card_uid 查找参与者和账户
+    2. 验证余额是否足够还款
+    3. 从余额中扣除还款金额
+    4. 按时间顺序清除贷款记录（先借先还）
+    5. 写入 loan_repay 流水
+    6. 更新账户 credit_borrowed
+    """
+    if current_user.role not in ("bank_clerk", "super_admin", "event_admin"):
+        raise HTTPException(status_code=403, detail="权限不足")
+
+    try:
+        from decimal import Decimal, ROUND_HALF_UP
+
+        # 查找参与者
+        participant = db.query(Participant).filter(Participant.card_uid == req.card_uid).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail=f"未找到卡片 {req.card_uid} 对应的参与者")
+
+        # 获取账户
+        account = db.query(Account).filter(
+            Account.participant_id == participant.id,
+            Account.event_id == req.event_id
+        ).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="该参与者在此活动中没有账户")
+
+        # 验证余额
+        balance_before = float(account.balance)
+        repay_amount = float(Decimal(str(req.amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+
+        if balance_before < repay_amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"余额不足：当前余额 ¥{balance_before:.2f}，还款金额 ¥{repay_amount:.2f}"
+            )
+
+        # 查询未清贷款（按时间顺序）
+        outstanding_loans = db.execute(
+            text("""SELECT id, principal_amount FROM bank_loans
+                    WHERE participant_id = :pid AND event_id = :eid AND status = 'active'
+                    ORDER BY id ASC"""),
+            {"pid": participant.id, "eid": req.event_id}
+        ).mappings().all()
+
+        if not outstanding_loans:
+            raise HTTPException(status_code=400, detail="该参与者没有未清贷款")
+
+        # 按顺序清除贷款
+        remaining_repay = repay_amount
+        loans_cleared = 0
+        for loan in outstanding_loans:
+            if remaining_repay <= 0:
+                break
+            loan_amount = float(loan["principal_amount"])
+            if remaining_repay >= loan_amount:
+                # 全额清除此笔贷款
+                db.execute(
+                    text("UPDATE bank_loans SET status = 'repaid' WHERE id = :lid"),
+                    {"lid": loan["id"]}
+                )
+                remaining_repay -= loan_amount
+                loans_cleared += 1
+            else:
+                # 部分还款：减少本金
+                new_principal = loan_amount - remaining_repay
+                db.execute(
+                    text("UPDATE bank_loans SET principal_amount = :new_amt WHERE id = :lid"),
+                    {"lid": loan["id"], "new_amt": new_principal}
+                )
+                remaining_repay = 0
+
+        # 写入还款流水
+        balance_after = balance_before - repay_amount
+        txn = Transaction(
+            uid=None,
+            card_uid=req.card_uid,
+            event_id=req.event_id,
+            participant_id=participant.id,
+            account_id=account.id,
+            type="loan_repay",
+            amount=repay_amount,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            merchant_id=None,
+            remark=req.remark or f"贷款还款 ¥{repay_amount:.2f}",
+            operator_id=str(current_user.id)
+        )
+        db.add(txn)
+
+        # 更新账户余额和借款记录
+        account.balance = balance_after
+        account.credit_borrowed = max(0, float(account.credit_borrowed or 0) - repay_amount)
+
+        # 计算剩余债务
+        remaining_debt_row = db.execute(
+            text("""SELECT COALESCE(SUM(principal_amount), 0) as total
+                    FROM bank_loans
+                    WHERE participant_id = :pid AND event_id = :eid AND status = 'active'"""),
+            {"pid": participant.id, "eid": req.event_id}
+        ).mappings().first()
+
+        db.commit()
+
+        remaining_debt = float(remaining_debt_row["total"]) if remaining_debt_row else 0
+
+        logger.info(
+            f"[LOAN_REPAID] participant={participant.name}, card={req.card_uid}, "
+            f"repaid={repay_amount}, loans_cleared={loans_cleared}, "
+            f"remaining_debt={remaining_debt}, balance: {balance_before} -> {balance_after}, "
+            f"operator={current_user.username}"
+        )
+
+        return RepayLoanResponse(
+            success=True,
+            message=f"还款成功，已清除 {loans_cleared} 笔贷款",
+            participant_id=participant.id,
+            participant_name=participant.name,
+            repaid_amount=repay_amount,
+            remaining_debt=remaining_debt,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            loans_cleared=loans_cleared,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Loan repayment failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Return Card: POST /bank/return_card
+# ============================================================================
+
+class ReturnCardRequest(BaseModel):
+    """退卡请求（手机端）"""
+    event_id: int = Field(..., description="活动ID")
+    card_uid: str = Field(..., min_length=1, max_length=32, description="NFC卡片UID")
+    refund_balance: bool = Field(True, description="是否退还余额")
+    remark: Optional[str] = Field(None, max_length=255, description="备注")
+    timestamp: Optional[int] = Field(None, exclude=True)
+    signature: Optional[str] = Field(None, exclude=True)
+
+    class Config:
+        extra = "allow"
+
+
+@router.post("/return_card")
+async def return_card(
+    req: ReturnCardRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    退卡接口（手机端银行柜员使用）。
+
+    流程：
+    1. 验证参与者存在
+    2. 检查未清贷款（有则拒绝）
+    3. 退还余额（写入流水）
+    4. 解除卡片绑定
+    5. 保留交易流水
+    """
+    if current_user.role not in ("bank_clerk", "super_admin", "event_admin"):
+        raise HTTPException(status_code=403, detail="权限不足")
+
+    try:
+        # 查找参与者
+        participant = db.query(Participant).filter(Participant.card_uid == req.card_uid).first()
+        if not participant:
+            raise HTTPException(status_code=404, detail=f"未找到卡片 {req.card_uid} 对应的参与者")
+
+        # 获取账户
+        account = db.query(Account).filter(
+            Account.participant_id == participant.id,
+            Account.event_id == req.event_id
+        ).first()
+
+        # 检查未清贷款
+        outstanding = db.execute(
+            text("""SELECT COUNT(*) as cnt, COALESCE(SUM(principal_amount), 0) as total
+                    FROM bank_loans
+                    WHERE participant_id = :pid AND event_id = :eid AND status = 'active'"""),
+            {"pid": participant.id, "eid": req.event_id}
+        ).mappings().first()
+
+        if outstanding and outstanding["cnt"] > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"有 {outstanding['cnt']} 笔未清贷款（共 ¥{float(outstanding['total']):.2f}），请先还清贷款"
+            )
+
+        # 退还余额
+        balance_before = float(account.balance) if account else 0.0
+        refunded = 0.0
+
+        if account and balance_before > 0 and req.refund_balance:
+            txn = Transaction(
+                uid=None,
+                card_uid=req.card_uid,
+                event_id=req.event_id,
+                participant_id=participant.id,
+                account_id=account.id,
+                type="correction",
+                amount=balance_before,
+                balance_before=balance_before,
+                balance_after=0,
+                merchant_id=None,
+                remark=req.remark or "退卡退款",
+                operator_id=str(current_user.id)
+            )
+            db.add(txn)
+            refunded = balance_before
+            account.balance = 0
+        elif account:
+            account.balance = 0
+
+        # 解除卡片绑定
+        old_card_uid = participant.card_uid
+        participant.status = 'inactive'
+        participant.card_uid = f"RETURNED_{old_card_uid}_{participant.id}"
+
+        db.commit()
+
+        logger.info(
+            f"[CARD_RETURNED] participant={participant.name}, card={old_card_uid}, "
+            f"refunded={refunded:.2f}, operator={current_user.username}"
+        )
+
+        return {
+            "success": True,
+            "message": "退卡成功",
+            "participant_name": participant.name,
+            "card_uid": old_card_uid,
+            "balance_refunded": refunded,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Return card failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Dashboard: GET /bank/dashboard/{event_id}
 # ============================================================================
 
 @router.get("/dashboard/{event_id}", response_model=CreditDashboardStats)

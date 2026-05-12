@@ -231,6 +231,46 @@ const ParticipantBalances = () => {
     })
   }
 
+  // 登记还款操作
+  const handleRepay = (record: ParticipantBalance) => {
+    Modal.confirm({
+      title: '登记还款',
+      width: 450,
+      content: (
+        <div>
+          <p><strong>参与者：</strong>{record.name} ({record.card_uid})</p>
+          <p><strong>当前余额：</strong>¥{record.balance.toFixed(2)}</p>
+          <p><strong>借款总额：</strong>¥{record.credit_borrowed.toFixed(2)}</p>
+          <p style={{ marginTop: 12, color: '#13c2c2' }}>
+            将从余额中扣除全部借款金额作为还款。
+          </p>
+        </div>
+      ),
+      okText: '确认全额还款',
+      cancelText: '取消',
+      onOk: async () => {
+        if (!selectedEventId) return
+        const repayAmount = Math.min(record.balance, record.credit_borrowed)
+        if (repayAmount <= 0) {
+          message.warning('余额不足或无借款')
+          return
+        }
+        try {
+          const res = await request.post<any, any>('/bank/repay_loan', {
+            event_id: selectedEventId,
+            card_uid: record.card_uid,
+            amount: repayAmount,
+            remark: '管理员后台登记还款',
+          })
+          message.success(res.message || `还款成功 ¥${repayAmount.toFixed(2)}`)
+          loadBalances()
+        } catch (error: any) {
+          message.error(error?.response?.data?.detail || '还款失败')
+        }
+      },
+    })
+  }
+
   const columns: ColumnsType<ParticipantBalance> = [
     {
       title: 'ID',
@@ -314,7 +354,7 @@ const ParticipantBalances = () => {
     {
       title: '操作',
       key: 'action',
-      width: 300,
+      width: 340,
       fixed: 'right',
       render: (_: any, record: ParticipantBalance) => (
         <Space size="small">
@@ -344,6 +384,16 @@ const ParticipantBalances = () => {
           >
             贷款
           </Button>
+          {record.credit_borrowed > 0 && (
+            <Button
+              type="link"
+              size="small"
+              style={{ color: '#13c2c2' }}
+              onClick={() => handleRepay(record)}
+            >
+              还款
+            </Button>
+          )}
           <Button
             type="link"
             size="small"

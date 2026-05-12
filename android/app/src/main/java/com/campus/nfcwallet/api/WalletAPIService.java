@@ -492,4 +492,34 @@ public interface WalletAPIService {
         @Header("Authorization") String authorization,
         @Body LoanIssuanceRequest request
     );
+
+    /**
+     * Repay loan (deduct from balance to clear debt).
+     *
+     * POST /bank/repay_loan
+     *
+     * @param authorization Authorization header (Bearer token)
+     * @param request Repay loan request body
+     * @return Repay loan response
+     */
+    @POST("bank/repay_loan")
+    Call<Map<String, Object>> repayLoan(
+        @Header("Authorization") String authorization,
+        @Body Map<String, Object> request
+    );
+
+    /**
+     * Return card (refund balance and unbind card).
+     *
+     * POST /bank/return_card
+     *
+     * @param authorization Authorization header (Bearer token)
+     * @param request Return card request body
+     * @return Return card response
+     */
+    @POST("bank/return_card")
+    Call<Map<String, Object>> returnCard(
+        @Header("Authorization") String authorization,
+        @Body Map<String, Object> request
+    );
 }
