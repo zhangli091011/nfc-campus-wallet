@@ -555,7 +555,7 @@ const MacroEconomyDashboard: React.FC = () => {
           <div className="indicator-label">全场总流动性 Total Liquidity</div>
           <div className="indicator-value blue">¥{formatMoney(totalLiquidity)}</div>
           <div className="indicator-sub">
-            发放 ¥{formatMoney(summaryReport?.total_issued || 0)} · 消费 ¥{formatMoney(summaryReport?.total_consumed || 0)}
+            发放 ¥{formatMoney((summaryReport?.total_issued || 0) + (summaryReport?.total_recharged || 0))} · 消费 ¥{formatMoney(summaryReport?.total_consumed || 0)}
           </div>
         </div>
 

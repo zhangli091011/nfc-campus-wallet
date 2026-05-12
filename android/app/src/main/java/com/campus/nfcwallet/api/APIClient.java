@@ -78,6 +78,13 @@ public class APIClient {
     }
     
     /**
+     * Get the base URL for direct HTTP calls (e.g., OTA update check).
+     */
+    public static String getBaseUrl() {
+        return BASE_URL;
+    }
+    
+    /**
      * Parse error response from API.
      * 
      * @param response Failed response

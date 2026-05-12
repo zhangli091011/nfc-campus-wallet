@@ -835,8 +835,7 @@ async def get_credit_dashboard(
     db: Session = Depends(get_db)
 ):
     """央行宏观经济与信用风险看板数据"""
-    if current_user.role not in ("bank_clerk", "super_admin", "event_admin"):
-        raise HTTPException(status_code=403, detail="权限不足")
+    # 所有已认证用户均可查看宏观看板数据（只读）
 
     # 核心指标
     stats = db.execute(

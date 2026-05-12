@@ -71,6 +71,11 @@ const Layout = () => {
       label: '参与者余额',
     },
     {
+      key: '/class-search',
+      icon: <TeamOutlined />,
+      label: '班级搜索',
+    },
+    {
       key: '/transactions',
       icon: <TransactionOutlined />,
       label: '交易流水',

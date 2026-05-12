@@ -8,6 +8,7 @@ import BoothManagement from '@/pages/BoothManagement'
 import ProductManagement from '@/pages/ProductManagement'
 import ParticipantManagement from '@/pages/ParticipantManagement'
 import ParticipantBalances from '@/pages/ParticipantBalances'
+import ClassSearch from '@/pages/ClassSearch'
 import TransactionHistory from '@/pages/TransactionHistory'
 import RefundApproval from '@/pages/RefundApproval'
 import RefundMonitor from '@/pages/RefundMonitor'
@@ -99,6 +100,7 @@ const AppRoutes = () => {
         <Route path="products" element={<ProductManagement />} />
         <Route path="participants" element={<ParticipantManagement />} />
         <Route path="participant-balances" element={<ParticipantBalances />} />
+        <Route path="class-search" element={<ClassSearch />} />
         <Route path="transactions" element={<TransactionHistory />} />
         <Route path="refunds" element={<RefundApproval />} />
         <Route path="refund-monitor" element={<RefundMonitor />} />

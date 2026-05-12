@@ -186,6 +186,14 @@ def create_app() -> FastAPI:
     from routes.admin_participants import router as admin_participants_router
     app.include_router(admin_participants_router, tags=["admin-participants"])
     
+    # Class search (按班级搜索参与者及流水)
+    from routes.class_search import router as class_search_router
+    app.include_router(class_search_router, tags=["class-search"])
+    
+    # App OTA update (APK 上传与版本检查)
+    from routes.app_update import router as app_update_router
+    app.include_router(app_update_router, tags=["app-update"])
+    
     # Health check endpoint
     @app.get("/health")
     async def health_check():
