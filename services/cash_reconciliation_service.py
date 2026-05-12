@@ -84,9 +84,9 @@ class CashReconciliationService:
                     error_code="BOOTH_NOT_IN_EVENT"
                 )
             
-            # 转换为分
-            expected_cash = int(expected_cash_yuan * 100)
-            actual_cash = int(actual_cash_yuan * 100)
+            # 金额直接使用元为单位
+            expected_cash = expected_cash_yuan
+            actual_cash = actual_cash_yuan
             diff_amount = actual_cash - expected_cash
             
             # 创建对账记录

@@ -114,8 +114,8 @@ class Stock(Base):
     
     @property
     def initial_price_yuan(self) -> float:
-        """获取初始发行价（元）"""
-        return self.initial_price / 100.0
+        """获取初始发行价（元）- 值已为元"""
+        return float(self.initial_price)
     
     @property
     def available_shares(self) -> int:
@@ -256,36 +256,35 @@ class StockPurchase(Base):
     
     @property
     def purchase_price_yuan(self) -> float:
-        """获取购买单价（元）"""
-        return self.purchase_price / 100.0
+        """获取购买单价（元）- 值已为元"""
+        return float(self.purchase_price)
     
     @property
     def total_amount_yuan(self) -> float:
-        """获取购买总金额（元）"""
-        return self.total_amount / 100.0
+        """获取购买总金额（元）- 值已为元"""
+        return float(self.total_amount)
     
     @property
     def settlement_price_yuan(self) -> float | None:
-        """获取结算单价（元）"""
-        return self.settlement_price / 100.0 if self.settlement_price else None
+        """获取结算单价（元）- 值已为元"""
+        return float(self.settlement_price) if self.settlement_price else None
     
     @property
     def settlement_amount_yuan(self) -> float | None:
-        """获取结算总金额（元）"""
-        return self.settlement_amount / 100.0 if self.settlement_amount else None
+        """获取结算总金额（元）- 值已为元"""
+        return float(self.settlement_amount) if self.settlement_amount else None
     
     @property
-    def profit_loss(self) -> int | None:
-        """获取盈亏金额（分）"""
+    def profit_loss(self) -> float | None:
+        """获取盈亏金额（元）"""
         if self.settlement_amount is None:
             return None
-        return self.settlement_amount - self.total_amount
+        return float(self.settlement_amount) - float(self.total_amount)
     
     @property
     def profit_loss_yuan(self) -> float | None:
-        """获取盈亏金额（元）"""
-        profit_loss = self.profit_loss
-        return profit_loss / 100.0 if profit_loss is not None else None
+        """获取盈亏金额（元）- 值已为元"""
+        return self.profit_loss
 
 
 class BoothSettlement(Base):
@@ -410,20 +409,20 @@ class BoothSettlement(Base):
     
     @property
     def revenue_yuan(self) -> float:
-        """获取营业额（元）"""
-        return self.revenue / 100.0
+        """获取营业额（元）- 值已为元"""
+        return float(self.revenue)
     
     @property
     def profit_yuan(self) -> float:
-        """获取净利润（元）"""
-        return self.profit / 100.0
+        """获取净利润（元）- 值已为元"""
+        return float(self.profit)
     
     @property
     def final_price_yuan(self) -> float:
-        """获取最终每股价格（元）"""
-        return self.final_price / 100.0
+        """获取最终每股价格（元）- 值已为元"""
+        return float(self.final_price)
     
     @property
     def global_pool_yuan(self) -> float:
-        """获取全局奖金池（元）"""
-        return self.global_pool / 100.0
+        """获取全局奖金池（元）- 值已为元"""
+        return float(self.global_pool)

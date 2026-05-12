@@ -882,7 +882,7 @@ async def get_credit_dashboard(
         {
             "class_name": row["class_name"],
             "total_amount": row["total_amount"],
-            "total_amount_yuan": row["total_amount"] / 1,
+            "total_amount_yuan": float(row["total_amount"]),
             "loan_count": row["loan_count"],
             "borrower_count": row["borrower_count"]
         }
@@ -906,7 +906,7 @@ async def get_credit_dashboard(
         {
             "time": row["time_slot"],
             "amount": row["amount"],
-            "amount_yuan": row["amount"] / 1,
+            "amount_yuan": float(row["amount"]),
             "count": row["count"]
         }
         for row in trend_rows
@@ -943,11 +943,11 @@ async def get_credit_dashboard(
             "participant_name": row["participant_name"],
             "card_uid": row["card_uid"],
             "total_principal": row["total_principal"],
-            "total_principal_yuan": row["total_principal"] / 1,
+            "total_principal_yuan": float(row["total_principal"]),
             "total_fee": row["total_fee"],
-            "total_fee_yuan": row["total_fee"] / 1,
+            "total_fee_yuan": float(row["total_fee"]),
             "total_disbursed": row["total_disbursed"],
-            "total_disbursed_yuan": row["total_disbursed"] / 1,
+            "total_disbursed_yuan": float(row["total_disbursed"]),
             "operator_name": row["operator_name"],
             "last_loan_time": row["last_loan_time"].isoformat() if row["last_loan_time"] else None,
             "loan_count": row["loan_count"]
@@ -965,20 +965,20 @@ async def get_credit_dashboard(
 
     return CreditDashboardStats(
         total_principal=total_principal,
-        total_principal_yuan=total_principal / 1,
+        total_principal_yuan=float(total_principal),
         total_fee=stats["total_fee"],
-        total_fee_yuan=stats["total_fee"] / 1,
+        total_fee_yuan=float(stats["total_fee"]),
         total_disbursed=stats["total_disbursed"],
-        total_disbursed_yuan=stats["total_disbursed"] / 1,
+        total_disbursed_yuan=float(stats["total_disbursed"]),
         total_loans=stats["total_loans"],
         total_borrowers=stats["total_borrowers"],
         total_participants=total_participants,
         penetration_rate=round(penetration_rate, 2),
         credit_limit=credit_limit,
-        credit_limit_yuan=credit_limit / 1,
+        credit_limit_yuan=float(credit_limit),
         credit_utilization=round(credit_utilization, 2),
         avg_loan_amount=float(stats["avg_loan"]),
-        avg_loan_amount_yuan=float(stats["avg_loan"]) / 1,
+        avg_loan_amount_yuan=float(stats["avg_loan"]),
         class_distribution=class_distribution,
         lending_trend=lending_trend,
         top_debtors=top_debtors
@@ -1040,12 +1040,12 @@ async def get_loans(
             card_uid=row["card_uid"],
             operator_name=row["operator_name"],
             principal_amount=row["principal_amount"],
-            principal_amount_yuan=row["principal_amount"] / 1,
+            principal_amount_yuan=float(row["principal_amount"]),
             fee_rate=float(row["fee_rate"]),
             fee_amount=row["fee_amount"],
-            fee_amount_yuan=row["fee_amount"] / 1,
+            fee_amount_yuan=float(row["fee_amount"]),
             disbursed_amount=row["disbursed_amount"],
-            disbursed_amount_yuan=row["disbursed_amount"] / 1,
+            disbursed_amount_yuan=float(row["disbursed_amount"]),
             status=row["status"],
             remark=row["remark"],
             created_at=row["created_at"].isoformat() if row["created_at"] else ""
@@ -1099,9 +1099,9 @@ async def export_loans_csv(
             row["student_no"] or "未知",
             row["participant_name"],
             row["card_uid"],
-            f"{row['principal_amount'] / 1:.2f}",
-            f"{row['fee_amount'] / 1:.2f}",
-            f"{row['disbursed_amount'] / 1:.2f}",
+            f"{float(row['principal_amount']):.2f}",
+            f"{float(row['fee_amount']):.2f}",
+            f"{float(row['disbursed_amount']):.2f}",
             f"{float(row['fee_rate']) * 100:.1f}%",
             status_map.get(row["status"], row["status"]),
             row["operator_name"],
@@ -1136,9 +1136,9 @@ async def get_credit_config_endpoint(
     return {
         "event_id": event_id,
         "max_total_credit": config["max_total_credit"],
-        "max_total_credit_yuan": config["max_total_credit"] / 1,
+        "max_total_credit_yuan": float(config["max_total_credit"]),
         "max_per_person": config["max_per_person"],
-        "max_per_person_yuan": config["max_per_person"] / 1,
+        "max_per_person_yuan": float(config["max_per_person"]),
         "fee_rate": config["fee_rate"],
         "is_enabled": config["is_enabled"]
     }
@@ -1231,11 +1231,11 @@ async def get_account_credit_summary(
         "participant_name": participant.display_name,
         "card_uid": card_uid,
         "balance": account.balance,
-        "balance_yuan": account.balance / 1,
+        "balance_yuan": float(account.balance),
         "credit_borrowed": account.credit_borrowed,
-        "credit_borrowed_yuan": account.credit_borrowed / 1,
+        "credit_borrowed_yuan": float(account.credit_borrowed),
         "credit_fee_paid": account.credit_fee_paid,
-        "credit_fee_paid_yuan": account.credit_fee_paid / 1,
+        "credit_fee_paid_yuan": float(account.credit_fee_paid),
         "loan_count": loan_count_row["cnt"]
     }
 
