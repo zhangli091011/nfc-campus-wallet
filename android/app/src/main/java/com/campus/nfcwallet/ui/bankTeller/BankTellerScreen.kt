@@ -68,6 +68,9 @@ data class BankTellerUiState(
     val errorMessage: String? = null,
     val resultNewBalance: Double? = null,
     val resultDisbursedAmount: Double? = null,
+    // 实名认证弹窗
+    val showVerificationDialog: Boolean = false,
+    val verificationParticipantId: Int? = null,
 ) {
     val feeRate: Double get() = 0.05
     val feeAmount: Double get() = (selectedAmount ?: 0) * feeRate
@@ -89,6 +92,8 @@ fun BankTellerScreen(
     onReset: () -> Unit,
     onDismissError: () -> Unit,
     onLogout: () -> Unit = {},
+    onDismissVerification: () -> Unit = {},
+    onSubmitVerification: (String, String) -> Unit = { _, _ -> },
 ) {
     Scaffold(
         containerColor = BankColors.NavyDeep,
@@ -190,6 +195,14 @@ fun BankTellerScreen(
                     Text("确定", color = BankColors.Platinum)
                 }
             },
+        )
+    }
+
+    // 实名认证弹窗
+    if (state.showVerificationDialog) {
+        BankVerificationDialog(
+            onDismiss = onDismissVerification,
+            onConfirm = onSubmitVerification,
         )
     }
 }
@@ -792,4 +805,84 @@ private fun InfoField(label: String, value: String) {
 private fun maskName(name: String): String {
     if (name.length <= 1) return name
     return name.first() + "*".repeat(name.length - 1)
+}
+
+// ============================================================================
+// 实名认证弹窗
+// ============================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BankVerificationDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var className by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = BankColors.NavySurface,
+        titleContentColor = BankColors.PlatinumBright,
+        textContentColor = BankColors.TextPrimary,
+        title = {
+            Text("实名认证", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "该卡片尚未实名，办理信用垫资需先完成实名认证",
+                    color = BankColors.TextSecondary,
+                    fontSize = 13.sp,
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("姓名（必填）") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = BankColors.TextPrimary,
+                        unfocusedTextColor = BankColors.TextPrimary,
+                        focusedBorderColor = BankColors.Platinum,
+                        unfocusedBorderColor = BankColors.BorderPlatinum,
+                        focusedLabelColor = BankColors.Platinum,
+                        unfocusedLabelColor = BankColors.TextDim,
+                        cursorColor = BankColors.Platinum,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = className,
+                    onValueChange = { className = it },
+                    label = { Text("班级（必填）") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = BankColors.TextPrimary,
+                        unfocusedTextColor = BankColors.TextPrimary,
+                        focusedBorderColor = BankColors.Platinum,
+                        unfocusedBorderColor = BankColors.BorderPlatinum,
+                        focusedLabelColor = BankColors.Platinum,
+                        unfocusedLabelColor = BankColors.TextDim,
+                        cursorColor = BankColors.Platinum,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.isNotBlank() && className.isNotBlank()) onConfirm(name.trim(), className.trim()) },
+                enabled = name.isNotBlank() && className.isNotBlank(),
+            ) {
+                Text(
+                    "确认",
+                    color = if (name.isNotBlank() && className.isNotBlank()) BankColors.Platinum else BankColors.TextDim,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消", color = BankColors.TextSecondary)
+            }
+        },
+    )
 }

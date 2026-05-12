@@ -76,6 +76,8 @@ class InvestmentComposeActivity : ComponentActivity() {
                     onHoldingSelected = viewModel::onHoldingSelected,
                     onSellSharesChanged = viewModel::onSellSharesChanged,
                     onConfirmSell = viewModel::onConfirmSell,
+                    onDismissVerification = viewModel::onDismissVerificationDialog,
+                    onSubmitVerification = viewModel::onSubmitVerification,
                 )
             }
         }
