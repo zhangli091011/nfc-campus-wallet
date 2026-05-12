@@ -1,7 +1,7 @@
-"""
+﻿"""
 Merchant service for NFC Campus E-Wallet System.
 
-商户服务：处理商户注册、商铺管理、收入统计、交易记录等业务逻辑�?
+商户服务：处理商户注册、商铺管理、收入统计、交易记录等业务逻辑。
 """
 
 from sqlalchemy.orm import Session
@@ -31,7 +31,7 @@ class UsernameExistsError(MerchantRegistrationError):
     
     def __init__(self, username: str):
         super().__init__(
-            message=f"用户�?'{username}' 已被注册",
+            message=f"用户名'{username}' 已被注册",
             error_code="USERNAME_EXISTS"
         )
         self.username = username
@@ -48,9 +48,9 @@ class MerchantAuthError(BusinessException):
 
 
 class MerchantNotFoundError(BusinessException):
-    """商户不存�?""
+    """商户不存在"""
     
-    def __init__(self, message: str = "商户信息不存�?):
+    def __init__(self, message: str = "商户信息不存在"):
         super().__init__(
             message=message,
             error_code="MERCHANT_NOT_FOUND"
@@ -58,17 +58,17 @@ class MerchantNotFoundError(BusinessException):
 
 
 class MerchantInactiveError(BusinessException):
-    """商户未激�?""
+    """商户未激活"""
     
     def __init__(self, merchant_id: str = ""):
         super().__init__(
-            message=f"Merchant '{merchant_id}' is not active" if merchant_id else "商户未激�?,
+            message=f"Merchant '{merchant_id}' is not active" if merchant_id else "商户未激活",
             error_code="MERCHANT_INACTIVE"
         )
 
 
 class ProductNotFoundError(BusinessException):
-    """商品不存�?""
+    """商品不存在"""
     
     def __init__(self, product_id: int):
         super().__init__(
@@ -80,9 +80,9 @@ class ProductNotFoundError(BusinessException):
 
 class MerchantService:
     """
-    商户服务类�?
+    商户服务类。
     
-    提供商户注册、登录、商铺管理、收入统计等操作�?
+    提供商户注册、登录、商铺管理、收入统计等操作。
     """
     
     def __init__(self, db_session: Session):
@@ -91,22 +91,22 @@ class MerchantService:
     
     def validate_merchant(self, merchant_id: str) -> None:
         """
-        验证商户是否存在且激活（兼容旧版支付路由）�?
+        验证商户是否存在且激活（兼容旧版支付路由）。
         
         Args:
             merchant_id: 商户标识
             
         Raises:
-            MerchantNotFoundError: 商户不存�?
-            MerchantInactiveError: 商户未激�?
+            MerchantNotFoundError: 商户不存在
+            MerchantInactiveError: 商户未激活
         """
-        # merchant_id 可能�?booth_id �?username
+        # merchant_id 可能是 booth_id 或 username
         user = self.db.query(User).filter(
             User.username == merchant_id
         ).first()
         
         if user is None:
-            # 尝试�?booth_id 查找
+            # 尝试用 booth_id 查找
             try:
                 booth_id = int(merchant_id)
                 booth = self.db.query(Booth).filter(Booth.id == booth_id).first()
@@ -129,10 +129,10 @@ class MerchantService:
         class_name: str
     ) -> Dict[str, Any]:
         """
-        商户注册：创建用户账�?+ 创建商铺�?
+        商户注册：创建用户账号 + 创建商铺。
         
         Args:
-            username: 登录用户�?
+            username: 登录用户名
             password: 登录密码
             booth_name: 商铺名称
             class_name: 班级名称
@@ -143,7 +143,7 @@ class MerchantService:
         Raises:
             UsernameExistsError: 用户名已存在
         """
-        # 检查用户名是否已存�?
+        # 检查用户名是否已存在
         existing_user = self.db.query(User).filter(User.username == username).first()
         if existing_user:
             raise UsernameExistsError(username)
@@ -155,7 +155,7 @@ class MerchantService:
         
         if active_event is None:
             raise BusinessException(
-                message="当前没有激活的活动，无法注册商�?,
+                message="当前没有激活的活动，无法注册商户",
                 error_code="NO_ACTIVE_EVENT"
             )
         
@@ -169,7 +169,7 @@ class MerchantService:
         self.db.add(booth)
         self.db.flush()  # 获取 booth.id
         
-        # 创建商户用户（使�?merchant 角色�?
+        # 创建商户用户（使用 merchant 角色）
         password_hash = hash_password(password)
         user = User(
             username=username,
@@ -211,10 +211,10 @@ class MerchantService:
     
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """
-        商户登录�?
+        商户登录。
         
         Args:
-            username: 用户�?
+            username: 用户名
             password: 密码
             
         Returns:
@@ -270,10 +270,10 @@ class MerchantService:
     
     def get_booth_info(self, user: User) -> Dict[str, Any]:
         """
-        获取商户的商铺信息（含商品列表）�?
+        获取商户的商铺信息（含商品列表）。
         
         Args:
-            user: 当前登录的商户用�?
+            user: 当前登录的商户用户
             
         Returns:
             商铺信息字典
@@ -316,10 +316,10 @@ class MerchantService:
         class_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        更新商铺信息�?
+        更新商铺信息。
         
         Args:
-            user: 当前登录的商户用�?
+            user: 当前登录的商户用户
             booth_name: 新商铺名称（可选）
             class_name: 新班级名称（可选）
             
@@ -358,17 +358,17 @@ class MerchantService:
         stock: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        添加商品�?
+        添加商品。
         
         Args:
-            user: 当前登录的商户用�?
+            user: 当前登录的商户用户
             name: 商品名称
-            price: 商品定价（元�?
+            price: 商品定价（元）
             cost_price: 成本价（元，可选）
             stock: 库存数量（可选）
             
         Returns:
-            创建的商品信�?
+            创建的商品信息
         """
         booth = self.db.query(Booth).filter(Booth.id == user.booth_id).first()
         if booth is None:
@@ -416,10 +416,10 @@ class MerchantService:
         enabled: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
-        更新商品信息�?
+        更新商品信息。
         
         Args:
-            user: 当前登录的商户用�?
+            user: 当前登录的商户用户
             product_id: 商品ID
             name: 商品名称（可选）
             price: 商品定价（元，可选）
@@ -466,10 +466,10 @@ class MerchantService:
     
     def delete_product(self, user: User, product_id: int) -> None:
         """
-        删除商品�?
+        删除商品。
         
         Args:
-            user: 当前登录的商户用�?
+            user: 当前登录的商户用户
             product_id: 商品ID
         """
         product = self.db.query(Product).filter(
@@ -487,10 +487,10 @@ class MerchantService:
     
     def get_income_stats(self, user: User) -> Dict[str, Any]:
         """
-        获取商户收入统计�?
+        获取商户收入统计。
         
         Args:
-            user: 当前登录的商户用�?
+            user: 当前登录的商户用户
             
         Returns:
             收入统计信息
@@ -544,14 +544,14 @@ class MerchantService:
         end_date: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        获取商户交易记录�?
+        获取商户交易记录。
         
         Args:
-            user: 当前登录的商户用�?
-            limit: 返回记录数限�?
-            offset: 偏移�?
-            start_date: 开始日期（YYYY-MM-DD�?
-            end_date: 结束日期（YYYY-MM-DD�?
+            user: 当前登录的商户用户
+            limit: 返回记录数限制
+            offset: 偏移量
+            start_date: 开始日期（YYYY-MM-DD）
+            end_date: 结束日期（YYYY-MM-DD）
             
         Returns:
             交易记录列表和总数
