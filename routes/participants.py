@@ -443,3 +443,41 @@ async def get_participant_by_card(
                 "message": "An internal error occurred. Please try again later."
             }
         )
+
+
+
+@router.delete("/participants/{participant_id}", status_code=204)
+async def delete_participant(
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    删除参与者。
+
+    仅 super_admin 和 event_admin 可执行此操作。
+    会级联删除关联的账户记录。关联的交易记录不会被删除（保留审计）。
+
+    Path Parameters:
+        - participant_id: 参与者ID
+    """
+    from models.participant import Participant
+    from models.account import Account
+
+    participant = db.query(Participant).filter(Participant.id == participant_id).first()
+    if participant is None:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error_code": "PARTICIPANT_NOT_FOUND",
+                "message": f"参与者 {participant_id} 不存在"
+            }
+        )
+
+    # 删除关联账户
+    db.query(Account).filter(Account.participant_id == participant_id).delete()
+
+    db.delete(participant)
+    db.commit()
+
+    logger.info(f"Participant deleted: id={participant_id}, name={participant.name}")
+    return None

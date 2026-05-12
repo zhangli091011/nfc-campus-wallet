@@ -82,3 +82,8 @@ export const recharge = (data: RechargeRequest) => {
 export const getBalance = (params: { event_id: number; card_uid: string }) => {
   return request.get('/balance', { params })
 }
+
+// 删除参与者
+export const deleteParticipant = (id: number) => {
+  return request.delete(`/participants/${id}`)
+}

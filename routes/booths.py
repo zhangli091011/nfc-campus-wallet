@@ -350,6 +350,44 @@ async def get_booth(
         )
 
 
+@router.delete("/booths/{booth_id}", status_code=204)
+async def delete_booth(
+    booth_id: int,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    删除摊位。
+
+    仅 super_admin 和 event_admin 可执行此操作。
+    会级联删除关联的商品记录。关联的交易记录和收银员账号不会被删除。
+
+    Path Parameters:
+        - booth_id: 摊位ID
+    """
+    from models.booth import Booth
+
+    booth = db.query(Booth).filter(Booth.id == booth_id).first()
+    if booth is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"摊位 {booth_id} 不存在"
+        )
+
+    # 解除收银员关联
+    for cashier in booth.cashiers:
+        cashier.booth_id = None
+
+    db.delete(booth)
+    db.commit()
+
+    logger.info(
+        f"Booth deleted: id={booth_id}, name={booth.name}, "
+        f"operator={current_user.username}"
+    )
+    return None
+
 
 @router.post("/booths/{booth_id}/pay", response_model=TransactionResponse)
 async def process_booth_payment(

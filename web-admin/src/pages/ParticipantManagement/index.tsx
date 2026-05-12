@@ -18,6 +18,7 @@ import {
   updateParticipant,
   verifyParticipant,
   recharge,
+  deleteParticipant,
   type Participant,
   type CreateParticipantRequest,
   type UpdateParticipantRequest,
@@ -98,6 +99,25 @@ const ParticipantManagement = () => {
       status: record.status,
     })
     setModalVisible(true)
+  }
+
+  const handleDeleteParticipant = (record: Participant) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除用户「${record.name || record.card_uid}」吗？此操作不可撤销，关联的账户数据将被一并删除。`,
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteParticipant(record.id)
+          message.success('用户已删除')
+          loadParticipants()
+        } catch (error) {
+          message.error('删除失败')
+        }
+      },
+    })
   }
 
   const handleRecharge = (record: Participant) => {
@@ -249,7 +269,7 @@ const ParticipantManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 260,
+      width: 320,
       render: (_: any, record: Participant) => (
         <Space>
           {!record.is_verified && (
@@ -280,6 +300,14 @@ const ParticipantManagement = () => {
             onClick={() => handleEdit(record)}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            danger
+            onClick={() => handleDeleteParticipant(record)}
+          >
+            删除
           </Button>
         </Space>
       ),

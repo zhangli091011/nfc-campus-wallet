@@ -25,6 +25,7 @@ import {
   getBooths,
   createBooth,
   updateBooth,
+  deleteBooth,
   getBoothCredentials,
   generateBoothCredentials,
   getBoothCashiers,
@@ -116,6 +117,25 @@ const BoothManagement = () => {
       status: record.status,
     })
     setModalVisible(true)
+  }
+
+  const handleDeleteBooth = (record: Booth) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除摊位「${record.name}」吗？此操作不可撤销，关联的商品将被一并删除。`,
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteBooth(record.id)
+          message.success('摊位已删除')
+          loadBooths()
+        } catch (error) {
+          message.error('删除失败')
+        }
+      },
+    })
   }
 
   const handleSubmit = async () => {
@@ -261,7 +281,7 @@ const BoothManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 280,
+      width: 340,
       render: (_: any, record: Booth) => (
         <Space>
           <Button
@@ -287,6 +307,14 @@ const BoothManagement = () => {
             onClick={() => handleManageCashiers(record)}
           >
             收银员
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            danger
+            onClick={() => handleDeleteBooth(record)}
+          >
+            删除
           </Button>
         </Space>
       ),

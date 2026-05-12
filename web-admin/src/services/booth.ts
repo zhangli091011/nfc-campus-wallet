@@ -86,3 +86,8 @@ export const getBoothCashiers = (boothId: number) => {
 export const assignCashierToBooth = (boothId: number, userId: number) => {
   return request.post<any, any>(`/booths/${boothId}/cashiers`, { user_id: userId })
 }
+
+// 删除摊位
+export const deleteBooth = (id: number) => {
+  return request.delete(`/booths/${id}`)
+}
