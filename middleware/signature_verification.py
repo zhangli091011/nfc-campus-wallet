@@ -61,17 +61,17 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
         self.time_window = self.settings.timestamp_window
         
         # Endpoints that bypass authentication
-        self.bypass_paths = {"/health", "/docs", "/redoc", "/openapi.json", "/transactions", "/leaderboard"}
+        self.bypass_paths = {"/health", "/docs", "/redoc", "/openapi.json", "/transactions", "/leaderboard", "/bank/issue_loan", "/bank/dashboard"}
         # Path prefixes that bypass authentication (for JWT-authenticated endpoints)
         self.bypass_prefixes = [
             "/booths", "/products", "/auth", "/events", "/participants",
             "/stock", "/users", "/reports", "/leaderboard",
             "/refund", "/correction", "/stocks", "/exports",
-            "/cash-reconciliation", "/trade", "/bank",
+            "/cash-reconciliation", "/trade", "/bank/",
             "/bank-credit", "/merchant", "/admin",
         ]
         # Paths that support event mode (no signature required when event_id + card_uid provided)
-        self.event_mode_paths = {"/recharge", "/pay", "/balance"}
+        self.event_mode_paths = {"/recharge", "/pay", "/balance", "/bank/issue_loan"}
     
     async def dispatch(self, request: Request, call_next):
         """
