@@ -74,64 +74,8 @@ const StockDashboard: React.FC = () => {
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 更新时钟
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   // 加载活动列表
-  useEffect(() => {
-    loadEvents();
-  }, []);
-
-  // 选择活动后加载数据
-  useEffect(() => {
-    if (selectedEventId) {
-      loadData();
-      // 每5秒刷新
-      if (refreshTimer.current) {
-        clearInterval(refreshTimer.current);
-      }
-      refreshTimer.current = setInterval(loadData, 5000);
-    }
-    return () => {
-      if (refreshTimer.current) {
-        clearInterval(refreshTimer.current);
-      }
-    };
-  }, [selectedEventId]);
-
-  // 初始化/更新图表
-  useEffect(() => {
-    if (chartRef.current && boothData.length > 0) {
-      if (!chartInstance.current) {
-        chartInstance.current = echarts.init(chartRef.current);
-      }
-      updateChart();
-    }
-    return () => {
-      if (chartInstance.current) {
-        chartInstance.current.dispose();
-        chartInstance.current = null;
-      }
-    };
-  }, [boothData]);
-
-  // 窗口大小变化时重新调整图表
-  useEffect(() => {
-    const handleResize = () => {
-      if (chartInstance.current) {
-        chartInstance.current.resize();
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       setEventsLoading(true);
       const res: any = await request.get('/events');
@@ -147,24 +91,20 @@ const StockDashboard: React.FC = () => {
     } finally {
       setEventsLoading(false);
     }
-  };
+  }, []);
 
+  // 加载市场数据
   const loadData = useCallback(async () => {
     if (!selectedEventId) return;
-    
     try {
       setLoading(true);
-
-      // 并行加载市场统计和摊位数据
       const [statsRes, boothRes] = await Promise.all([
         request.get(`/stock/stats/${selectedEventId}`).catch(() => null),
         request.get(`/stock/all-booth-stats/${selectedEventId}`).catch(() => []),
       ]);
-
       if (statsRes) {
         setMarketStats(statsRes as any);
       }
-
       const booths = Array.isArray(boothRes) ? boothRes : [];
       setBoothData(booths as BoothData[]);
     } catch (error) {
@@ -174,56 +114,29 @@ const StockDashboard: React.FC = () => {
     }
   }, [selectedEventId]);
 
-  const updateChart = () => {
+  // 更新图表
+  const updateChart = useCallback(() => {
     if (!chartInstance.current || boothData.length === 0) return;
 
-    // 按总投资额排序
     const sortedData = [...boothData].sort((a, b) => b.total_investment_yuan - a.total_investment_yuan);
-    const names = sortedData.map(b => `${b.booth_name}`);
+    const names = sortedData.map(b => b.booth_name);
     const investments = sortedData.map(b => b.total_investment_yuan);
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
-      grid: {
-        left: '15%',
-        right: '10%',
-        top: '5%',
-        bottom: '5%',
-      },
+      grid: { left: '15%', right: '10%', top: '5%', bottom: '5%' },
       xAxis: {
         type: 'value',
-        axisLine: {
-          lineStyle: {
-            color: '#2A4A7C',
-          },
-        },
-        axisLabel: {
-          color: '#8B9DC3',
-          fontSize: 12,
-        },
-        splitLine: {
-          lineStyle: {
-            color: '#1A2F4F',
-            type: 'dashed',
-          },
-        },
+        axisLine: { lineStyle: { color: '#2A4A7C' } },
+        axisLabel: { color: '#8B9DC3', fontSize: 12 },
+        splitLine: { lineStyle: { color: '#1A2F4F', type: 'dashed' } },
       },
       yAxis: {
         type: 'category',
         data: names,
-        axisLine: {
-          lineStyle: {
-            color: '#2A4A7C',
-          },
-        },
-        axisLabel: {
-          color: '#C0C0C0',
-          fontSize: 14,
-          fontWeight: 'bold',
-        },
-        axisTick: {
-          show: false,
-        },
+        axisLine: { lineStyle: { color: '#2A4A7C' } },
+        axisLabel: { color: '#C0C0C0', fontSize: 14, fontWeight: 'bold' },
+        axisTick: { show: false },
       },
       series: [
         {
@@ -245,9 +158,7 @@ const StockDashboard: React.FC = () => {
             color: '#FFD700',
             fontSize: 14,
             fontWeight: 'bold',
-            formatter: (params: any) => {
-              return `¥${params.value.toFixed(2)}`;
-            },
+            formatter: (params: any) => `¥${params.value.toFixed(2)}`,
           },
           animationDuration: 1000,
           animationEasing: 'cubicOut',
@@ -256,7 +167,53 @@ const StockDashboard: React.FC = () => {
     };
 
     chartInstance.current.setOption(option, true);
-  };
+  }, [boothData]);
+
+  // 更新时钟
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 初始加载活动列表
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  // 选择活动后加载数据并定时刷新
+  useEffect(() => {
+    if (selectedEventId) {
+      loadData();
+      if (refreshTimer.current) clearInterval(refreshTimer.current);
+      refreshTimer.current = setInterval(loadData, 5000);
+    }
+    return () => {
+      if (refreshTimer.current) clearInterval(refreshTimer.current);
+    };
+  }, [selectedEventId, loadData]);
+
+  // 初始化/更新图表
+  useEffect(() => {
+    if (chartRef.current && boothData.length > 0) {
+      if (!chartInstance.current) {
+        chartInstance.current = echarts.init(chartRef.current);
+      }
+      updateChart();
+    }
+    return () => {
+      if (chartInstance.current) {
+        chartInstance.current.dispose();
+        chartInstance.current = null;
+      }
+    };
+  }, [boothData, updateChart]);
+
+  // 窗口大小变化时重新调整图表
+  useEffect(() => {
+    const handleResize = () => chartInstance.current?.resize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('zh-CN', {
@@ -301,7 +258,6 @@ const StockDashboard: React.FC = () => {
         const initialPrice = 10.0;
         const change = ((price - initialPrice) / initialPrice) * 100;
         const isUp = change >= 0;
-        
         return (
           <div>
             <div className={index === 0 ? 'text-gold text-lg font-bold' : 'text-white text-lg'}>
@@ -310,8 +266,7 @@ const StockDashboard: React.FC = () => {
             {record.is_settled && (
               <div className={isUp ? 'text-green-400' : 'text-red-400'}>
                 {isUp ? <RiseOutlined /> : <FallOutlined />}
-                {' '}
-                {isUp ? '+' : ''}{change.toFixed(2)}%
+                {' '}{isUp ? '+' : ''}{change.toFixed(2)}%
               </div>
             )}
           </div>
@@ -322,31 +277,23 @@ const StockDashboard: React.FC = () => {
       title: '售出股数',
       dataIndex: 'sold_shares',
       key: 'sold_shares',
-      render: (shares: number) => (
-        <span className="text-white">{shares} 股</span>
-      ),
+      render: (shares: number) => <span className="text-white">{shares} 股</span>,
     },
     {
       title: '总投资额',
       dataIndex: 'total_investment_yuan',
       key: 'total_investment_yuan',
-      render: (amount: number) => (
-        <span className="text-blue-300">¥{formatNumber(amount)}</span>
-      ),
+      render: (amount: number) => <span className="text-blue-300">¥{formatNumber(amount)}</span>,
     },
     {
       title: '投资人数',
       dataIndex: 'investor_count',
       key: 'investor_count',
-      render: (count: number) => (
-        <Tag color="blue" className="score-tag">
-          {count} 人
-        </Tag>
-      ),
+      render: (count: number) => <Tag color="blue" className="score-tag">{count} 人</Tag>,
     },
   ];
 
-  // 活动选择界面
+  // 加载中
   if (eventsLoading) {
     return (
       <div className="stock-dashboard" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -374,7 +321,6 @@ const StockDashboard: React.FC = () => {
                 value: e.id,
                 label: `${e.name} (${e.status === 'active' ? '进行中' : e.status})`,
               }))}
-              dropdownStyle={{ background: '#1a2332' }}
             />
             <div className="status-indicator">
               <div className={`status-light ${marketStats?.is_settled ? 'settled' : 'active'}`} />
@@ -412,15 +358,11 @@ const StockDashboard: React.FC = () => {
               <div className="pool-stats">
                 <div className="stat-item">
                   <span className="stat-label">总投资额</span>
-                  <span className="stat-value">
-                    ¥{formatNumber(marketStats?.total_investment_yuan || 0)}
-                  </span>
+                  <span className="stat-value">¥{formatNumber(marketStats?.total_investment_yuan || 0)}</span>
                 </div>
                 <div className="stat-item">
                   <span className="stat-label">手续费</span>
-                  <span className="stat-value">
-                    ¥{formatNumber(marketStats?.fee_collected_yuan || 0)}
-                  </span>
+                  <span className="stat-value">¥{formatNumber(marketStats?.fee_collected_yuan || 0)}</span>
                 </div>
               </div>
             </Card>
@@ -487,9 +429,7 @@ const StockDashboard: React.FC = () => {
                 <div className="top-company">
                   <div className="top-badge">最受投资者青睐</div>
                   <div className="top-name">{boothData[0]?.booth_name}</div>
-                  <div className="top-price">
-                    ¥{formatNumber(boothData[0]?.total_investment_yuan || 0)}
-                  </div>
+                  <div className="top-price">¥{formatNumber(boothData[0]?.total_investment_yuan || 0)}</div>
                 </div>
               )}
               <Table
