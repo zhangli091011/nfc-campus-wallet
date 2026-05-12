@@ -331,8 +331,10 @@ async def issue_loan(
         #     raise HTTPException(...)
 
         # ── 8. 计算手续费和实际到账（金额单位：元） ──
-        fee_amount = round(float(nominal_amount) * fee_rate, 2)
-        actual_grant = float(nominal_amount) - fee_amount
+        from decimal import Decimal, ROUND_HALF_UP
+        nominal_amount = Decimal(str(nominal_amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        fee_amount = (nominal_amount * Decimal(str(fee_rate))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        actual_grant = nominal_amount - fee_amount
 
         # ── 9. 悲观锁锁定账户行 (SELECT ... FOR UPDATE) ──
         locked_account = db.query(Account).filter(
