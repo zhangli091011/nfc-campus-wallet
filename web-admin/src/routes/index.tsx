@@ -26,6 +26,7 @@ import {
 } from '@/pages/Reports'
 import BankCreditDashboard from '@/pages/BankCreditDashboard'
 import MacroEconomyDashboard from '@/pages/MacroEconomyDashboard'
+import AppUpdate from '@/pages/AppUpdate'
 import {
   MerchantLogin,
   MerchantRegister,
@@ -109,6 +110,9 @@ const AppRoutes = () => {
         
         {/* 投资管理 */}
         <Route path="investment" element={<InvestmentManagement />} />
+        
+        {/* 应用版本管理 */}
+        <Route path="app-update" element={<AppUpdate />} />
         
         {/* 报表相关路由 */}
         <Route path="reports/dashboard" element={<ReportsDashboard />} />

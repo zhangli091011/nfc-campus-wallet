@@ -23,6 +23,7 @@ import {
   BankOutlined,
   AlertOutlined,
   FileTextOutlined,
+  CloudUploadOutlined,
 } from '@ant-design/icons'
 import { getUser, clearAuth, isSuperAdmin } from '@/utils/auth'
 import type { MenuProps } from 'antd'
@@ -158,6 +159,11 @@ const Layout = () => {
             key: '/users',
             icon: <UserOutlined />,
             label: '用户管理',
+          },
+          {
+            key: '/app-update',
+            icon: <CloudUploadOutlined />,
+            label: '应用更新',
           },
         ]
       : []),

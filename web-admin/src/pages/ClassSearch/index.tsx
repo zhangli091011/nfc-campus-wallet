@@ -13,16 +13,12 @@ import {
   Switch,
   Empty,
   Spin,
-  Collapse,
-  Timeline,
 } from 'antd'
 import {
   SearchOutlined,
   TeamOutlined,
   WalletOutlined,
-  DollarOutlined,
   BookOutlined,
-  TransactionOutlined,
 } from '@ant-design/icons'
 import { getEvents, type Event } from '@/services/event'
 import request from '@/utils/request'
@@ -30,7 +26,6 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 
 const { Title, Text } = Typography
-const { Panel } = Collapse
 
 interface TransactionRecord {
   id: number
