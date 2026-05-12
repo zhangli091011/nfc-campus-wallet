@@ -1,5 +1,6 @@
 package com.campus.nfcwallet.api;
 
+import com.campus.nfcwallet.models.BoothTransactionsResponse;
 import com.campus.nfcwallet.models.BalanceResponse;
 import com.campus.nfcwallet.models.BoothInfo;
 import com.campus.nfcwallet.models.BoothPaymentRequest;
@@ -38,6 +39,7 @@ import retrofit2.Call;
 import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.Header;
+import retrofit2.http.PATCH;
 import retrofit2.http.POST;
 import retrofit2.http.Path;
 import retrofit2.http.Query;
@@ -195,6 +197,23 @@ public interface WalletAPIService {
     Call<ParticipantInfo> createParticipant(
         @Header("Authorization") String authorization,
         @Body Map<String, Object> participantData
+    );
+
+    /**
+     * Update participant information (for real-name verification).
+     *
+     * PATCH /participants/{participant_id}
+     *
+     * @param authorization Authorization header (Bearer token)
+     * @param participantId Participant ID
+     * @param updateData Fields to update (name, class_name, student_no)
+     * @return Updated participant information
+     */
+    @PATCH("participants/{participant_id}")
+    Call<ParticipantInfo> updateParticipant(
+        @Header("Authorization") String authorization,
+        @Path("participant_id") int participantId,
+        @Body Map<String, Object> updateData
     );
     
     // ==================== Legacy Endpoints ====================
@@ -405,19 +424,17 @@ public interface WalletAPIService {
     /**
      * Get booth transaction history (for refund management).
      *
-     * GET /booths/{booth_id}/transactions?card_uid={card_uid}&limit={limit}
+     * GET /booths/{booth_id}/transactions?limit={limit}
      *
      * @param authorization Authorization header (Bearer token)
      * @param boothId Booth ID
-     * @param cardUid Optional card UID filter
      * @param limit Optional result limit
-     * @return List of transactions
+     * @return Booth transactions response with transactions list and total_count
      */
     @GET("booths/{booth_id}/transactions")
-    Call<List<Transaction>> getBoothTransactions(
+    Call<BoothTransactionsResponse> getBoothTransactions(
         @Header("Authorization") String authorization,
         @Path("booth_id") int boothId,
-        @Query("card_uid") String cardUid,
         @Query("limit") Integer limit
     );
 

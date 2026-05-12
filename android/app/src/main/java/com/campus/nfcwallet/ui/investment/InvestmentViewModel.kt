@@ -93,12 +93,12 @@ class InvestmentViewModel(
                 if (response.isSuccessful && response.body() != null) {
                     currentParticipant = response.body()
                     if (!currentParticipant!!.isVerified) {
+                        // 未实名：弹出实名认证对话框
                         uiState = uiState.copy(
                             isLoading = false,
-                            cardUid = null,
-                            errorMessage = "该卡片持卡人处于实名审核中，请先到管理后台完成审核后再进行投资操作",
+                            showVerificationDialog = true,
+                            verificationParticipantId = currentParticipant!!.id,
                         )
-                        currentParticipant = null
                         return
                     }
                     uiState = uiState.copy(
@@ -216,6 +216,61 @@ class InvestmentViewModel(
 
     fun onDismissMessage() {
         uiState = uiState.copy(errorMessage = null, successMessage = null)
+    }
+
+    // -------------------------------------------------------------
+    // 实名认证
+    // -------------------------------------------------------------
+    fun onDismissVerificationDialog() {
+        uiState = uiState.copy(
+            showVerificationDialog = false,
+            verificationParticipantId = null,
+            cardUid = null,
+            isLoading = false,
+        )
+        currentParticipant = null
+    }
+
+    fun onSubmitVerification(name: String, className: String) {
+        val participantId = uiState.verificationParticipantId ?: return
+        val token = sessionManager.authHeader ?: return
+        val uid = uiState.cardUid ?: return
+
+        uiState = uiState.copy(showVerificationDialog = false, isLoading = true)
+
+        val updateData = HashMap<String, Any>()
+        updateData["name"] = name
+        if (className.isNotBlank()) {
+            updateData["class_name"] = className
+        }
+
+        apiService.updateParticipant(token, participantId, updateData)
+            .enqueue(object : Callback<ParticipantInfo> {
+                override fun onResponse(call: Call<ParticipantInfo>, response: Response<ParticipantInfo>) {
+                    if (response.isSuccessful && response.body() != null) {
+                        currentParticipant = response.body()
+                        uiState = uiState.copy(
+                            participantName = "${currentParticipant!!.name} (${currentParticipant!!.className ?: "-"})",
+                            verificationParticipantId = null,
+                        )
+                        loadBalance(uid)
+                        loadHoldings(uid)
+                    } else {
+                        uiState = uiState.copy(
+                            isLoading = false,
+                            errorMessage = "实名认证失败: ${APIClient.getErrorMessage(response)}",
+                        )
+                    }
+                }
+
+                override fun onFailure(call: Call<ParticipantInfo>, t: Throwable) {
+                    Log.e(TAG, "实名认证请求失败", t)
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        errorMessage = "网络错误: ${t.message}",
+                    )
+                }
+            })
     }
 
     // -------------------------------------------------------------

@@ -66,6 +66,11 @@ const Layout = () => {
       label: '参与者管理',
     },
     {
+      key: '/participant-balances',
+      icon: <DollarCircleOutlined />,
+      label: '参与者余额',
+    },
+    {
       key: '/transactions',
       icon: <TransactionOutlined />,
       label: '交易流水',

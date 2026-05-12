@@ -1,14 +1,17 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Form, Input, Button, Card, message } from 'antd'
+import { Form, Input, Button, message } from 'antd'
 import { UserOutlined, LockOutlined, ShopOutlined, TeamOutlined } from '@ant-design/icons'
 import { merchantRegister } from '@/services/merchant'
 import { setToken } from '@/utils/auth'
 import { setMerchantInfo } from './MerchantLogin'
-import './merchant-mobile.css'
+import TermsModal from './TermsModal'
+import './merchant-register.css'
 
 const MerchantRegister = () => {
   const [loading, setLoading] = useState(false)
+  const [isAgreed, setIsAgreed] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
   const navigate = useNavigate()
 
   const onFinish = async (values: {
@@ -18,6 +21,10 @@ const MerchantRegister = () => {
     booth_name: string
     class_name: string
   }) => {
+    if (!isAgreed) {
+      message.warning('请先阅读并同意《宇华校园沙盒市场商家服务条款》')
+      return
+    }
     setLoading(true)
     try {
       const response = await merchantRegister({
@@ -39,17 +46,39 @@ const MerchantRegister = () => {
     }
   }
 
+  const handleTermsConfirm = useCallback(() => {
+    setIsAgreed(true)
+    setShowTermsModal(false)
+  }, [])
+
+  const handleCheckboxToggle = () => {
+    setIsAgreed(prev => !prev)
+  }
+
+  const handleOpenTerms = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowTermsModal(true)
+  }
+
   return (
-    <div className="merchant-auth-mobile">
-      <Card
-        title={
-          <div style={{ textAlign: 'center', fontSize: 20, fontWeight: 'bold' }}>
-            <ShopOutlined style={{ marginRight: 8 }} />
-            商户注册
+    <div className="merchant-register-dark">
+      {/* 背景装饰 */}
+      <div className="register-bg-grid" />
+      <div className="register-bg-glow" />
+
+      <div className="register-card">
+        {/* 顶部标题 */}
+        <div className="register-header">
+          <div className="register-header-icon">
+            <ShopOutlined />
           </div>
-        }
-      >
-        <Form name="merchant-register" onFinish={onFinish} size="large">
+          <h1 className="register-title">商户注册</h1>
+          <p className="register-subtitle">宇华校园沙盒经济平台</p>
+        </div>
+
+        {/* 表单 */}
+        <Form name="merchant-register" onFinish={onFinish} size="large" className="register-form">
           <Form.Item
             name="username"
             rules={[
@@ -110,17 +139,56 @@ const MerchantRegister = () => {
             <Input prefix={<TeamOutlined />} placeholder="班级名称（如：高一(3)班）" />
           </Form.Item>
 
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading} block>
-              注册
-            </Button>
+          {/* 条款复选框区域 */}
+          <div className="terms-checkbox-area">
+            <label className="terms-checkbox-label" onClick={handleCheckboxToggle}>
+              <span className={`terms-checkbox ${isAgreed ? 'checked' : ''}`}>
+                {isAgreed && (
+                  <svg viewBox="0 0 12 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M1 5L4.5 8.5L11 1.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+              <span className="terms-text">
+                我已阅读并同意{' '}
+                <span className="terms-link" onClick={handleOpenTerms}>
+                  《宇华校园沙盒市场商家服务条款》
+                </span>
+              </span>
+            </label>
+          </div>
+
+          {/* 注册按钮 */}
+          <Form.Item style={{ marginBottom: 16 }}>
+            <button
+              type="submit"
+              className={`register-submit-btn ${isAgreed ? 'active' : 'disabled'}`}
+              disabled={!isAgreed || loading}
+            >
+              {loading ? (
+                <span className="btn-loading">
+                  <span className="btn-loading-dot" />
+                  <span className="btn-loading-dot" />
+                  <span className="btn-loading-dot" />
+                </span>
+              ) : (
+                '注 册'
+              )}
+            </button>
           </Form.Item>
 
-          <div style={{ textAlign: 'center' }}>
+          <div className="register-footer-link">
             已有账号？<Link to="/merchant/login">去登录</Link>
           </div>
         </Form>
-      </Card>
+      </div>
+
+      {/* 条款弹窗 */}
+      <TermsModal
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onConfirm={handleTermsConfirm}
+      />
     </div>
   )
 }

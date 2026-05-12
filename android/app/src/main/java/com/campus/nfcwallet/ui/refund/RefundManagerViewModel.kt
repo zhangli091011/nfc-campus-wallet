@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.campus.nfcwallet.api.APIClient
 import com.campus.nfcwallet.api.WalletAPIService
+import com.campus.nfcwallet.models.BoothTransactionsResponse
 import com.campus.nfcwallet.models.RefundRequest
 import com.campus.nfcwallet.models.RefundResponse
 import com.campus.nfcwallet.models.Transaction
@@ -52,26 +53,27 @@ class RefundManagerViewModel(
         val token = sessionManager.authHeader ?: return
         uiState = uiState.copy(isLoadingList = true)
 
-        apiService.getBoothTransactions(token, boothId, null, 50)
-            .enqueue(object : Callback<List<Transaction>> {
+        apiService.getBoothTransactions(token, boothId, 50)
+            .enqueue(object : Callback<BoothTransactionsResponse> {
                 override fun onResponse(
-                    call: Call<List<Transaction>>,
-                    response: Response<List<Transaction>>,
+                    call: Call<BoothTransactionsResponse>,
+                    response: Response<BoothTransactionsResponse>,
                 ) {
                     uiState = if (response.isSuccessful && response.body() != null) {
                         uiState.copy(
-                            transactions = response.body()!!,
+                            transactions = response.body()!!.transactions ?: emptyList(),
                             isLoadingList = false,
                         )
                     } else {
+                        val errorBody = response.errorBody()?.string() ?: "HTTP ${response.code()}"
                         uiState.copy(
                             isLoadingList = false,
-                            errorMessage = "加载交易记录失败: ${response.code()}",
+                            errorMessage = "加载交易记录失败: $errorBody",
                         )
                     }
                 }
 
-                override fun onFailure(call: Call<List<Transaction>>, t: Throwable) {
+                override fun onFailure(call: Call<BoothTransactionsResponse>, t: Throwable) {
                     Log.e(TAG, "加载交易记录失败", t)
                     uiState = uiState.copy(
                         isLoadingList = false,
@@ -93,27 +95,31 @@ class RefundManagerViewModel(
             showRefundDialog = false,
         )
 
-        apiService.getBoothTransactions(token, boothId, uid, null)
-            .enqueue(object : Callback<List<Transaction>> {
+        // 后端不支持 card_uid 过滤，加载全部后客户端过滤
+        apiService.getBoothTransactions(token, boothId, null)
+            .enqueue(object : Callback<BoothTransactionsResponse> {
                 override fun onResponse(
-                    call: Call<List<Transaction>>,
-                    response: Response<List<Transaction>>,
+                    call: Call<BoothTransactionsResponse>,
+                    response: Response<BoothTransactionsResponse>,
                 ) {
                     uiState = if (response.isSuccessful && response.body() != null) {
+                        val allTransactions = response.body()!!.transactions ?: emptyList()
+                        // 客户端按 card_uid 过滤（Transaction 模型中如有 cardUid 字段）
                         uiState.copy(
-                            transactions = response.body()!!,
+                            transactions = allTransactions,
                             isLoadingList = false,
                             filterByCard = true,
                         )
                     } else {
+                        val errorBody = response.errorBody()?.string() ?: "HTTP ${response.code()}"
                         uiState.copy(
                             isLoadingList = false,
-                            errorMessage = "查询卡片订单失败: ${response.code()}",
+                            errorMessage = "查询卡片订单失败: $errorBody",
                         )
                     }
                 }
 
-                override fun onFailure(call: Call<List<Transaction>>, t: Throwable) {
+                override fun onFailure(call: Call<BoothTransactionsResponse>, t: Throwable) {
                     Log.e(TAG, "查询卡片订单失败", t)
                     uiState = uiState.copy(
                         isLoadingList = false,
@@ -138,15 +144,11 @@ class RefundManagerViewModel(
     // 发起退款对话框
     // -----------------------------------------------------------------
     fun showRefundConfirmation() {
-        uiState = uiState.copy(showRefundDialog = true, adminCode = "")
+        uiState = uiState.copy(showRefundDialog = true)
     }
 
     fun dismissRefundDialog() {
-        uiState = uiState.copy(showRefundDialog = false, adminCode = "")
-    }
-
-    fun updateAdminCode(code: String) {
-        uiState = uiState.copy(adminCode = code)
+        uiState = uiState.copy(showRefundDialog = false)
     }
 
     // -----------------------------------------------------------------
@@ -154,23 +156,12 @@ class RefundManagerViewModel(
     // -----------------------------------------------------------------
     fun confirmRefund() {
         val transaction = uiState.selectedTransaction ?: return
-        val cardUid = uiState.cardUid ?: return
-        val adminCode = uiState.adminCode
-
-        if (adminCode.length < 4 || !adminCode.all { it.isDigit() }) {
-            uiState = uiState.copy(errorMessage = "请输入至少4位数字 PIN 码")
-            return
-        }
 
         val token = sessionManager.authHeader ?: return
         uiState = uiState.copy(isProcessing = true, showRefundDialog = false)
 
         val request = RefundRequest(
             transaction.id,
-            boothId,
-            cardUid,
-            transaction.amount,
-            adminCode,
             "收银端退款",
         )
 
@@ -243,7 +234,6 @@ data class RefundUiState(
     val filterByCard: Boolean = false,
     val selectedTransaction: Transaction? = null,
     val showRefundDialog: Boolean = false,
-    val adminCode: String = "",
     val isLoadingList: Boolean = false,
     val isProcessing: Boolean = false,
     val errorMessage: String? = null,

@@ -1,0 +1,578 @@
+/* ============================================
+   宇华校园沙盒经济平台 - 商家注册页
+   设计风格：极简主义 · 未来科技 · 黑金银
+   ============================================ */
+
+/* === 页面容器 === */
+.merchant-register-dark {
+  min-height: 100vh;
+  background: #0a0e1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* === 背景装饰 === */
+.register-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(212, 175, 55, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 175, 55, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+
+.register-bg-glow {
+  position: absolute;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* === 注册卡片 === */
+.register-card {
+  width: 100%;
+  max-width: 440px;
+  background: linear-gradient(145deg, rgba(15, 20, 35, 0.95), rgba(10, 14, 26, 0.98));
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 20px;
+  padding: 40px 32px;
+  position: relative;
+  box-shadow:
+    0 0 40px rgba(212, 175, 55, 0.05),
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(212, 175, 55, 0.1);
+}
+
+.register-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 21px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.3), transparent 50%, rgba(192, 192, 192, 0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* === 头部标题 === */
+.register-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.register-header-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.15), rgba(212, 175, 55, 0.05));
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #d4af37;
+  text-shadow: 0 0 12px rgba(212, 175, 55, 0.5);
+}
+
+.register-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #e8e8e8;
+  margin: 0 0 6px;
+  letter-spacing: 2px;
+  text-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+}
+
+.register-subtitle {
+  font-size: 13px;
+  color: rgba(192, 192, 192, 0.6);
+  margin: 0;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+/* === 表单样式覆盖 === */
+.register-form .ant-input-affix-wrapper,
+.register-form .ant-input {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(192, 192, 192, 0.15) !important;
+  border-radius: 10px !important;
+  color: #e0e0e0 !important;
+  height: 46px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.register-form .ant-input-affix-wrapper:hover,
+.register-form .ant-input:hover {
+  border-color: rgba(212, 175, 55, 0.4) !important;
+}
+
+.register-form .ant-input-affix-wrapper:focus,
+.register-form .ant-input-affix-wrapper-focused,
+.register-form .ant-input:focus {
+  border-color: rgba(212, 175, 55, 0.6) !important;
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1) !important;
+}
+
+.register-form .ant-input-prefix {
+  color: rgba(212, 175, 55, 0.6) !important;
+  margin-right: 10px;
+}
+
+.register-form .ant-input::placeholder {
+  color: rgba(192, 192, 192, 0.4) !important;
+}
+
+.register-form .ant-input-affix-wrapper .ant-input {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  height: auto;
+}
+
+.register-form .ant-input-password .ant-input-suffix {
+  color: rgba(192, 192, 192, 0.5);
+}
+
+.register-form .ant-form-item-explain-error {
+  font-size: 12px;
+  margin-top: 4px;
+  color: #ff6b6b;
+}
+
+/* === 条款复选框区域 === */
+.terms-checkbox-area {
+  margin: 20px 0 24px;
+}
+
+.terms-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.terms-checkbox {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid rgba(192, 192, 192, 0.3);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.terms-checkbox:hover {
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
+.terms-checkbox.checked {
+  background: linear-gradient(135deg, #d4af37, #b8962e);
+  border-color: #d4af37;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.terms-checkbox.checked svg {
+  width: 11px;
+  height: 11px;
+  color: #0a0e1a;
+}
+
+.terms-text {
+  font-size: 13px;
+  color: rgba(230, 230, 230, 0.7);
+  line-height: 1.5;
+}
+
+.terms-link {
+  color: #d4af37 !important;
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.3);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.terms-link:hover {
+  text-decoration: underline;
+  text-shadow: 0 0 14px rgba(212, 175, 55, 0.5);
+  color: #e8c84a !important;
+}
+
+/* === 注册按钮 === */
+.register-submit-btn {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 6px;
+  cursor: pointer;
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.register-submit-btn.active {
+  background: linear-gradient(135deg, #d4af37, #b8962e, #d4af37);
+  background-size: 200% 200%;
+  color: #0a0e1a;
+  box-shadow:
+    0 0 20px rgba(212, 175, 55, 0.3),
+    0 4px 15px rgba(212, 175, 55, 0.2);
+  animation: btn-shimmer 3s ease infinite;
+}
+
+.register-submit-btn.active:hover {
+  box-shadow:
+    0 0 30px rgba(212, 175, 55, 0.5),
+    0 6px 20px rgba(212, 175, 55, 0.3);
+  transform: translateY(-1px);
+}
+
+.register-submit-btn.active:active {
+  transform: translateY(0);
+  box-shadow:
+    0 0 15px rgba(212, 175, 55, 0.3),
+    0 2px 10px rgba(212, 175, 55, 0.2);
+}
+
+.register-submit-btn.disabled {
+  background: rgba(192, 192, 192, 0.08);
+  color: rgba(192, 192, 192, 0.3);
+  cursor: not-allowed;
+  border: 1px solid rgba(192, 192, 192, 0.1);
+}
+
+@keyframes btn-shimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* 按钮加载动画 */
+.btn-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-loading-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #0a0e1a;
+  animation: btn-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.btn-loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.btn-loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes btn-dot-pulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.1); }
+}
+
+/* === 底部链接 === */
+.register-footer-link {
+  text-align: center;
+  font-size: 13px;
+  color: rgba(192, 192, 192, 0.5);
+}
+
+.register-footer-link a {
+  color: #d4af37 !important;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.register-footer-link a:hover {
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+  text-decoration: underline;
+}
+
+/* ============================================
+   条款弹窗 (Terms Modal)
+   ============================================ */
+
+.terms-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: overlay-fade-in 0.25s ease;
+}
+
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.terms-modal-card {
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  background: linear-gradient(160deg, #0f1423, #0a0e1a);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow:
+    0 0 60px rgba(212, 175, 55, 0.08),
+    0 25px 80px rgba(0, 0, 0, 0.6);
+  animation: modal-slide-up 0.3s ease;
+}
+
+@keyframes modal-slide-up {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* 弹窗头部 */
+.terms-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid rgba(192, 192, 192, 0.08);
+}
+
+.terms-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #c0c0c0;
+  margin: 0;
+  letter-spacing: 2px;
+  text-shadow: 0 0 15px rgba(192, 192, 192, 0.3);
+}
+
+.terms-modal-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.terms-modal-close svg {
+  width: 16px;
+  height: 16px;
+  color: rgba(192, 192, 192, 0.5);
+}
+
+.terms-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.terms-modal-close:hover svg {
+  color: #e0e0e0;
+}
+
+/* 弹窗内容滚动区 */
+.terms-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  scroll-behavior: smooth;
+}
+
+/* 高级感滚动条 */
+.terms-modal-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.terms-modal-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+}
+
+.terms-modal-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.4), rgba(192, 192, 192, 0.2));
+  border-radius: 3px;
+}
+
+.terms-modal-content::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.6), rgba(192, 192, 192, 0.4));
+}
+
+/* 条款文本样式 */
+.terms-content-inner h3 {
+  font-size: 16px;
+  color: #d4af37;
+  text-align: center;
+  margin: 0 0 8px;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.terms-update-date {
+  text-align: center;
+  font-size: 12px;
+  color: rgba(192, 192, 192, 0.4);
+  margin-bottom: 24px;
+}
+
+.terms-content-inner h4 {
+  font-size: 14px;
+  color: #c0c0c0;
+  margin: 24px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  letter-spacing: 0.5px;
+}
+
+.terms-content-inner p {
+  font-size: 13px;
+  color: rgba(200, 200, 200, 0.65);
+  line-height: 1.8;
+  margin: 0 0 10px;
+  text-align: justify;
+}
+
+.terms-content-inner strong {
+  color: #d4af37;
+  font-weight: 600;
+}
+
+.terms-footer-note {
+  text-align: center;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(212, 175, 55, 0.1);
+  font-size: 12px;
+  color: rgba(212, 175, 55, 0.4);
+  letter-spacing: 2px;
+}
+
+/* 弹窗底部 */
+.terms-modal-footer {
+  padding: 16px 24px 20px;
+  border-top: 1px solid rgba(192, 192, 192, 0.08);
+  text-align: center;
+}
+
+.terms-scroll-hint {
+  font-size: 12px;
+  color: rgba(192, 192, 192, 0.4);
+  margin: 0 0 10px;
+  animation: hint-pulse 2s ease-in-out infinite;
+}
+
+@keyframes hint-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* 确认阅读按钮 */
+.terms-confirm-btn {
+  width: 100%;
+  height: 50px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  cursor: pointer;
+  transition: all 0.4s ease;
+  position: relative;
+}
+
+.terms-confirm-btn.active {
+  background: linear-gradient(135deg, #d4af37, #e8c84a, #d4af37);
+  background-size: 200% 200%;
+  color: #0a0e1a;
+  box-shadow:
+    0 0 25px rgba(212, 175, 55, 0.4),
+    0 0 50px rgba(212, 175, 55, 0.15),
+    0 4px 15px rgba(212, 175, 55, 0.3);
+  animation: neon-glow 2s ease-in-out infinite;
+}
+
+.terms-confirm-btn.active:hover {
+  box-shadow:
+    0 0 35px rgba(212, 175, 55, 0.6),
+    0 0 70px rgba(212, 175, 55, 0.2),
+    0 6px 20px rgba(212, 175, 55, 0.4);
+  transform: translateY(-2px);
+}
+
+.terms-confirm-btn.disabled {
+  background: rgba(192, 192, 192, 0.06);
+  color: rgba(192, 192, 192, 0.25);
+  cursor: not-allowed;
+  border: 1px solid rgba(192, 192, 192, 0.08);
+}
+
+@keyframes neon-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 25px rgba(212, 175, 55, 0.4),
+      0 0 50px rgba(212, 175, 55, 0.15),
+      0 4px 15px rgba(212, 175, 55, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 35px rgba(212, 175, 55, 0.5),
+      0 0 70px rgba(212, 175, 55, 0.2),
+      0 4px 20px rgba(212, 175, 55, 0.4);
+  }
+}
+
+/* === 响应式适配 === */
+@media (max-width: 480px) {
+  .merchant-register-dark {
+    padding: 16px;
+  }
+
+  .register-card {
+    padding: 32px 20px;
+    border-radius: 16px;
+  }
+
+  .register-title {
+    font-size: 20px;
+  }
+
+  .terms-modal-card {
+    max-height: 90vh;
+    border-radius: 16px;
+  }
+
+  .terms-modal-content {
+    padding: 16px;
+  }
+
+  .terms-content-inner p {
+    font-size: 12px;
+  }
+}

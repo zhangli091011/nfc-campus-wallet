@@ -84,6 +84,9 @@ data class InvestmentUiState(
     val holdings: List<HoldingInfo> = emptyList(),
     val selectedHolding: HoldingInfo? = null,
     val sellSharesInput: String = "",
+    // 实名认证弹窗
+    val showVerificationDialog: Boolean = false,
+    val verificationParticipantId: Int? = null,
 )
 
 // ============================================================================
@@ -102,6 +105,8 @@ fun InvestmentScreen(
     onHoldingSelected: (HoldingInfo) -> Unit = {},
     onSellSharesChanged: (String) -> Unit = {},
     onConfirmSell: () -> Unit = {},
+    onDismissVerification: () -> Unit = {},
+    onSubmitVerification: (String, String) -> Unit = { _, _ -> },
 ) {
     val pricePerShare = 10.0
     val totalAmount = state.sharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
@@ -236,6 +241,14 @@ fun InvestmentScreen(
                 onDismiss = onDismissMessage,
             )
         }
+    }
+
+    // 实名认证弹窗
+    if (state.showVerificationDialog) {
+        VerificationDialog(
+            onDismiss = onDismissVerification,
+            onConfirm = onSubmitVerification,
+        )
     }
 }
 
@@ -1161,4 +1174,81 @@ private fun TechCard(
     ) {
         content()
     }
+}
+
+// ============================================================================
+// 实名认证弹窗
+// ============================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VerificationDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var className by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = InvestmentColors.SurfaceElevated,
+        titleContentColor = InvestmentColors.Gold,
+        textContentColor = InvestmentColors.TextPrimary,
+        title = {
+            Text("实名认证", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "该卡片尚未实名，请输入持卡人信息后继续操作",
+                    color = InvestmentColors.TextSecondary,
+                    fontSize = 13.sp,
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("姓名（必填）") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = InvestmentColors.TextPrimary,
+                        unfocusedTextColor = InvestmentColors.TextPrimary,
+                        focusedBorderColor = InvestmentColors.Gold,
+                        unfocusedBorderColor = InvestmentColors.BorderGold,
+                        focusedLabelColor = InvestmentColors.Gold,
+                        unfocusedLabelColor = InvestmentColors.TextDim,
+                        cursorColor = InvestmentColors.Gold,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = className,
+                    onValueChange = { className = it },
+                    label = { Text("班级（必填）") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = InvestmentColors.TextPrimary,
+                        unfocusedTextColor = InvestmentColors.TextPrimary,
+                        focusedBorderColor = InvestmentColors.Gold,
+                        unfocusedBorderColor = InvestmentColors.BorderGold,
+                        focusedLabelColor = InvestmentColors.Gold,
+                        unfocusedLabelColor = InvestmentColors.TextDim,
+                        cursorColor = InvestmentColors.Gold,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.isNotBlank() && className.isNotBlank()) onConfirm(name.trim(), className.trim()) },
+                enabled = name.isNotBlank() && className.isNotBlank(),
+            ) {
+                Text("确认", color = if (name.isNotBlank() && className.isNotBlank()) InvestmentColors.Gold else InvestmentColors.TextDim)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消", color = InvestmentColors.TextSecondary)
+            }
+        },
+    )
 }

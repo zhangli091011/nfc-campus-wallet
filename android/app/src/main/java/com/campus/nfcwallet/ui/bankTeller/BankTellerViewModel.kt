@@ -85,7 +85,14 @@ class BankTellerViewModel(
                         )
                         return
                     }
-                    // 实名审核限制已取消，无需检查 isVerified
+                    if (!participant.isVerified) {
+                        // 未实名：弹出实名认证对话框
+                        uiState = uiState.copy(
+                            showVerificationDialog = true,
+                            verificationParticipantId = participant.id,
+                        )
+                        return
+                    }
                     uiState = uiState.copy(
                         participantName = participant.name,
                         participantId = participant.id,
@@ -229,5 +236,58 @@ class BankTellerViewModel(
     // -----------------------------------------------------------------
     fun onDismissError() {
         uiState = uiState.copy(errorMessage = null)
+    }
+
+    // -----------------------------------------------------------------
+    // 实名认证
+    // -----------------------------------------------------------------
+    fun onDismissVerificationDialog() {
+        uiState = uiState.copy(
+            showVerificationDialog = false,
+            verificationParticipantId = null,
+            cardUid = null,
+        )
+    }
+
+    fun onSubmitVerification(name: String, className: String) {
+        val participantId = uiState.verificationParticipantId ?: return
+        val token = sessionManager.authHeader ?: return
+        val cardUid = uiState.cardUid ?: return
+
+        uiState = uiState.copy(showVerificationDialog = false, isLoading = true)
+
+        val updateData = HashMap<String, Any>()
+        updateData["name"] = name
+        if (className.isNotBlank()) {
+            updateData["class_name"] = className
+        }
+
+        apiService.updateParticipant(token, participantId, updateData)
+            .enqueue(object : Callback<ParticipantInfo> {
+                override fun onResponse(call: Call<ParticipantInfo>, response: Response<ParticipantInfo>) {
+                    if (response.isSuccessful && response.body() != null) {
+                        val participant = response.body()!!
+                        uiState = uiState.copy(
+                            isLoading = false,
+                            participantName = participant.name,
+                            participantId = participant.id,
+                            verificationParticipantId = null,
+                        )
+                    } else {
+                        uiState = uiState.copy(
+                            isLoading = false,
+                            errorMessage = "实名认证失败: ${APIClient.getErrorMessage(response)}",
+                        )
+                    }
+                }
+
+                override fun onFailure(call: Call<ParticipantInfo>, t: Throwable) {
+                    Log.e(TAG, "实名认证请求失败", t)
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        errorMessage = "网络错误: ${t.message}",
+                    )
+                }
+            })
     }
 }

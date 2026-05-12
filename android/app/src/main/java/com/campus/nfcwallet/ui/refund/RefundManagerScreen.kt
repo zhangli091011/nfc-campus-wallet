@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -30,8 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,7 +70,6 @@ fun RefundManagerScreen(
     onInitiateRefund: () -> Unit,
     onConfirmRefund: () -> Unit,
     onDismissRefundDialog: () -> Unit,
-    onAdminCodeChanged: (String) -> Unit,
     onClearCardFilter: () -> Unit,
     onClearSelection: () -> Unit,
     onDismissError: () -> Unit,
@@ -130,8 +126,6 @@ fun RefundManagerScreen(
             if (state.showRefundDialog) {
                 RefundConfirmDialog(
                     transaction = state.selectedTransaction,
-                    adminCode = state.adminCode,
-                    onAdminCodeChanged = onAdminCodeChanged,
                     onConfirm = onConfirmRefund,
                     onDismiss = onDismissRefundDialog,
                 )
@@ -654,13 +648,11 @@ private fun RefundActionBar(
 }
 
 // ============================================================================
-// 退款确认对话框
+// 退款确认对话框（简单确认，无 PIN 码）
 // ============================================================================
 @Composable
 private fun RefundConfirmDialog(
     transaction: Transaction?,
-    adminCode: String,
-    onAdminCodeChanged: (String) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -715,59 +707,21 @@ private fun RefundConfirmDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // 数字 PIN 码授权输入
                 Text(
-                    text = "管理员 PIN 码授权",
+                    text = "订单 #${transaction.id}",
                     color = RefundColors.TextSecondary,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = adminCode,
-                    onValueChange = { value ->
-                        // 仅允许数字输入
-                        if (value.all { it.isDigit() }) onAdminCodeChanged(value)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = {
-                        Text(
-                            "输入6位数字 PIN 码",
-                            color = RefundColors.TextDim,
-                            fontSize = 13.sp,
-                        )
-                    },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = RefundColors.TextPrimary,
-                        unfocusedTextColor = RefundColors.TextPrimary,
-                        cursorColor = RefundColors.Gold,
-                        focusedBorderColor = RefundColors.Gold,
-                        unfocusedBorderColor = RefundColors.TextDim,
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "⚠ 需输入管理员数字 PIN 码方可执行退款（危险操作）",
-                    color = RefundColors.DangerRed.copy(alpha = 0.7f),
-                    fontSize = 11.sp,
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                enabled = adminCode.length >= 4,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = RefundColors.DangerRed,
                     contentColor = Color.White,
-                    disabledContainerColor = RefundColors.DangerRedDim.copy(alpha = 0.3f),
                 ),
                 shape = RoundedCornerShape(10.dp),
             ) {

@@ -83,7 +83,6 @@ class RefundManagerActivity : ComponentActivity() {
                     onInitiateRefund = viewModel::showRefundConfirmation,
                     onConfirmRefund = viewModel::confirmRefund,
                     onDismissRefundDialog = viewModel::dismissRefundDialog,
-                    onAdminCodeChanged = viewModel::updateAdminCode,
                     onClearCardFilter = viewModel::clearCardFilter,
                     onClearSelection = viewModel::clearSelection,
                     onDismissError = viewModel::dismissError,

@@ -182,6 +182,10 @@ def create_app() -> FastAPI:
     from routes.refund import router as refund_router
     app.include_router(refund_router, tags=["trade"])
     
+    # Admin participant balances (后台参与者余额查看)
+    from routes.admin_participants import router as admin_participants_router
+    app.include_router(admin_participants_router, tags=["admin-participants"])
+    
     # Health check endpoint
     @app.get("/health")
     async def health_check():
