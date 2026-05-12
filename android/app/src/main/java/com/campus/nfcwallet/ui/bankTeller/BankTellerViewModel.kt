@@ -98,9 +98,10 @@ class BankTellerViewModel(
                         participantId = participant.id,
                     )
                 } else {
+                    // 卡片未注册：弹出注册对话框
                     uiState = uiState.copy(
-                        errorMessage = "未找到该卡片对应的学生信息 (UID: $cardUid)",
-                        cardUid = null,
+                        showRegistrationDialog = true,
+                        registrationCardUid = cardUid,
                     )
                 }
             }
@@ -190,6 +191,7 @@ class BankTellerViewModel(
             cardUid,
             principalAmount,
             eventId,
+            if (uiState.useDepositCard) uiState.depositAmount else null,
             timestamp,
             signature,
         )
@@ -289,5 +291,71 @@ class BankTellerViewModel(
                     )
                 }
             })
+    }
+
+    // -----------------------------------------------------------------
+    // 新卡注册（银行借贷时直接注册）
+    // -----------------------------------------------------------------
+    fun onDismissRegistrationDialog() {
+        uiState = uiState.copy(
+            showRegistrationDialog = false,
+            registrationCardUid = null,
+            cardUid = null,
+        )
+    }
+
+    fun onSubmitRegistration(name: String, className: String) {
+        val cardUid = uiState.registrationCardUid ?: return
+        val token = sessionManager.authHeader ?: return
+
+        uiState = uiState.copy(showRegistrationDialog = false, isLoading = true)
+
+        val participantData = HashMap<String, Any>()
+        participantData["card_uid"] = cardUid
+        participantData["name"] = name
+        if (className.isNotBlank()) {
+            participantData["class_name"] = className
+        }
+
+        apiService.createParticipant(token, participantData)
+            .enqueue(object : Callback<ParticipantInfo> {
+                override fun onResponse(call: Call<ParticipantInfo>, response: Response<ParticipantInfo>) {
+                    if (response.isSuccessful && response.body() != null) {
+                        val participant = response.body()!!
+                        uiState = uiState.copy(
+                            isLoading = false,
+                            participantName = participant.name,
+                            participantId = participant.id,
+                            registrationCardUid = null,
+                        )
+                        Log.i(TAG, "新卡注册成功: ${participant.name} (${cardUid})")
+                    } else {
+                        val errorMsg = APIClient.getErrorMessage(response) ?: "注册失败"
+                        uiState = uiState.copy(
+                            isLoading = false,
+                            errorMessage = "注册失败: $errorMsg",
+                            cardUid = null,
+                            registrationCardUid = null,
+                        )
+                    }
+                }
+
+                override fun onFailure(call: Call<ParticipantInfo>, t: Throwable) {
+                    Log.e(TAG, "注册请求失败", t)
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        errorMessage = "网络错误: ${t.message}",
+                        cardUid = null,
+                        registrationCardUid = null,
+                    )
+                }
+            })
+    }
+
+    // -----------------------------------------------------------------
+    // 专用消费卡押金选项
+    // -----------------------------------------------------------------
+    fun onDepositCardToggle(checked: Boolean) {
+        uiState = uiState.copy(useDepositCard = checked)
     }
 }

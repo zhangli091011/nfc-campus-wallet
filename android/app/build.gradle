@@ -4,32 +4,42 @@ plugins {
 }
 
 android {
-    namespace 'com.campus.nfcwallet'
-    compileSdk 34
+    namespace = 'com.campus.nfcwallet'
+    compileSdk = 34
 
     defaultConfig {
-        applicationId "com.campus.nfcwallet"
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        applicationId = "com.campus.nfcwallet"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
-            useSupportLibrary true
+            useSupportLibrary = true
+        }
+    }
+
+    signingConfigs {
+        release {
+            storeFile = file('nfc-wallet-release.jks')
+            storePassword = 'campus2026'
+            keyAlias = 'nfc-wallet'
+            keyPassword = 'campus2026'
         }
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            signingConfig = signingConfigs.release
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
@@ -37,12 +47,12 @@ android {
     }
 
     buildFeatures {
-        viewBinding true
-        compose true
+        viewBinding = true
+        compose = true
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion '1.5.8'
+        kotlinCompilerExtensionVersion = '1.5.8'
     }
 
     packaging {

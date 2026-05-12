@@ -941,6 +941,79 @@ public class CashierActivity extends AppCompatActivity {
         } else {
             rechargeButton.setVisibility(View.GONE);
         }
+        
+        // Show delete participant button only for super_admin
+        if (currentUser != null && "super_admin".equals(currentUser.getRole())) {
+            clearButton.setText("删除用户");
+            clearButton.setOnClickListener(v -> confirmDeleteParticipant());
+        }
+    }
+    
+    /**
+     * Confirm and delete current participant (super_admin only).
+     */
+    private void confirmDeleteParticipant() {
+        if (currentParticipant == null) {
+            // No participant loaded, just clear card
+            clearCard();
+            return;
+        }
+        
+        if (currentUser == null || !"super_admin".equals(currentUser.getRole())) {
+            showError("仅超级管理员可删除参与者");
+            return;
+        }
+        
+        String participantName = currentParticipant.getName() != null 
+            ? currentParticipant.getName() : currentCardUid;
+        
+        new AlertDialog.Builder(this)
+            .setTitle("⚠️ 删除参与者")
+            .setMessage("确定要删除参与者「" + participantName + "」吗？\n\n" +
+                "• 该用户的所有账户数据将被删除\n" +
+                "• 交易记录将保留用于审计\n" +
+                "• 此操作不可撤销！")
+            .setPositiveButton("确认删除", (dialog, which) -> executeDeleteParticipant())
+            .setNegativeButton("取消", null)
+            .show();
+    }
+    
+    /**
+     * Execute participant deletion via API.
+     */
+    private void executeDeleteParticipant() {
+        if (currentParticipant == null) return;
+        
+        String authHeader = sessionManager.getAuthHeader();
+        if (authHeader == null) {
+            showError("未登录");
+            return;
+        }
+        
+        actionProgress.setVisibility(View.VISIBLE);
+        
+        Call<Void> call = apiService.deleteParticipant(authHeader, currentParticipant.getId());
+        call.enqueue(new Callback<Void>() {
+            @Override
+            public void onResponse(Call<Void> call, Response<Void> response) {
+                actionProgress.setVisibility(View.GONE);
+                
+                if (response.isSuccessful()) {
+                    showSuccess("参与者已删除");
+                    clearCard();
+                } else {
+                    String error = ErrorHandler.getErrorMessage(response);
+                    showError("删除失败: " + error);
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<Void> call, Throwable t) {
+                actionProgress.setVisibility(View.GONE);
+                Log.e(TAG, "Delete participant failed", t);
+                showError("删除失败: 网络错误");
+            }
+        });
     }
     
     /**

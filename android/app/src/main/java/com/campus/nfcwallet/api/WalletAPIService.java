@@ -37,6 +37,7 @@ import java.util.Map;
 
 import retrofit2.Call;
 import retrofit2.http.Body;
+import retrofit2.http.DELETE;
 import retrofit2.http.GET;
 import retrofit2.http.Header;
 import retrofit2.http.PATCH;
@@ -214,6 +215,21 @@ public interface WalletAPIService {
         @Header("Authorization") String authorization,
         @Path("participant_id") int participantId,
         @Body Map<String, Object> updateData
+    );
+
+    /**
+     * Delete participant (super_admin only).
+     *
+     * DELETE /participants/{participant_id}
+     *
+     * @param authorization Authorization header (Bearer token)
+     * @param participantId Participant ID
+     * @return Void (204 No Content on success)
+     */
+    @DELETE("participants/{participant_id}")
+    Call<Void> deleteParticipant(
+        @Header("Authorization") String authorization,
+        @Path("participant_id") int participantId
     );
     
     // ==================== Legacy Endpoints ====================

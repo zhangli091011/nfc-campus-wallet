@@ -15,6 +15,7 @@ from core.security import get_current_user
 from services.transaction_service import TransactionService
 from models.user import User
 from core.exceptions import ResourceNotFoundError, ValidationError
+from services.event_service import EventNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ async def get_transactions(
     event_id: Optional[int] = Query(None, description="Filter by event ID"),
     booth_id: Optional[int] = Query(None, description="Filter by booth ID"),
     product_id: Optional[int] = Query(None, description="Filter by product ID"),
+    type: Optional[str] = Query(None, description="Filter by transaction type(s), comma-separated"),
     start_date: Optional[str] = Query(None, description="Start date filter (ISO format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (ISO format: YYYY-MM-DD)"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of transactions to return"),
@@ -91,6 +93,11 @@ async def get_transactions(
     try:
         transaction_service = TransactionService(db)
         
+        # 解析交易类型过滤
+        transaction_types = None
+        if type:
+            transaction_types = [t.strip() for t in type.split(',') if t.strip()]
+        
         # 权限验证和过滤逻辑
         # super_admin 和 event_admin 可以查看所有交易
         if current_user.role in ('super_admin', 'event_admin'):
@@ -109,6 +116,7 @@ async def get_transactions(
                 result = transaction_service.get_event_transaction_history(
                     event_id=event_id,
                     participant_id=None,
+                    transaction_types=transaction_types,
                     start_date=start_date,
                     end_date=end_date,
                     limit=limit,
@@ -168,6 +176,7 @@ async def get_transactions(
                 result = transaction_service.get_event_transaction_history(
                     event_id=event_id,
                     participant_id=None,
+                    transaction_types=transaction_types,
                     start_date=start_date,
                     end_date=end_date,
                     limit=limit,
@@ -208,6 +217,16 @@ async def get_transactions(
     except HTTPException:
         # Re-raise HTTPException (403 errors from permission validation)
         raise
+    
+    except EventNotFoundError as e:
+        logger.warning(f"Transaction query failed - event not found: {str(e)}")
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error_code": e.error_code,
+                "message": e.message
+            }
+        )
     
     except ResourceNotFoundError as e:
         logger.warning(f"Transaction query failed: {str(e)}")

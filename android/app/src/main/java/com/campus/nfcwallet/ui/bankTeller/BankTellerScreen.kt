@@ -71,12 +71,20 @@ data class BankTellerUiState(
     // 实名认证弹窗
     val showVerificationDialog: Boolean = false,
     val verificationParticipantId: Int? = null,
+    // 新卡注册弹窗
+    val showRegistrationDialog: Boolean = false,
+    val registrationCardUid: String? = null,
+    // 专用消费卡押金选项
+    val useDepositCard: Boolean = false,
+    val depositAmount: Double = 5.0,
 ) {
     val feeRate: Double get() = 0.05
     val feeAmount: Double get() = (selectedAmount ?: 0) * feeRate
-    val disbursedAmount: Double get() = (selectedAmount ?: 0) - feeAmount
+    val depositDeduction: Double get() = if (useDepositCard) depositAmount else 0.0
+    val disbursedAmount: Double get() = (selectedAmount ?: 0) - feeAmount - depositDeduction
     val canSubmit: Boolean
         get() = cardUid != null && selectedAmount != null && paperworkConfirmed && !isLoading
+                && disbursedAmount > 0
 }
 
 // ============================================================================
@@ -94,6 +102,9 @@ fun BankTellerScreen(
     onLogout: () -> Unit = {},
     onDismissVerification: () -> Unit = {},
     onSubmitVerification: (String, String) -> Unit = { _, _ -> },
+    onDismissRegistration: () -> Unit = {},
+    onSubmitRegistration: (String, String) -> Unit = { _, _ -> },
+    onDepositCardToggle: (Boolean) -> Unit = {},
 ) {
     Scaffold(
         containerColor = BankColors.NavyDeep,
@@ -147,8 +158,19 @@ fun BankTellerScreen(
                             principal = state.selectedAmount ?: 0,
                             feeAmount = state.feeAmount,
                             disbursedAmount = state.disbursedAmount,
+                            useDepositCard = state.useDepositCard,
+                            depositAmount = state.depositAmount,
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 专用消费卡押金选项
+                    DepositCardOption(
+                        checked = state.useDepositCard,
+                        depositAmount = state.depositAmount,
+                        onCheckedChange = onDepositCardToggle,
+                    )
 
                     Spacer(modifier = Modifier.height(20.dp))
 
@@ -203,6 +225,15 @@ fun BankTellerScreen(
         BankVerificationDialog(
             onDismiss = onDismissVerification,
             onConfirm = onSubmitVerification,
+        )
+    }
+
+    // 新卡注册弹窗
+    if (state.showRegistrationDialog) {
+        BankRegistrationDialog(
+            cardUid = state.registrationCardUid ?: "",
+            onDismiss = onDismissRegistration,
+            onConfirm = onSubmitRegistration,
         )
     }
 }
@@ -481,6 +512,8 @@ private fun SettlementPanel(
     principal: Int,
     feeAmount: Double,
     disbursedAmount: Double,
+    useDepositCard: Boolean = false,
+    depositAmount: Double = 5.0,
 ) {
     Box(
         modifier = Modifier
@@ -528,6 +561,16 @@ private fun SettlementPanel(
                 value = "-¥${"%.2f".format(feeAmount)}",
                 valueColor = BankColors.WarningAmber,
             )
+
+            // 专用消费卡押金
+            if (useDepositCard) {
+                Spacer(modifier = Modifier.height(8.dp))
+                SettlementRow(
+                    label = "专用消费卡押金",
+                    value = "-¥${"%.2f".format(depositAmount)}",
+                    valueColor = BankColors.WarningAmber,
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -885,4 +928,139 @@ private fun BankVerificationDialog(
             }
         },
     )
+}
+
+// ============================================================================
+// 新卡注册弹窗（银行借贷时直接注册未知卡片）
+// ============================================================================
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BankRegistrationDialog(
+    cardUid: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var className by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = BankColors.NavySurface,
+        titleContentColor = BankColors.PlatinumBright,
+        textContentColor = BankColors.TextPrimary,
+        title = {
+            Text("新卡注册", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "该卡片 ($cardUid) 尚未注册，请填写信息完成注册后继续办理借贷",
+                    color = BankColors.TextSecondary,
+                    fontSize = 13.sp,
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("姓名（必填）") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = BankColors.TextPrimary,
+                        unfocusedTextColor = BankColors.TextPrimary,
+                        focusedBorderColor = BankColors.Platinum,
+                        unfocusedBorderColor = BankColors.BorderPlatinum,
+                        focusedLabelColor = BankColors.Platinum,
+                        unfocusedLabelColor = BankColors.TextDim,
+                        cursorColor = BankColors.Platinum,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = className,
+                    onValueChange = { className = it },
+                    label = { Text("班级（选填）") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = BankColors.TextPrimary,
+                        unfocusedTextColor = BankColors.TextPrimary,
+                        focusedBorderColor = BankColors.Platinum,
+                        unfocusedBorderColor = BankColors.BorderPlatinum,
+                        focusedLabelColor = BankColors.Platinum,
+                        unfocusedLabelColor = BankColors.TextDim,
+                        cursorColor = BankColors.Platinum,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.isNotBlank()) onConfirm(name.trim(), className.trim()) },
+                enabled = name.isNotBlank(),
+            ) {
+                Text(
+                    "注册并继续",
+                    color = if (name.isNotBlank()) BankColors.Platinum else BankColors.TextDim,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消", color = BankColors.TextSecondary)
+            }
+        },
+    )
+}
+
+// ============================================================================
+// 专用消费卡押金选项
+// ============================================================================
+@Composable
+private fun DepositCardOption(
+    checked: Boolean,
+    depositAmount: Double,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .border(
+                width = 1.dp,
+                color = if (checked) BankColors.Platinum.copy(alpha = 0.6f)
+                else BankColors.BorderPlatinum,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .background(
+                if (checked) BankColors.Platinum.copy(alpha = 0.05f)
+                else Color.Transparent,
+            )
+            .clickable { onCheckedChange(!checked) }
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = CheckboxDefaults.colors(
+                    checkedColor = BankColors.Platinum,
+                    uncheckedColor = BankColors.TextDim,
+                    checkmarkColor = BankColors.NavyDeep,
+                ),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = "使用专用消费卡",
+                    color = if (checked) BankColors.PlatinumBright else BankColors.TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = "押金 ¥${"%.0f".format(depositAmount)} 将从借款中直接扣除",
+                    color = BankColors.TextDim,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+    }
 }

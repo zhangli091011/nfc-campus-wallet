@@ -11,7 +11,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import * as echarts from 'echarts';
-import { Table } from 'antd';
+import { Table, Select, Spin } from 'antd';
 import {
   AlertOutlined,
   BankOutlined,
@@ -121,6 +121,12 @@ interface SummaryReport {
   total_refunded: number;
 }
 
+interface EventItem {
+  id: number;
+  name: string;
+  status: string;
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -131,6 +137,9 @@ const MacroEconomyDashboard: React.FC = () => {
   const [auditLogs, setAuditLogs] = useState<AuditTransaction[]>([]);
   const [summaryReport, setSummaryReport] = useState<SummaryReport | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [eventId, setEventId] = useState<number | null>(null);
+  const [eventsLoading, setEventsLoading] = useState(true);
 
   const pieChartRef = useRef<HTMLDivElement>(null);
   const barChartRef = useRef<HTMLDivElement>(null);
@@ -138,7 +147,28 @@ const MacroEconomyDashboard: React.FC = () => {
   const barInstance = useRef<echarts.ECharts | null>(null);
   const auditScrollRef = useRef<HTMLDivElement>(null);
 
-  const eventId = 1; // TODO: 从配置或路由获取
+  // 加载活动列表
+  useEffect(() => {
+    const loadEvents = async () => {
+      const token = localStorage.getItem('nfc_wallet_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const baseUrl = import.meta.env.VITE_API_URL || '';
+      try {
+        const res = await axios.get(`${baseUrl}/api/events`, { headers });
+        const eventList: EventItem[] = res.data?.events || [];
+        setEvents(eventList);
+        // 默认选择第一个活动
+        if (eventList.length > 0) {
+          setEventId(eventList[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load events:', err);
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+    loadEvents();
+  }, []);
 
   // 时钟
   useEffect(() => {
@@ -148,6 +178,8 @@ const MacroEconomyDashboard: React.FC = () => {
 
   // 数据加载
   const loadData = useCallback(async () => {
+    if (!eventId) return;
+
     const token = localStorage.getItem('nfc_wallet_token');
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const baseUrl = import.meta.env.VITE_API_URL || '';
@@ -476,6 +508,15 @@ const MacroEconomyDashboard: React.FC = () => {
           <div className="macro-title-section">
             <BankOutlined className="macro-title-icon" />
             <h1 className="macro-title">宏观经济与风控审计中心</h1>
+            <Select
+              style={{ width: 180, marginLeft: 24 }}
+              placeholder="选择活动"
+              value={eventId ?? undefined}
+              onChange={(val) => setEventId(val)}
+              loading={eventsLoading}
+              options={events.map((e) => ({ label: e.name, value: e.id }))}
+              dropdownStyle={{ background: '#1f2937', borderColor: 'rgba(0,212,255,0.3)' }}
+            />
           </div>
           <div className="macro-status-section">
             <div className="macro-live-badge">
@@ -488,6 +529,24 @@ const MacroEconomyDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 未选择活动时的提示 */}
+      {!eventId && !eventsLoading && (
+        <div style={{ textAlign: 'center', padding: '80px 0', color: '#8B9DC3' }}>
+          <BankOutlined style={{ fontSize: 48, marginBottom: 16, display: 'block' }} />
+          {events.length === 0
+            ? '暂无活动数据，请先创建活动'
+            : '请在顶部选择一个活动以加载风控数据'}
+        </div>
+      )}
+
+      {eventsLoading && (
+        <div style={{ textAlign: 'center', padding: '80px 0' }}>
+          <Spin size="large" tip="加载活动列表..." />
+        </div>
+      )}
+
+      {eventId && !eventsLoading && (<>
 
       {/* ═══════════ 顶部宏观指标卡片 ═══════════ */}
       <div className="macro-indicators">
@@ -574,6 +633,7 @@ const MacroEconomyDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      </>)}
     </div>
   );
 };

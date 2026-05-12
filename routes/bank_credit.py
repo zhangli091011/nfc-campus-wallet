@@ -60,6 +60,7 @@ class IssueLoanRequest(BaseModel):
     card_uid: str = Field(..., min_length=1, max_length=32, description="NFC卡片UID")
     nominal_amount: Optional[float] = Field(None, description="名义借款金额（元）")
     principal_amount: Optional[float] = Field(None, description="名义借款金额 - 兼容安卓端字段名（元）")
+    deposit_card_fee: Optional[float] = Field(None, description="专用消费卡押金（元），从借款中扣除")
     remark: Optional[str] = Field(None, max_length=255, description="备注（如借条编号）")
     # 允许安卓端发送的额外字段（timestamp, signature）
     timestamp: Optional[int] = Field(None, exclude=True)
@@ -334,7 +335,13 @@ async def issue_loan(
         from decimal import Decimal, ROUND_HALF_UP
         nominal_amount = Decimal(str(nominal_amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         fee_amount = (nominal_amount * Decimal(str(fee_rate))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        actual_grant = nominal_amount - fee_amount
+        
+        # 专用消费卡押金
+        deposit_card_fee = Decimal('0')
+        if req.deposit_card_fee and req.deposit_card_fee > 0:
+            deposit_card_fee = Decimal(str(req.deposit_card_fee)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        actual_grant = nominal_amount - fee_amount - deposit_card_fee
 
         # ── 9. 悲观锁锁定账户行 (SELECT ... FOR UPDATE) ──
         locked_account = db.query(Account).filter(
@@ -416,9 +423,10 @@ async def issue_loan(
         loan_id = loan_id_row["id"]
 
         # ── 13. 审计日志 ──
+        deposit_info = f", 消费卡押金={deposit_card_fee:.2f}元" if deposit_card_fee > 0 else ""
         audit_detail = (
             f"放贷成功: participant={participant.name}(card={req.card_uid}), "
-            f"本金={nominal_amount:.2f}元, 手续费={fee_amount:.2f}元, "
+            f"本金={nominal_amount:.2f}元, 手续费={fee_amount:.2f}元{deposit_info}, "
             f"实际到账={actual_grant:.2f}元, "
             f"余额: {float(balance_before):.2f} -> {float(balance_after):.2f}元"
         )

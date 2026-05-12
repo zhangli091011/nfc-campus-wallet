@@ -11,6 +11,7 @@ from typing import Optional
 import logging
 
 from core.database import get_db
+from core.security import get_current_user
 from services.participant_service import (
     ParticipantService,
     ParticipantNotFoundError,
@@ -388,6 +389,64 @@ async def bind_card(
         )
 
 
+@router.delete("/participants/clear-all")
+async def clear_all_participants(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    清除所有参与者数据。
+
+    ⚠️ 危险操作：将删除所有参与者及其关联的账户记录。
+    交易记录保留用于审计。仅 super_admin 可执行。
+
+    Returns:
+        JSON: 删除的参与者数量
+    """
+    from models.participant import Participant
+    from models.account import Account
+
+    # 权限校验：仅 super_admin
+    if current_user.role != 'super_admin':
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error_code": "FORBIDDEN",
+                "message": "仅超级管理员可清除所有参与者"
+            }
+        )
+
+    try:
+        # 先删除所有账户（外键依赖）
+        accounts_deleted = db.query(Account).delete()
+        # 再删除所有参与者
+        participants_deleted = db.query(Participant).delete()
+        db.commit()
+
+        logger.info(
+            f"All participants cleared by {current_user.username}: "
+            f"{participants_deleted} participants, {accounts_deleted} accounts deleted"
+        )
+
+        return {
+            "success": True,
+            "message": f"已清除 {participants_deleted} 个参与者和 {accounts_deleted} 个账户",
+            "participants_deleted": participants_deleted,
+            "accounts_deleted": accounts_deleted,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to clear all participants: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error_code": "INTERNAL_ERROR",
+                "message": f"清除参与者失败: {str(e)}"
+            }
+        )
+
+
 @router.get("/participants/by-card/{card_uid}", response_model=ParticipantResponse)
 async def get_participant_by_card(
     card_uid: str,
@@ -449,12 +508,13 @@ async def get_participant_by_card(
 @router.delete("/participants/{participant_id}", status_code=204)
 async def delete_participant(
     participant_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     删除参与者。
 
-    仅 super_admin 和 event_admin 可执行此操作。
+    仅 super_admin 可执行此操作。
     会级联删除关联的账户记录。关联的交易记录不会被删除（保留审计）。
 
     Path Parameters:
@@ -462,6 +522,16 @@ async def delete_participant(
     """
     from models.participant import Participant
     from models.account import Account
+
+    # 权限校验：仅 super_admin
+    if current_user.role != 'super_admin':
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error_code": "FORBIDDEN",
+                "message": "仅超级管理员可删除参与者"
+            }
+        )
 
     participant = db.query(Participant).filter(Participant.id == participant_id).first()
     if participant is None:
@@ -479,5 +549,5 @@ async def delete_participant(
     db.delete(participant)
     db.commit()
 
-    logger.info(f"Participant deleted: id={participant_id}, name={participant.name}")
+    logger.info(f"Participant deleted by {current_user.username}: id={participant_id}, name={participant.name}")
     return None

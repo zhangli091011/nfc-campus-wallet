@@ -17,6 +17,9 @@ public class LoanIssuanceRequest {
     @SerializedName("event_id")
     private int eventId;
 
+    @SerializedName("deposit_card_fee")
+    private Double depositCardFee;
+
     @SerializedName("timestamp")
     private long timestamp;
 
@@ -29,11 +32,23 @@ public class LoanIssuanceRequest {
         this.eventId = eventId;
         this.timestamp = timestamp;
         this.signature = signature;
+        this.depositCardFee = null;
+    }
+
+    public LoanIssuanceRequest(String cardUid, int principalAmount, int eventId, Double depositCardFee, long timestamp, String signature) {
+        this.cardUid = cardUid;
+        this.principalAmount = principalAmount;
+        this.eventId = eventId;
+        this.depositCardFee = depositCardFee;
+        this.timestamp = timestamp;
+        this.signature = signature;
     }
 
     public String getCardUid() { return cardUid; }
     public int getPrincipalAmount() { return principalAmount; }
     public int getEventId() { return eventId; }
+    public Double getDepositCardFee() { return depositCardFee; }
+    public void setDepositCardFee(Double depositCardFee) { this.depositCardFee = depositCardFee; }
     public long getTimestamp() { return timestamp; }
     public String getSignature() { return signature; }
 }

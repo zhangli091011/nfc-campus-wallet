@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Table,
   Button,
@@ -11,14 +11,14 @@ import {
   message,
   Tag,
 } from 'antd'
-import { PlusOutlined, EditOutlined, DollarOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DollarOutlined, SafetyCertificateOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons'
 import {
-  getParticipants,
   createParticipant,
   updateParticipant,
   verifyParticipant,
   recharge,
   deleteParticipant,
+  clearAllParticipants,
   type Participant,
   type CreateParticipantRequest,
   type UpdateParticipantRequest,
@@ -26,60 +26,94 @@ import {
   type RechargeRequest,
 } from '@/services/participant'
 import { getEvents, type Event } from '@/services/event'
+import request from '@/utils/request'
 import dayjs from 'dayjs'
 
+interface ParticipantWithBalance extends Participant {
+  balance?: number
+  credit_borrowed?: number
+  credit_fee_paid?: number
+}
+
 const ParticipantManagement = () => {
-  const [participants, setParticipants] = useState<Participant[]>([])
+  const [participants, setParticipants] = useState<ParticipantWithBalance[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [rechargeModalVisible, setRechargeModalVisible] = useState(false)
   const [verifyModalVisible, setVerifyModalVisible] = useState(false)
-  const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null)
-  const [rechargingParticipant, setRechargingParticipant] = useState<Participant | null>(null)
-  const [verifyingParticipant, setVerifyingParticipant] = useState<Participant | null>(null)
+  const [editingParticipant, setEditingParticipant] = useState<ParticipantWithBalance | null>(null)
+  const [rechargingParticipant, setRechargingParticipant] = useState<ParticipantWithBalance | null>(null)
+  const [verifyingParticipant, setVerifyingParticipant] = useState<ParticipantWithBalance | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<number>()
+  const [searchText, setSearchText] = useState('')
+  const [totalCount, setTotalCount] = useState(0)
   const [form] = Form.useForm()
   const [rechargeForm] = Form.useForm()
   const [verifyForm] = Form.useForm()
 
   useEffect(() => {
     loadEvents()
-    loadParticipants() // 直接加载所有参与者
   }, [])
 
   const loadEvents = async () => {
     try {
-      const data = await getEvents()  // 移除 status 筛选
+      const data = await getEvents()
       const eventList = data?.events || []
       setEvents(eventList)
       if (eventList.length > 0) {
         setSelectedEventId(eventList[0].id)
       }
     } catch (error) {
-      // 错误已处理
       setEvents([])
     }
   }
 
-  const loadParticipants = async () => {
+  const loadParticipants = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await getParticipants({ limit: 1000 })
-      // 处理返回的数据格式
-      if (Array.isArray(data)) {
-        setParticipants(data)
-      } else if (data && typeof data === 'object' && 'participants' in data) {
-        setParticipants((data as any).participants || [])
+      if (selectedEventId) {
+        // 使用 admin 接口获取带余额的参与者列表，支持搜索
+        const res = await request.get<any, any>('/admin/participants/balances', {
+          params: {
+            event_id: selectedEventId,
+            search: searchText || undefined,
+            sort_by: 'balance_desc',
+            limit: 1000,
+          },
+        })
+        setParticipants(res.participants || [])
+        setTotalCount(res.total_count || 0)
       } else {
-        setParticipants([])
+        // 没有选择活动时，使用基础接口
+        const res = await request.get<any, any>('/participants', {
+          params: { limit: 1000 },
+        })
+        if (Array.isArray(res)) {
+          setParticipants(res)
+          setTotalCount(res.length)
+        } else if (res && typeof res === 'object' && 'participants' in res) {
+          setParticipants(res.participants || [])
+          setTotalCount(res.total_count || res.participants?.length || 0)
+        } else {
+          setParticipants([])
+          setTotalCount(0)
+        }
       }
     } catch (error) {
-      // 错误已处理
       setParticipants([])
+      setTotalCount(0)
     } finally {
       setLoading(false)
     }
+  }, [selectedEventId, searchText])
+
+  useEffect(() => {
+    loadParticipants()
+  }, [loadParticipants])
+
+  const handleSearch = (value: string) => {
+    setSearchText(value)
   }
 
   const handleAdd = () => {
@@ -89,7 +123,7 @@ const ParticipantManagement = () => {
     setModalVisible(true)
   }
 
-  const handleEdit = (record: Participant) => {
+  const handleEdit = (record: ParticipantWithBalance) => {
     setEditingParticipant(record)
     form.setFieldsValue({
       card_uid: record.card_uid,
@@ -101,7 +135,7 @@ const ParticipantManagement = () => {
     setModalVisible(true)
   }
 
-  const handleDeleteParticipant = (record: Participant) => {
+  const handleDeleteParticipant = (record: ParticipantWithBalance) => {
     Modal.confirm({
       title: '确认删除',
       content: `确定要删除用户「${record.name || record.card_uid}」吗？此操作不可撤销，关联的账户数据将被一并删除。`,
@@ -120,13 +154,43 @@ const ParticipantManagement = () => {
     })
   }
 
-  const handleRecharge = (record: Participant) => {
+  const handleClearAll = () => {
+    Modal.confirm({
+      title: '⚠️ 危险操作：清除所有参与者',
+      content: (
+        <div>
+          <p style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+            此操作将永久删除所有参与者及其关联的账户数据！
+          </p>
+          <p>• 所有参与者记录将被删除</p>
+          <p>• 所有账户余额将被清零并删除</p>
+          <p>• 交易记录将保留用于审计</p>
+          <p style={{ marginTop: 8, color: '#faad14' }}>此操作不可撤销，请确认！</p>
+        </div>
+      ),
+      okText: '确认清除全部',
+      okType: 'danger',
+      cancelText: '取消',
+      width: 480,
+      onOk: async () => {
+        try {
+          const result = await clearAllParticipants()
+          message.success(result?.message || '已清除所有参与者')
+          loadParticipants()
+        } catch (error) {
+          message.error('清除失败，请重试')
+        }
+      },
+    })
+  }
+
+  const handleRecharge = (record: ParticipantWithBalance) => {
     setRechargingParticipant(record)
     rechargeForm.resetFields()
     setRechargeModalVisible(true)
   }
 
-  const handleVerify = (record: Participant) => {
+  const handleVerify = (record: ParticipantWithBalance) => {
     setVerifyingParticipant(record)
     verifyForm.resetFields()
     verifyForm.setFieldsValue({
@@ -214,19 +278,21 @@ const ParticipantManagement = () => {
       title: 'ID',
       dataIndex: 'id',
       key: 'id',
-      width: 80,
+      width: 70,
     },
     {
       title: '卡号',
       dataIndex: 'card_uid',
       key: 'card_uid',
+      width: 140,
     },
     {
       title: '姓名',
       dataIndex: 'display_name',
       key: 'display_name',
+      width: 120,
       render: (text: string, record: any) => (
-        record.is_verified
+        record.is_verified || record.name
           ? <span>{text || record.name}</span>
           : <Tag color="warning">审核中</Tag>
       ),
@@ -235,17 +301,36 @@ const ParticipantManagement = () => {
       title: '学号',
       dataIndex: 'student_no',
       key: 'student_no',
+      width: 120,
       render: (text: string, record: any) => text || record.student_id || '-',
     },
     {
       title: '班级',
       dataIndex: 'class_name',
       key: 'class_name',
+      width: 120,
+      render: (text: string) => text || '-',
+    },
+    {
+      title: '余额（元）',
+      dataIndex: 'balance',
+      key: 'balance',
+      width: 120,
+      align: 'right' as const,
+      render: (balance: number | undefined) => {
+        if (balance === undefined || balance === null) return '-'
+        return (
+          <span style={{ color: balance > 0 ? '#52c41a' : balance < 0 ? '#ff4d4f' : '#999', fontWeight: 600 }}>
+            ¥{balance.toFixed(2)}
+          </span>
+        )
+      },
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
+      width: 90,
       render: (status: string) => {
         const colorMap: Record<string, string> = {
           active: 'success',
@@ -257,20 +342,14 @@ const ParticipantManagement = () => {
           inactive: '未激活',
           blocked: '已冻结',
         }
-        return <Tag color={colorMap[status]}>{textMap[status]}</Tag>
+        return <Tag color={colorMap[status]}>{textMap[status] || status}</Tag>
       },
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm'),
     },
     {
       title: '操作',
       key: 'action',
-      width: 320,
-      render: (_: any, record: Participant) => (
+      width: 280,
+      render: (_: any, record: ParticipantWithBalance) => (
         <Space>
           {!record.is_verified && (
             <Button
@@ -305,6 +384,7 @@ const ParticipantManagement = () => {
             type="link"
             size="small"
             danger
+            icon={<DeleteOutlined />}
             onClick={() => handleDeleteParticipant(record)}
           >
             删除
@@ -316,17 +396,33 @@ const ParticipantManagement = () => {
 
   return (
     <div>
-      <Space style={{ marginBottom: 16 }}>
+      <Space style={{ marginBottom: 16 }} wrap>
         <Select
           style={{ width: 200 }}
-          placeholder="选择活动（充值用）"
+          placeholder="选择活动"
           value={selectedEventId}
-          onChange={setSelectedEventId}
+          onChange={(val) => setSelectedEventId(val)}
           options={events.map((e) => ({ label: e.name, value: e.id }))}
           allowClear
         />
+        <Input.Search
+          style={{ width: 260 }}
+          placeholder="搜索姓名 / 卡号 / 学号"
+          prefix={<SearchOutlined />}
+          allowClear
+          onSearch={handleSearch}
+          enterButton
+        />
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
           新建参与者
+        </Button>
+        <Button
+          danger
+          icon={<DeleteOutlined />}
+          onClick={handleClearAll}
+          disabled={participants.length === 0}
+        >
+          清除所有参与者
         </Button>
       </Space>
 
@@ -335,7 +431,15 @@ const ParticipantManagement = () => {
         dataSource={participants}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
+        pagination={{
+          pageSize: 20,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          total: totalCount,
+          showTotal: (total) => `共 ${total} 条`,
+          pageSizeOptions: ['10', '20', '50', '100'],
+        }}
+        scroll={{ x: 1100 }}
       />
 
       <Modal
@@ -398,6 +502,9 @@ const ParticipantManagement = () => {
             <div>
               <p>姓名：{rechargingParticipant?.name}</p>
               <p>卡号：{rechargingParticipant?.card_uid}</p>
+              {rechargingParticipant?.balance !== undefined && (
+                <p>当前余额：¥{rechargingParticipant.balance.toFixed(2)}</p>
+              )}
             </div>
           </Form.Item>
 

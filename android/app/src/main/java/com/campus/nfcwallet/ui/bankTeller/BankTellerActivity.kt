@@ -89,6 +89,9 @@ class BankTellerActivity : ComponentActivity() {
                     onLogout = { logout() },
                     onDismissVerification = viewModel::onDismissVerificationDialog,
                     onSubmitVerification = viewModel::onSubmitVerification,
+                    onDismissRegistration = viewModel::onDismissRegistrationDialog,
+                    onSubmitRegistration = viewModel::onSubmitRegistration,
+                    onDepositCardToggle = viewModel::onDepositCardToggle,
                 )
             }
 

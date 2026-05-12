@@ -54,6 +54,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "🏪 摊位收银员（选择摊位）",
         "🏦 投资办理员（官方中央银行）",
         "💳 信用垫资发行（银行放贷）",
+        "💰 充值员（官方中央银行）",
         "🔄 退款管理（摊位售后）",
         "📋 摊位列表（管理员视角）",
     };
@@ -62,6 +63,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "booth_cashier",
         "bank_clerk",
         "bank_teller",
+        "issuer",
         "refund_manager",
         "admin_browse",
     };
@@ -121,6 +123,12 @@ public class BoothSelectionActivity extends AppCompatActivity {
                 navigateToInvestment();
                 break;
                 
+            case "issuer":
+                // 充值员 - 直接进入官方中央银行摊位（带充值权限）
+                Log.i(TAG, "Issuer role detected, navigating to Central Bank booth");
+                navigateToCentralBankBooth();
+                break;
+                
             case "booth_cashier":
                 // Booth cashier with assigned booth
                 if (boothId != null && boothId > 0) {
@@ -133,7 +141,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
                 break;
                 
             default:
-                // event_admin, issuer, reviewer - show booth list
+                // event_admin, reviewer - show booth list
                 loadBooths();
                 break;
         }
@@ -163,6 +171,11 @@ public class BoothSelectionActivity extends AppCompatActivity {
                     case "bank_teller":
                         // Go to bank teller (credit advance) screen
                         navigateToBankTeller();
+                        break;
+                        
+                    case "issuer":
+                        // Go to Central Bank booth as recharger
+                        navigateToCentralBankBooth();
                         break;
                         
                     case "refund_manager":
@@ -306,6 +319,62 @@ public class BoothSelectionActivity extends AppCompatActivity {
         Intent intent = new Intent(this, InvestmentComposeActivity.class);
         startActivity(intent);
         finish();
+    }
+    
+    /**
+     * Navigate issuer (充值员) directly to the Central Bank booth (官方中央银行).
+     * Queries the booth list and finds the booth named "官方中央银行",
+     * then enters CashierActivity with recharge permission.
+     */
+    private void navigateToCentralBankBooth() {
+        String authHeader = sessionManager.getAuthHeader();
+        if (authHeader == null) {
+            navigateToLogin();
+            return;
+        }
+        
+        progressBar.setVisibility(View.VISIBLE);
+        errorText.setVisibility(View.GONE);
+        
+        apiService.getBooths(authHeader, "active").enqueue(new Callback<List<BoothInfo>>() {
+            @Override
+            public void onResponse(Call<List<BoothInfo>> call, Response<List<BoothInfo>> response) {
+                progressBar.setVisibility(View.GONE);
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    // Find the Central Bank booth
+                    BoothInfo centralBankBooth = null;
+                    for (BoothInfo booth : response.body()) {
+                        if ("官方中央银行".equals(booth.getName())) {
+                            centralBankBooth = booth;
+                            break;
+                        }
+                    }
+                    
+                    if (centralBankBooth != null) {
+                        Log.i(TAG, "Found Central Bank booth: ID=" + centralBankBooth.getId());
+                        navigateToCashier(centralBankBooth.getId());
+                    } else {
+                        // Central Bank booth not found, fall back to booth list
+                        Log.w(TAG, "Central Bank booth not found, showing booth list");
+                        errorText.setText("未找到「官方中央银行」摊位\n请联系管理员创建");
+                        errorText.setVisibility(View.VISIBLE);
+                        
+                        // Show all booths as fallback
+                        booths.clear();
+                        booths.addAll(response.body());
+                        adapter.notifyDataSetChanged();
+                    }
+                } else {
+                    handleLoadError(response);
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<List<BoothInfo>> call, Throwable t) {
+                handleNetworkError(t);
+            }
+        });
     }
     
     private void navigateToBankTeller() {

@@ -14,7 +14,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import * as echarts from 'echarts'
-import { Table, Button, Tag, Tooltip, message } from 'antd'
+import { Table, Button, Tag, Tooltip, message, Select } from 'antd'
 import {
   BankOutlined,
   WarningOutlined,
@@ -29,19 +29,37 @@ import {
   type CreditDashboardStats,
   type TopDebtor,
 } from '@/services/bankCredit'
+import { getEvents, type Event } from '@/services/event'
 import './index.css'
 
 const BankCreditDashboard: React.FC = () => {
   const [stats, setStats] = useState<CreditDashboardStats | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [loading, setLoading] = useState(true)
+  const [events, setEvents] = useState<Event[]>([])
+  const [eventId, setEventId] = useState<number | null>(null)
 
   const pieChartRef = useRef<HTMLDivElement>(null)
   const lineChartRef = useRef<HTMLDivElement>(null)
   const pieInstance = useRef<echarts.ECharts | null>(null)
   const lineInstance = useRef<echarts.ECharts | null>(null)
 
-  const eventId = 1 // TODO: 从配置或路由获取
+  // 加载活动列表
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const data = await getEvents()
+        const eventList = data?.events || []
+        setEvents(eventList)
+        if (eventList.length > 0) {
+          setEventId(eventList[0].id)
+        }
+      } catch {
+        setEvents([])
+      }
+    }
+    loadEvents()
+  }, [])
 
   // 时钟
   useEffect(() => {
@@ -51,6 +69,7 @@ const BankCreditDashboard: React.FC = () => {
 
   // 数据加载
   const loadData = useCallback(async () => {
+    if (!eventId) return
     try {
       const data = await getCreditDashboard(eventId)
       setStats(data)
@@ -253,6 +272,7 @@ const BankCreditDashboard: React.FC = () => {
 
   // 导出
   const handleExport = () => {
+    if (!eventId) return
     exportLoansCSV(eventId)
     message.success('正在导出对账单...')
   }
@@ -359,6 +379,13 @@ const BankCreditDashboard: React.FC = () => {
         <div className="cd-header-left">
           <BankOutlined className="cd-header-icon" />
           <h1 className="cd-title">央行宏观经济与信用风险看板</h1>
+          <Select
+            style={{ width: 180, marginLeft: 16 }}
+            placeholder="选择活动"
+            value={eventId ?? undefined}
+            onChange={(val) => setEventId(val)}
+            options={events.map((e) => ({ label: e.name, value: e.id }))}
+          />
           <div className={`cd-risk-badge cd-risk-${riskLevel}`}>
             {riskLevel === 'critical' ? '⚠ 高风险' : riskLevel === 'warning' ? '⚡ 关注' : '✓ 正常'}
           </div>

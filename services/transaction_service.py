@@ -448,6 +448,7 @@ class TransactionService:
         self,
         event_id: int,
         participant_id: Optional[int] = None,
+        transaction_types: Optional[List[str]] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         limit: int = 100,
@@ -459,6 +460,7 @@ class TransactionService:
         Args:
             event_id: 活动ID
             participant_id: 参与者ID（可选，用于过滤特定参与者）
+            transaction_types: 交易类型列表（可选，用于过滤特定类型）
             start_date: 开始日期（ISO格式，可选）
             end_date: 结束日期（ISO格式，可选）
             limit: 返回记录数限制
@@ -470,12 +472,19 @@ class TransactionService:
         Raises:
             EventNotFoundError: 活动不存在
         """
-        from services.event_service import EventService
+        from services.event_service import EventService, EventNotFoundError
         
         try:
-            # 验证活动存在
+            # 验证活动存在（不存在则返回空结果）
             event_service = EventService(self.db)
-            event = event_service.get_event(event_id)
+            try:
+                event = event_service.get_event(event_id)
+            except EventNotFoundError:
+                logger.warning(f"Event {event_id} not found, returning empty transaction list")
+                return {
+                    'transactions': [],
+                    'total_count': 0
+                }
             
             # 构建查询
             query = self.db.query(Transaction).filter(Transaction.event_id == event_id)
@@ -483,6 +492,10 @@ class TransactionService:
             # 应用参与者过滤
             if participant_id is not None:
                 query = query.filter(Transaction.participant_id == participant_id)
+            
+            # 应用交易类型过滤
+            if transaction_types:
+                query = query.filter(Transaction.type.in_(transaction_types))
             
             # 应用日期过滤
             if start_date:

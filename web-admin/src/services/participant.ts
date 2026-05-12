@@ -87,3 +87,13 @@ export const getBalance = (params: { event_id: number; card_uid: string }) => {
 export const deleteParticipant = (id: number) => {
   return request.delete(`/participants/${id}`)
 }
+
+// 清除所有参与者
+export const clearAllParticipants = () => {
+  return request.delete<any, {
+    success: boolean
+    message: string
+    participants_deleted: number
+    accounts_deleted: number
+  }>('/participants/clear-all')
+}
