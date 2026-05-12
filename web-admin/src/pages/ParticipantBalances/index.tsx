@@ -10,11 +10,19 @@ import {
   Row,
   Col,
   Typography,
+  Button,
+  Modal,
+  Form,
+  InputNumber,
+  message,
 } from 'antd'
 import {
   WalletOutlined,
   TeamOutlined,
   SearchOutlined,
+  PlusOutlined,
+  MinusOutlined,
+  BankOutlined,
 } from '@ant-design/icons'
 import { getEvents, type Event } from '@/services/event'
 import request from '@/utils/request'
@@ -51,6 +59,11 @@ const ParticipantBalances = () => {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('balance_desc')
   const [pagination, setPagination] = useState({ current: 1, pageSize: 50 })
+  const [adjustModalVisible, setAdjustModalVisible] = useState(false)
+  const [loanModalVisible, setLoanModalVisible] = useState(false)
+  const [operatingParticipant, setOperatingParticipant] = useState<ParticipantBalance | null>(null)
+  const [adjustForm] = Form.useForm()
+  const [loanForm] = Form.useForm()
 
   useEffect(() => {
     loadEvents()
@@ -111,6 +124,60 @@ const ParticipantBalances = () => {
   const handleSortChange = (value: string) => {
     setSortBy(value)
     setPagination({ ...pagination, current: 1 })
+  }
+
+  // 充值/扣款操作
+  const handleAdjust = (record: ParticipantBalance, type: 'recharge' | 'deduct') => {
+    setOperatingParticipant(record)
+    adjustForm.resetFields()
+    adjustForm.setFieldsValue({ type })
+    setAdjustModalVisible(true)
+  }
+
+  const handleAdjustSubmit = async () => {
+    if (!operatingParticipant || !selectedEventId) return
+    try {
+      const values = await adjustForm.validateFields()
+      const amount = values.type === 'deduct' ? -Math.abs(values.amount) : Math.abs(values.amount)
+      await request.post('/admin/participants/adjust-balance', {
+        event_id: selectedEventId,
+        participant_id: operatingParticipant.id,
+        amount,
+        remark: values.remark || '',
+      })
+      message.success(values.type === 'deduct' ? '扣款成功' : '充值成功')
+      setAdjustModalVisible(false)
+      loadBalances()
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '操作失败')
+    }
+  }
+
+  // 发放贷款操作
+  const handleLoan = (record: ParticipantBalance) => {
+    setOperatingParticipant(record)
+    loanForm.resetFields()
+    loanForm.setFieldsValue({ fee_rate: 5 })
+    setLoanModalVisible(true)
+  }
+
+  const handleLoanSubmit = async () => {
+    if (!operatingParticipant || !selectedEventId) return
+    try {
+      const values = await loanForm.validateFields()
+      const res = await request.post<any, any>('/admin/participants/issue-loan', {
+        event_id: selectedEventId,
+        participant_id: operatingParticipant.id,
+        amount: values.amount,
+        fee_rate: values.fee_rate / 100,
+        remark: values.remark || '',
+      })
+      message.success(`贷款发放成功，实际到账 ¥${res.actual_grant?.toFixed(2)}`)
+      setLoanModalVisible(false)
+      loadBalances()
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '贷款发放失败')
+    }
   }
 
   const columns: ColumnsType<ParticipantBalance> = [
@@ -192,6 +259,42 @@ const ParticipantBalances = () => {
         }
         return <Tag color={colorMap[status]}>{textMap[status] || status}</Tag>
       },
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 240,
+      fixed: 'right',
+      render: (_: any, record: ParticipantBalance) => (
+        <Space size="small">
+          <Button
+            type="link"
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => handleAdjust(record, 'recharge')}
+          >
+            充值
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<MinusOutlined />}
+            onClick={() => handleAdjust(record, 'deduct')}
+          >
+            扣款
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<BankOutlined />}
+            style={{ color: '#722ed1' }}
+            onClick={() => handleLoan(record)}
+          >
+            贷款
+          </Button>
+        </Space>
+      ),
     },
   ]
 
@@ -278,8 +381,77 @@ const ParticipantBalances = () => {
           pageSizeOptions: ['20', '50', '100', '200'],
           onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
         }}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 1200 }}
       />
+
+      {/* 充值/扣款弹窗 */}
+      <Modal
+        title={adjustForm.getFieldValue('type') === 'deduct' ? '扣款' : '充值'}
+        open={adjustModalVisible}
+        onOk={handleAdjustSubmit}
+        onCancel={() => setAdjustModalVisible(false)}
+        okText="确认"
+        width={480}
+      >
+        <Form form={adjustForm} layout="vertical">
+          <Form.Item label="参与者">
+            <Input value={`${operatingParticipant?.name || ''} (${operatingParticipant?.card_uid || ''})`} disabled />
+          </Form.Item>
+          <Form.Item name="type" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="amount"
+            label="金额（元）"
+            rules={[{ required: true, message: '请输入金额' }]}
+          >
+            <InputNumber min={0.01} precision={2} style={{ width: '100%' }} placeholder="请输入金额" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={2} placeholder="操作原因说明（可选）" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 发放贷款弹窗 */}
+      <Modal
+        title="发放贷款"
+        open={loanModalVisible}
+        onOk={handleLoanSubmit}
+        onCancel={() => setLoanModalVisible(false)}
+        okText="确认发放"
+        width={520}
+      >
+        <Form form={loanForm} layout="vertical">
+          <Form.Item label="参与者">
+            <Input value={`${operatingParticipant?.name || ''} (${operatingParticipant?.card_uid || ''})`} disabled />
+          </Form.Item>
+          <Form.Item
+            name="amount"
+            label="贷款金额（元）"
+            rules={[{ required: true, message: '请输入贷款金额' }]}
+          >
+            <InputNumber min={1} precision={2} style={{ width: '100%' }} placeholder="名义借款金额" />
+          </Form.Item>
+          <Form.Item
+            name="fee_rate"
+            label="手续费率（%）"
+            rules={[{ required: true, message: '请输入手续费率' }]}
+          >
+            <InputNumber min={0} max={100} precision={1} style={{ width: '100%' }} placeholder="默认5%" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={2} placeholder="贷款用途说明（可选）" />
+          </Form.Item>
+          <Form.Item>
+            <Card size="small" style={{ background: '#f6ffed' }}>
+              <Typography.Text type="secondary">
+                实际到账 = 贷款金额 × (1 - 手续费率)
+              </Typography.Text>
+            </Card>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

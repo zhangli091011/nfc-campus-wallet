@@ -142,3 +142,259 @@ async def get_participants_balances(
                 "message": "An internal error occurred. Please try again later."
             }
         )
+
+
+# ============================================================================
+# 管理员操作：充值/扣款/发放贷款
+# ============================================================================
+
+from pydantic import BaseModel, Field
+from models.account import Account as AccountModel
+from models.transaction import Transaction
+from sqlalchemy import text
+
+
+class AdminAdjustBalanceRequest(BaseModel):
+    """管理员调整余额请求"""
+    event_id: int = Field(..., description="活动ID")
+    participant_id: int = Field(..., description="参与者ID")
+    amount: float = Field(..., description="金额（正数为充值，负数为扣除）")
+    remark: str = Field("", max_length=255, description="备注说明")
+
+
+class AdminIssueLoanRequest(BaseModel):
+    """管理员发放贷款请求"""
+    event_id: int = Field(..., description="活动ID")
+    participant_id: int = Field(..., description="参与者ID")
+    amount: float = Field(..., gt=0, description="贷款金额（元）")
+    fee_rate: float = Field(0.05, ge=0, le=1, description="手续费率（默认5%）")
+    remark: str = Field("", max_length=255, description="备注说明")
+
+
+@router.post("/participants/adjust-balance")
+async def admin_adjust_balance(
+    req: AdminAdjustBalanceRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员调整参与者余额（充值或扣款）。
+
+    - amount > 0: 充值（增加余额）
+    - amount < 0: 扣款（减少余额）
+
+    仅 super_admin 和 event_admin 可执行。
+    """
+    try:
+        if req.amount == 0:
+            return JSONResponse(status_code=400, content={"error_code": "VALIDATION_ERROR", "message": "金额不能为0"})
+
+        # 查找参与者
+        participant = db.query(Participant).filter(Participant.id == req.participant_id).first()
+        if not participant:
+            return JSONResponse(status_code=404, content={"error_code": "NOT_FOUND", "message": "参与者不存在"})
+
+        # 获取或创建账户
+        account = db.query(AccountModel).filter(
+            AccountModel.participant_id == req.participant_id,
+            AccountModel.event_id == req.event_id
+        ).first()
+        if not account:
+            account = AccountModel(
+                participant_id=req.participant_id,
+                event_id=req.event_id,
+                balance=0,
+                credit_borrowed=0,
+                credit_fee_paid=0
+            )
+            db.add(account)
+            db.flush()
+
+        balance_before = float(account.balance)
+        balance_after = balance_before + req.amount
+
+        # 扣款时检查余额是否足够（允许扣成负数，管理员操作不限制）
+        txn_type = "recharge" if req.amount > 0 else "correction"
+        remark = req.remark or ("管理员充值" if req.amount > 0 else "管理员扣款")
+
+        # 写入交易记录
+        txn = Transaction(
+            uid=None,
+            card_uid=participant.card_uid,
+            event_id=req.event_id,
+            participant_id=participant.id,
+            account_id=account.id,
+            type=txn_type,
+            amount=abs(req.amount),
+            balance_before=balance_before,
+            balance_after=balance_after,
+            merchant_id=None,
+            remark=remark,
+            operator_id=str(current_user.id)
+        )
+        db.add(txn)
+
+        # 更新余额
+        account.balance = balance_after
+        db.commit()
+
+        action = "充值" if req.amount > 0 else "扣款"
+        logger.info(
+            f"Admin {action}: participant={participant.name}(id={participant.id}), "
+            f"amount={req.amount}, balance: {balance_before} -> {balance_after}, "
+            f"operator={current_user.username}"
+        )
+
+        return {
+            "success": True,
+            "message": f"{action}成功",
+            "participant_id": participant.id,
+            "participant_name": participant.name,
+            "amount": req.amount,
+            "balance_before": balance_before,
+            "balance_after": balance_after,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Admin adjust balance failed: {str(e)}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error_code": "INTERNAL_ERROR", "message": str(e)})
+
+
+@router.post("/participants/issue-loan")
+async def admin_issue_loan(
+    req: AdminIssueLoanRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员为参与者发放贷款。
+
+    流程：
+    1. 计算手续费 = amount * fee_rate
+    2. 实际到账 = amount - 手续费
+    3. 写入 loan_issue 和 loan_fee 流水
+    4. 更新账户余额和借款记录
+    5. 写入 bank_loans 表
+
+    仅 super_admin 和 event_admin 可执行。
+    """
+    try:
+        from decimal import Decimal, ROUND_HALF_UP
+
+        # 查找参与者
+        participant = db.query(Participant).filter(Participant.id == req.participant_id).first()
+        if not participant:
+            return JSONResponse(status_code=404, content={"error_code": "NOT_FOUND", "message": "参与者不存在"})
+
+        # 获取或创建账户
+        account = db.query(AccountModel).filter(
+            AccountModel.participant_id == req.participant_id,
+            AccountModel.event_id == req.event_id
+        ).first()
+        if not account:
+            account = AccountModel(
+                participant_id=req.participant_id,
+                event_id=req.event_id,
+                balance=0,
+                credit_borrowed=0,
+                credit_fee_paid=0
+            )
+            db.add(account)
+            db.flush()
+
+        # 计算金额
+        nominal = Decimal(str(req.amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        fee_amount = (nominal * Decimal(str(req.fee_rate))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        actual_grant = nominal - fee_amount
+
+        balance_before = float(account.balance)
+
+        # 写入 loan_issue 流水
+        txn_issue = Transaction(
+            uid=None,
+            card_uid=participant.card_uid,
+            event_id=req.event_id,
+            participant_id=participant.id,
+            account_id=account.id,
+            type="loan_issue",
+            amount=float(nominal),
+            balance_before=balance_before,
+            balance_after=balance_before + float(nominal),
+            merchant_id=None,
+            remark=req.remark or f"管理员发放贷款：本金 {nominal} 元",
+            operator_id=str(current_user.id)
+        )
+        db.add(txn_issue)
+        db.flush()
+
+        # 写入 loan_fee 流水
+        balance_after_issue = balance_before + float(nominal)
+        txn_fee = Transaction(
+            uid=None,
+            card_uid=participant.card_uid,
+            event_id=req.event_id,
+            participant_id=participant.id,
+            account_id=account.id,
+            type="loan_fee",
+            amount=float(fee_amount),
+            balance_before=balance_after_issue,
+            balance_after=balance_after_issue - float(fee_amount),
+            merchant_id=None,
+            remark=f"贷款手续费：{req.fee_rate*100:.1f}% = {fee_amount} 元",
+            operator_id=str(current_user.id)
+        )
+        db.add(txn_fee)
+        db.flush()
+
+        # 更新账户
+        balance_after = balance_before + float(actual_grant)
+        account.balance = balance_after
+        account.credit_borrowed = float(account.credit_borrowed or 0) + float(nominal)
+        account.credit_fee_paid = float(account.credit_fee_paid or 0) + float(fee_amount)
+
+        # 写入 bank_loans 表
+        db.execute(
+            text("""INSERT INTO bank_loans
+                    (event_id, participant_id, operator_id, principal_amount,
+                     fee_rate, fee_amount, disbursed_amount, remark, status)
+                    VALUES (:eid, :pid, :oid, :principal, :rate, :fee, :disbursed, :remark, 'active')"""),
+            {
+                "eid": req.event_id,
+                "pid": participant.id,
+                "oid": current_user.id,
+                "principal": float(nominal),
+                "rate": req.fee_rate,
+                "fee": float(fee_amount),
+                "disbursed": float(actual_grant),
+                "remark": req.remark or "管理员后台发放",
+            }
+        )
+
+        db.commit()
+
+        logger.info(
+            f"Admin loan issued: participant={participant.name}(id={participant.id}), "
+            f"nominal={nominal}, fee={fee_amount}, actual={actual_grant}, "
+            f"balance: {balance_before} -> {balance_after}, operator={current_user.username}"
+        )
+
+        return {
+            "success": True,
+            "message": "贷款发放成功",
+            "participant_id": participant.id,
+            "participant_name": participant.name,
+            "nominal_amount": float(nominal),
+            "fee_rate": req.fee_rate,
+            "fee_amount": float(fee_amount),
+            "actual_grant": float(actual_grant),
+            "balance_before": balance_before,
+            "balance_after": balance_after,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Admin issue loan failed: {str(e)}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error_code": "INTERNAL_ERROR", "message": str(e)})
