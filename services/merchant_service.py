@@ -374,15 +374,12 @@ class MerchantService:
         if booth is None:
             raise MerchantNotFoundError()
         
-        # 价格转换为分
-        price_cents = int(price * 100)
-        cost_price_cents = int(cost_price * 100) if cost_price is not None else None
-        
+        # 价格直接存储（元为单位）
         product = Product(
             booth_id=booth.id,
             name=name,
-            price=price_cents,
-            cost_price=cost_price_cents,
+            price=price,
+            cost_price=cost_price,
             stock=stock,
             enabled=True
         )
@@ -441,9 +438,9 @@ class MerchantService:
         if name is not None:
             product.name = name
         if price is not None:
-            product.price = int(price * 100)
+            product.price = price
         if cost_price is not None:
-            product.cost_price = int(cost_price * 100)
+            product.cost_price = cost_price
         if stock is not None:
             product.stock = stock
         if enabled is not None:
