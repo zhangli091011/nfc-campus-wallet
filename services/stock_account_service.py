@@ -676,6 +676,65 @@ class StockAccountService:
             'total_sold_amount': total_sold_amount,
         }
     
+    def get_all_booth_stats(self, event_id: int) -> list:
+        """获取活动下所有摊位的股票统计"""
+        orders = self.db.query(StockOrder).filter(
+            StockOrder.event_id == event_id
+        ).all()
+        
+        # 按摊位分组
+        booth_orders: Dict[int, list] = {}
+        for o in orders:
+            if o.booth_id not in booth_orders:
+                booth_orders[o.booth_id] = []
+            booth_orders[o.booth_id].append(o)
+        
+        if not booth_orders:
+            return []
+        
+        # 获取所有相关摊位信息
+        booth_ids = list(booth_orders.keys())
+        booths = self.db.query(Booth).filter(Booth.id.in_(booth_ids)).all()
+        booth_map = {b.id: b for b in booths}
+        
+        results = []
+        for booth_id, orders_list in booth_orders.items():
+            booth = booth_map.get(booth_id)
+            if not booth:
+                continue
+            
+            buy_orders = [o for o in orders_list if o.status in ('holding', 'settled')]
+            sold_shares = sum(o.shares for o in buy_orders)
+            total_investment = sum(float(o.total_amount) for o in buy_orders)
+            investor_count = len(set(o.participant_id for o in buy_orders))
+            is_settled = any(o.status == 'settled' for o in orders_list)
+            
+            result = {
+                'booth_id': booth_id,
+                'booth_name': booth.name,
+                'class_name': booth.class_name,
+                'sold_shares': sold_shares,
+                'total_investment': total_investment,
+                'total_investment_yuan': total_investment,
+                'investor_count': investor_count,
+                'current_price': float(DEFAULT_STOCK_PRICE),
+                'is_settled': is_settled,
+                'final_price': None,
+                'final_price_yuan': None
+            }
+            
+            if is_settled:
+                settled_order = next((o for o in orders_list if o.settlement_price), None)
+                if settled_order:
+                    result['final_price'] = float(settled_order.settlement_price)
+                    result['final_price_yuan'] = float(settled_order.settlement_price)
+            
+            results.append(result)
+        
+        # 按总投资额降序排列
+        results.sort(key=lambda x: x['total_investment'], reverse=True)
+        return results
+
     def get_booth_stock_stats(self, booth_id: int, event_id: int) -> Dict:
         """获取摊位股票统计"""
         booth = self.db.query(Booth).filter(Booth.id == booth_id).first()

@@ -83,3 +83,15 @@ coverage.xml
 
 # Uploads
 uploads/
+
+# Temp/log files
+*.log
+server_output.log
+backups/
+
+# APK uploads (managed at runtime)
+uploads/apk/
+
+# Android build outputs
+android/app/build/
+android/.gradle/

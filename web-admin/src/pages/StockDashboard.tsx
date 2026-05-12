@@ -1,13 +1,17 @@
 /**
- * Stock Market Dashboard - 期末结算与动态市值大屏
+ * Stock Market Dashboard - 股市实时交易大屏
  * 
  * 高端深色科技风数据可视化大屏
  * 配色：深蓝 + 银色 + 黑金
+ * 
+ * 功能：
+ * 1. 先获取活动列表，选择活动后展示数据
+ * 2. 实时刷新市场统计和摊位数据
  */
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import * as echarts from 'echarts';
-import { Card, Statistic, Table, Tag, Space } from 'antd';
+import { Card, Statistic, Table, Tag, Space, Select, Spin, Empty } from 'antd';
 import { 
   TrophyOutlined, 
   RiseOutlined, 
@@ -16,25 +20,29 @@ import {
   StockOutlined,
   TeamOutlined 
 } from '@ant-design/icons';
-import axios from 'axios';
+import request from '@/utils/request';
 import './StockDashboard.css';
+
+interface EventItem {
+  id: number;
+  name: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+}
 
 interface BoothData {
   booth_id: number;
   booth_name: string;
   class_name: string;
-  revenue: number;
-  revenue_yuan: number;
-  profit: number;
-  profit_yuan: number;
-  order_count: number;
-  score: number;
-  ratio: number;
   sold_shares: number;
   total_investment: number;
   total_investment_yuan: number;
-  final_price: number;
-  final_price_yuan: number;
+  investor_count: number;
+  current_price: number;
+  is_settled: boolean;
+  final_price: number | null;
+  final_price_yuan: number | null;
 }
 
 interface MarketStats {
@@ -55,14 +63,16 @@ interface MarketStats {
 }
 
 const StockDashboard: React.FC = () => {
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [marketStats, setMarketStats] = useState<MarketStats | null>(null);
   const [boothData, setBoothData] = useState<BoothData[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [eventsLoading, setEventsLoading] = useState(true);
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
-
-  const eventId = 1; // TODO: 从配置或路由获取
+  const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 更新时钟
   useEffect(() => {
@@ -72,14 +82,29 @@ const StockDashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // 加载数据
+  // 加载活动列表
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5000); // 每5秒刷新
-    return () => clearInterval(interval);
+    loadEvents();
   }, []);
 
-  // 初始化图表
+  // 选择活动后加载数据
+  useEffect(() => {
+    if (selectedEventId) {
+      loadData();
+      // 每5秒刷新
+      if (refreshTimer.current) {
+        clearInterval(refreshTimer.current);
+      }
+      refreshTimer.current = setInterval(loadData, 5000);
+    }
+    return () => {
+      if (refreshTimer.current) {
+        clearInterval(refreshTimer.current);
+      }
+    };
+  }, [selectedEventId]);
+
+  // 初始化/更新图表
   useEffect(() => {
     if (chartRef.current && boothData.length > 0) {
       if (!chartInstance.current) {
@@ -90,67 +115,72 @@ const StockDashboard: React.FC = () => {
     return () => {
       if (chartInstance.current) {
         chartInstance.current.dispose();
+        chartInstance.current = null;
       }
     };
   }, [boothData]);
 
-  const loadData = async () => {
-    try {
-      const token = localStorage.getItem('nfc_wallet_token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const baseUrl = import.meta.env.VITE_API_URL || '';
-
-      // 加载市场统计
-      const statsRes = await axios.get<MarketStats>(
-        `${baseUrl}/api/stock/stats/${eventId}`,
-        { headers }
-      );
-      setMarketStats(statsRes.data);
-
-      // 如果已结算，加载结算数据
-      if (statsRes.data.is_settled) {
-        const settlementRes = await axios.get<{ booths: BoothData[] }>(
-          `${baseUrl}/stocks/settlement/event/${eventId}`,
-          { headers }
-        );
-        // settlement endpoint returns array directly, map to booth data format
-        const settlements = Array.isArray(settlementRes.data) ? settlementRes.data : (settlementRes.data.booths || []);
-        setBoothData(settlements.map((s: any) => ({
-          booth_id: s.booth_id,
-          booth_name: s.booth_name,
-          class_name: s.class_name,
-          revenue: s.revenue || 0,
-          revenue_yuan: s.revenue_yuan || 0,
-          profit: s.profit || 0,
-          profit_yuan: s.profit_yuan || 0,
-          order_count: s.order_count || 0,
-          score: s.score || 0,
-          ratio: s.ratio || 0,
-          sold_shares: s.order_count || 0,
-          total_investment: s.revenue || 0,
-          total_investment_yuan: s.revenue_yuan || 0,
-          final_price: s.final_price || 0,
-          final_price_yuan: s.final_price_yuan || 0,
-        })));
-      } else {
-        // 未结算，加载实时数据（模拟）
-        // TODO: 实现实时数据接口
-        setBoothData([]);
+  // 窗口大小变化时重新调整图表
+  useEffect(() => {
+    const handleResize = () => {
+      if (chartInstance.current) {
+        chartInstance.current.resize();
       }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-      setLoading(false);
+  const loadEvents = async () => {
+    try {
+      setEventsLoading(true);
+      const res: any = await request.get('/events');
+      const eventList = res.events || res || [];
+      setEvents(eventList);
+      // 自动选择第一个活动（优先选active的）
+      if (eventList.length > 0) {
+        const activeEvent = eventList.find((e: EventItem) => e.status === 'active');
+        setSelectedEventId(activeEvent ? activeEvent.id : eventList[0].id);
+      }
     } catch (error) {
-      console.error('加载数据失败:', error);
-      setLoading(false);
+      console.error('加载活动列表失败:', error);
+    } finally {
+      setEventsLoading(false);
     }
   };
+
+  const loadData = useCallback(async () => {
+    if (!selectedEventId) return;
+    
+    try {
+      setLoading(true);
+
+      // 并行加载市场统计和摊位数据
+      const [statsRes, boothRes] = await Promise.all([
+        request.get(`/stock/stats/${selectedEventId}`).catch(() => null),
+        request.get(`/stock/all-booth-stats/${selectedEventId}`).catch(() => []),
+      ]);
+
+      if (statsRes) {
+        setMarketStats(statsRes as any);
+      }
+
+      const booths = Array.isArray(boothRes) ? boothRes : [];
+      setBoothData(booths as BoothData[]);
+    } catch (error) {
+      console.error('加载数据失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedEventId]);
 
   const updateChart = () => {
     if (!chartInstance.current || boothData.length === 0) return;
 
-    const sortedData = [...boothData].sort((a, b) => b.score - a.score);
-    const names = sortedData.map(b => b.booth_name);
-    const scores = sortedData.map(b => b.score);
+    // 按总投资额排序
+    const sortedData = [...boothData].sort((a, b) => b.total_investment_yuan - a.total_investment_yuan);
+    const names = sortedData.map(b => `${b.booth_name}`);
+    const investments = sortedData.map(b => b.total_investment_yuan);
 
     const option: echarts.EChartsOption = {
       backgroundColor: 'transparent',
@@ -198,8 +228,8 @@ const StockDashboard: React.FC = () => {
       series: [
         {
           type: 'bar',
-          data: scores.map((score, index) => ({
-            value: score,
+          data: investments.map((val, index) => ({
+            value: val,
             itemStyle: {
               color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
                 { offset: 0, color: index === 0 ? '#FFD700' : '#4A90E2' },
@@ -216,7 +246,7 @@ const StockDashboard: React.FC = () => {
             fontSize: 14,
             fontWeight: 'bold',
             formatter: (params: any) => {
-              return params.value.toFixed(2);
+              return `¥${params.value.toFixed(2)}`;
             },
           },
           animationDuration: 1000,
@@ -265,9 +295,9 @@ const StockDashboard: React.FC = () => {
     },
     {
       title: '当前股价',
-      dataIndex: 'final_price_yuan',
-      key: 'final_price_yuan',
-      render: (price: number, _record: BoothData, index: number) => {
+      key: 'price',
+      render: (_: any, record: BoothData, index: number) => {
+        const price = record.final_price_yuan ?? record.current_price;
         const initialPrice = 10.0;
         const change = ((price - initialPrice) / initialPrice) * 100;
         const isUp = change >= 0;
@@ -277,11 +307,13 @@ const StockDashboard: React.FC = () => {
             <div className={index === 0 ? 'text-gold text-lg font-bold' : 'text-white text-lg'}>
               ¥{formatNumber(price)}
             </div>
-            <div className={isUp ? 'text-green-400' : 'text-red-400'}>
-              {isUp ? <RiseOutlined /> : <FallOutlined />}
-              {' '}
-              {isUp ? '+' : ''}{change.toFixed(2)}%
-            </div>
+            {record.is_settled && (
+              <div className={isUp ? 'text-green-400' : 'text-red-400'}>
+                {isUp ? <RiseOutlined /> : <FallOutlined />}
+                {' '}
+                {isUp ? '+' : ''}{change.toFixed(2)}%
+              </div>
+            )}
           </div>
         );
       },
@@ -303,16 +335,25 @@ const StockDashboard: React.FC = () => {
       ),
     },
     {
-      title: '经营分',
-      dataIndex: 'score',
-      key: 'score',
-      render: (score: number, _: any, index: number) => (
-        <Tag color={index === 0 ? 'gold' : 'blue'} className="score-tag">
-          {formatNumber(score)}
+      title: '投资人数',
+      dataIndex: 'investor_count',
+      key: 'investor_count',
+      render: (count: number) => (
+        <Tag color="blue" className="score-tag">
+          {count} 人
         </Tag>
       ),
     },
   ];
+
+  // 活动选择界面
+  if (eventsLoading) {
+    return (
+      <div className="stock-dashboard" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Spin size="large" tip="加载活动列表..." />
+      </div>
+    );
+  }
 
   return (
     <div className="stock-dashboard">
@@ -324,6 +365,17 @@ const StockDashboard: React.FC = () => {
             <h1 className="dashboard-title">模拟市场实时交易大屏</h1>
           </div>
           <div className="status-section">
+            <Select
+              value={selectedEventId}
+              onChange={(val) => setSelectedEventId(val)}
+              style={{ width: 220, marginRight: 16 }}
+              placeholder="选择活动"
+              options={events.map(e => ({
+                value: e.id,
+                label: `${e.name} (${e.status === 'active' ? '进行中' : e.status})`,
+              }))}
+              dropdownStyle={{ background: '#1a2332' }}
+            />
             <div className="status-indicator">
               <div className={`status-light ${marketStats?.is_settled ? 'settled' : 'active'}`} />
               <span className="status-text">
@@ -338,109 +390,121 @@ const StockDashboard: React.FC = () => {
       </div>
 
       {/* 主要内容区 */}
-      <div className="dashboard-content">
-        {/* 左侧面板 - 宏观资金池 */}
-        <div className="left-panel">
-          <Card className="data-card pool-card" bordered={false}>
-            <div className="card-header">
-              <DollarOutlined className="card-icon" />
-              <span>全局奖金池</span>
-            </div>
-            <div className="pool-amount">
-              <div className="amount-label">当前奖金池</div>
-              <div className="amount-value gold-glow">
-                ¥{formatNumber(marketStats?.global_pool_yuan || 0)}
-              </div>
-            </div>
-            <div className="pool-stats">
-              <div className="stat-item">
-                <span className="stat-label">总投资额</span>
-                <span className="stat-value">
-                  ¥{formatNumber(marketStats?.total_investment_yuan || 0)}
-                </span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">手续费</span>
-                <span className="stat-value">
-                  ¥{formatNumber(marketStats?.fee_collected_yuan || 0)}
-                </span>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="data-card stats-card" bordered={false}>
-            <div className="card-header">
-              <TeamOutlined className="card-icon" />
-              <span>市场概况</span>
-            </div>
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              <Statistic
-                title={<span className="stat-title">参与摊位</span>}
-                value={marketStats?.total_booths || 0}
-                suffix="个"
-                valueStyle={{ color: '#4A90E2', fontSize: 32 }}
-              />
-              <Statistic
-                title={<span className="stat-title">投资人数</span>}
-                value={marketStats?.total_investors || 0}
-                suffix="人"
-                valueStyle={{ color: '#50C878', fontSize: 32 }}
-              />
-              <Statistic
-                title={<span className="stat-title">买入订单</span>}
-                value={marketStats?.total_orders || 0}
-                suffix="笔"
-                valueStyle={{ color: '#9370DB', fontSize: 32 }}
-              />
-              <Statistic
-                title={<span className="stat-title">抛售订单</span>}
-                value={marketStats?.total_sold_orders || 0}
-                suffix="笔"
-                valueStyle={{ color: '#FF6B35', fontSize: 32 }}
-              />
-            </Space>
-          </Card>
+      {!selectedEventId ? (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+          <Empty description="请选择一个活动" />
         </div>
-
-        {/* 中央面板 - 经营指数排行 */}
-        <div className="center-panel">
-          <Card className="data-card chart-card" bordered={false}>
-            <div className="card-header">
-              <TrophyOutlined className="card-icon" />
-              <span>综合经营分排行</span>
-            </div>
-            <div ref={chartRef} className="chart-container" />
-          </Card>
-        </div>
-
-        {/* 右侧面板 - 模拟股价看板 */}
-        <div className="right-panel">
-          <Card className="data-card table-card" bordered={false}>
-            <div className="card-header">
-              <RiseOutlined className="card-icon" />
-              <span>股价实时看板</span>
-            </div>
-            {boothData.length > 0 && (
-              <div className="top-company">
-                <div className="top-badge">最被看好公司</div>
-                <div className="top-name">{boothData[0]?.booth_name}</div>
-                <div className="top-price">
-                  ¥{formatNumber(boothData[0]?.final_price_yuan || 0)}
+      ) : (
+        <div className="dashboard-content">
+          {/* 左侧面板 - 宏观资金池 */}
+          <div className="left-panel">
+            <Card className="data-card pool-card" bordered={false}>
+              <div className="card-header">
+                <DollarOutlined className="card-icon" />
+                <span>全局奖金池</span>
+              </div>
+              <div className="pool-amount">
+                <div className="amount-label">当前奖金池</div>
+                <div className="amount-value gold-glow">
+                  ¥{formatNumber(marketStats?.global_pool_yuan || 0)}
                 </div>
               </div>
-            )}
-            <Table
-              columns={columns}
-              dataSource={boothData}
-              rowKey="booth_id"
-              pagination={false}
-              loading={loading}
-              className="stock-table"
-              scroll={{ y: 500 }}
-            />
-          </Card>
+              <div className="pool-stats">
+                <div className="stat-item">
+                  <span className="stat-label">总投资额</span>
+                  <span className="stat-value">
+                    ¥{formatNumber(marketStats?.total_investment_yuan || 0)}
+                  </span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-label">手续费</span>
+                  <span className="stat-value">
+                    ¥{formatNumber(marketStats?.fee_collected_yuan || 0)}
+                  </span>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="data-card stats-card" bordered={false}>
+              <div className="card-header">
+                <TeamOutlined className="card-icon" />
+                <span>市场概况</span>
+              </div>
+              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                <Statistic
+                  title={<span className="stat-title">参与摊位</span>}
+                  value={marketStats?.total_booths || 0}
+                  suffix="个"
+                  valueStyle={{ color: '#4A90E2', fontSize: 32 }}
+                />
+                <Statistic
+                  title={<span className="stat-title">投资人数</span>}
+                  value={marketStats?.total_investors || 0}
+                  suffix="人"
+                  valueStyle={{ color: '#50C878', fontSize: 32 }}
+                />
+                <Statistic
+                  title={<span className="stat-title">买入订单</span>}
+                  value={marketStats?.total_orders || 0}
+                  suffix="笔"
+                  valueStyle={{ color: '#9370DB', fontSize: 32 }}
+                />
+                <Statistic
+                  title={<span className="stat-title">抛售订单</span>}
+                  value={marketStats?.total_sold_orders || 0}
+                  suffix="笔"
+                  valueStyle={{ color: '#FF6B35', fontSize: 32 }}
+                />
+              </Space>
+            </Card>
+          </div>
+
+          {/* 中央面板 - 投资额排行 */}
+          <div className="center-panel">
+            <Card className="data-card chart-card" bordered={false}>
+              <div className="card-header">
+                <TrophyOutlined className="card-icon" />
+                <span>摊位投资额排行</span>
+              </div>
+              {boothData.length > 0 ? (
+                <div ref={chartRef} className="chart-container" />
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  <Empty description="暂无股票交易数据" />
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* 右侧面板 - 模拟股价看板 */}
+          <div className="right-panel">
+            <Card className="data-card table-card" bordered={false}>
+              <div className="card-header">
+                <RiseOutlined className="card-icon" />
+                <span>股价实时看板</span>
+              </div>
+              {boothData.length > 0 && (
+                <div className="top-company">
+                  <div className="top-badge">最受投资者青睐</div>
+                  <div className="top-name">{boothData[0]?.booth_name}</div>
+                  <div className="top-price">
+                    ¥{formatNumber(boothData[0]?.total_investment_yuan || 0)}
+                  </div>
+                </div>
+              )}
+              <Table
+                columns={columns}
+                dataSource={boothData}
+                rowKey="booth_id"
+                pagination={false}
+                loading={loading}
+                className="stock-table"
+                scroll={{ y: 500 }}
+              />
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

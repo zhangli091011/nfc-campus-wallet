@@ -418,6 +418,27 @@ async def get_market_stats(
 
 
 @router.get(
+    "/all-booth-stats/{event_id}",
+    summary="获取活动所有摊位股票统计（大屏用）"
+)
+async def get_all_booth_stats(
+    event_id: int,
+    db: Session = Depends(get_db)
+):
+    """获取活动下所有摊位的股票统计数据（无需认证，供大屏展示）"""
+    try:
+        service = StockAccountService(db)
+        stats = service.get_all_booth_stats(event_id)
+        return stats
+    except Exception as e:
+        logger.error(f"获取所有摊位统计失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "查询失败"}
+        )
+
+
+@router.get(
     "/booth-stats/{booth_id}",
     response_model=BoothStockStatsResponse,
     summary="获取摊位股票统计"
