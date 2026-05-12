@@ -32,10 +32,10 @@ from models.event import Event
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/bank", tags=["Bank Credit"])
+router = APIRouter(prefix="/bank", tags=["Bank Credit"])
 
 # Legacy router for backward compatibility with web-admin frontend
-legacy_router = APIRouter(prefix="/api/bank-credit", tags=["Bank Credit (Legacy)"])
+legacy_router = APIRouter(prefix="/bank-credit", tags=["Bank Credit (Legacy)"])
 
 
 # ============================================================================

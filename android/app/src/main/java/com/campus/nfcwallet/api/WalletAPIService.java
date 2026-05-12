@@ -380,7 +380,7 @@ public interface WalletAPIService {
      * @param request Stock buy request body
      * @return Stock buy response
      */
-    @POST("api/stock/buy")
+    @POST("stock/buy")
     Call<StockBuyResponse> buyStock(
         @Header("Authorization") String authorization,
         @Body StockBuyRequest request
@@ -395,7 +395,7 @@ public interface WalletAPIService {
      * @param request Stock sell request body
      * @return Stock sell response
      */
-    @POST("api/stock/sell")
+    @POST("stock/sell")
     Call<StockSellResponse> sellStock(
         @Header("Authorization") String authorization,
         @Body StockSellRequest request
@@ -411,7 +411,7 @@ public interface WalletAPIService {
      * @param eventId Event ID
      * @return List of stock holdings by booth
      */
-    @GET("api/stock/holdings")
+    @GET("stock/holdings")
     Call<List<StockHoldingInfo>> getStockHoldingsByCard(
         @Header("Authorization") String authorization,
         @Query("card_uid") String cardUid,
@@ -428,7 +428,7 @@ public interface WalletAPIService {
      * @param eventId Event ID filter (optional)
      * @return List of stock orders
      */
-    @GET("api/stock/orders/{participant_id}")
+    @GET("stock/orders/{participant_id}")
     Call<List<StockOrderResponse>> getStockOrders(
         @Header("Authorization") String authorization,
         @Path("participant_id") int participantId,
@@ -466,7 +466,7 @@ public interface WalletAPIService {
      * @param request Refund request body (includes booth_id)
      * @return Refund response
      */
-    @POST("api/trade/refund")
+    @POST("trade/refund")
     Call<RefundResponse> processRefund(
         @Header("Authorization") String authorization,
         @Body RefundRequest request
@@ -487,7 +487,7 @@ public interface WalletAPIService {
      * @param request Loan issuance request body
      * @return Loan issuance response with breakdown
      */
-    @POST("api/bank/issue_loan")
+    @POST("bank/issue_loan")
     Call<LoanIssuanceResponse> issueLoan(
         @Header("Authorization") String authorization,
         @Body LoanIssuanceRequest request

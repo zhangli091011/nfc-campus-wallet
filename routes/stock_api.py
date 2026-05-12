@@ -41,7 +41,7 @@ from schemas.stock_account import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/stock")
+router = APIRouter(prefix="/stock")
 
 
 # ============ Deprecated: Account Transfer ============

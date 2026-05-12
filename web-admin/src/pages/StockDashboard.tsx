@@ -98,7 +98,7 @@ const StockDashboard: React.FC = () => {
     try {
       const token = localStorage.getItem('nfc_wallet_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const baseUrl = import.meta.env.VITE_API_URL || '';
 
       // 加载市场统计
       const statsRes = await axios.get<MarketStats>(

@@ -26,7 +26,7 @@ from models.booth import Booth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/trade", tags=["Trade"])
+router = APIRouter(prefix="/trade", tags=["Trade"])
 
 
 # ============================================================================
