@@ -23,6 +23,7 @@ import {
   PlusOutlined,
   MinusOutlined,
   BankOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons'
 import { getEvents, type Event } from '@/services/event'
 import request from '@/utils/request'
@@ -180,6 +181,56 @@ const ParticipantBalances = () => {
     }
   }
 
+  // 退卡操作
+  const handleReturnCard = (record: ParticipantBalance) => {
+    Modal.confirm({
+      title: '退卡确认',
+      width: 480,
+      content: (
+        <div>
+          <p><strong>参与者：</strong>{record.name} ({record.card_uid})</p>
+          <p><strong>当前余额：</strong>¥{record.balance.toFixed(2)}</p>
+          {record.credit_borrowed > 0 && (
+            <p style={{ color: '#ff4d4f' }}>
+              <strong>⚠️ 借款记录：</strong>¥{record.credit_borrowed.toFixed(2)}
+            </p>
+          )}
+          <p style={{ marginTop: 12 }}>退卡将：</p>
+          <ul>
+            <li>退还卡内剩余余额</li>
+            <li>解除卡片与该参与者的绑定</li>
+            <li>保留所有交易流水记录</li>
+            <li>卡片可重新分配给其他人</li>
+          </ul>
+          {record.credit_borrowed > 0 && (
+            <p style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+              如有未清贷款，系统将拒绝退卡！
+            </p>
+          )}
+        </div>
+      ),
+      okText: '确认退卡',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        if (!selectedEventId) return
+        try {
+          const res = await request.post<any, any>('/admin/participants/return-card', {
+            event_id: selectedEventId,
+            participant_id: record.id,
+            refund_balance: true,
+            remark: '管理员退卡',
+          })
+          message.success(`退卡成功，已退还 ¥${res.balance_refunded?.toFixed(2) || '0.00'}`)
+          loadBalances()
+        } catch (error: any) {
+          const errMsg = error?.response?.data?.message || '退卡失败'
+          message.error(errMsg)
+        }
+      },
+    })
+  }
+
   const columns: ColumnsType<ParticipantBalance> = [
     {
       title: 'ID',
@@ -263,7 +314,7 @@ const ParticipantBalances = () => {
     {
       title: '操作',
       key: 'action',
-      width: 240,
+      width: 300,
       fixed: 'right',
       render: (_: any, record: ParticipantBalance) => (
         <Space size="small">
@@ -292,6 +343,15 @@ const ParticipantBalances = () => {
             onClick={() => handleLoan(record)}
           >
             贷款
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<RollbackOutlined />}
+            onClick={() => handleReturnCard(record)}
+          >
+            退卡
           </Button>
         </Space>
       ),

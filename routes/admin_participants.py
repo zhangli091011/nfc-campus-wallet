@@ -398,3 +398,144 @@ async def admin_issue_loan(
         db.rollback()
         logger.error(f"Admin issue loan failed: {str(e)}", exc_info=True)
         return JSONResponse(status_code=500, content={"error_code": "INTERNAL_ERROR", "message": str(e)})
+
+
+# ============================================================================
+# 管理员操作：退卡
+# ============================================================================
+
+class AdminReturnCardRequest(BaseModel):
+    """管理员退卡请求"""
+    event_id: int = Field(..., description="活动ID")
+    participant_id: int = Field(..., description="参与者ID")
+    refund_balance: bool = Field(True, description="是否退还余额（记录退款流水）")
+    remark: str = Field("", max_length=255, description="备注说明")
+
+
+@router.post("/participants/return-card")
+async def admin_return_card(
+    req: AdminReturnCardRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员退卡处理。
+
+    流程：
+    1. 验证参与者存在
+    2. 检查是否有未清贷款（有则拒绝退卡）
+    3. 如果 refund_balance=true，将余额退还（写入退款流水）
+    4. 将账户余额清零
+    5. 解除卡片与参与者的绑定（card_uid 置空或标记为已退卡）
+    6. 交易流水保留不删除
+
+    仅 super_admin 和 event_admin 可执行。
+    """
+    try:
+        # 1. 查找参与者
+        participant = db.query(Participant).filter(Participant.id == req.participant_id).first()
+        if not participant:
+            return JSONResponse(status_code=404, content={
+                "error_code": "NOT_FOUND",
+                "message": "参与者不存在"
+            })
+
+        # 2. 获取账户
+        account = db.query(AccountModel).filter(
+            AccountModel.participant_id == req.participant_id,
+            AccountModel.event_id == req.event_id
+        ).first()
+
+        # 3. 检查未清贷款
+        outstanding_loans = db.execute(
+            text("""SELECT COUNT(*) as cnt, COALESCE(SUM(principal_amount), 0) as total
+                    FROM bank_loans
+                    WHERE participant_id = :pid AND event_id = :eid AND status = 'active'"""),
+            {"pid": req.participant_id, "eid": req.event_id}
+        ).mappings().first()
+
+        if outstanding_loans and outstanding_loans["cnt"] > 0:
+            return JSONResponse(status_code=400, content={
+                "error_code": "LOAN_NOT_CLEARED",
+                "message": f"该参与者有 {outstanding_loans['cnt']} 笔未清贷款（共 ¥{float(outstanding_loans['total']):.2f}），请先清除贷款后再退卡",
+                "outstanding_count": outstanding_loans["cnt"],
+                "outstanding_amount": float(outstanding_loans["total"]),
+            })
+
+        # 4. 处理余额退还
+        balance_before = float(account.balance) if account else 0.0
+        refunded_amount = 0.0
+
+        if account and balance_before > 0 and req.refund_balance:
+            # 写入退款流水
+            txn = Transaction(
+                uid=None,
+                card_uid=participant.card_uid,
+                event_id=req.event_id,
+                participant_id=participant.id,
+                account_id=account.id,
+                type="correction",
+                amount=balance_before,
+                balance_before=balance_before,
+                balance_after=0,
+                merchant_id=None,
+                remark=req.remark or "退卡退款：余额清零退还",
+                operator_id=str(current_user.id)
+            )
+            db.add(txn)
+            refunded_amount = balance_before
+
+            # 清零余额
+            account.balance = 0
+
+        elif account and balance_before != 0:
+            # 余额为负或不退还，也清零
+            txn = Transaction(
+                uid=None,
+                card_uid=participant.card_uid,
+                event_id=req.event_id,
+                participant_id=participant.id,
+                account_id=account.id,
+                type="correction",
+                amount=abs(balance_before),
+                balance_before=balance_before,
+                balance_after=0,
+                merchant_id=None,
+                remark=req.remark or "退卡：余额清零",
+                operator_id=str(current_user.id)
+            )
+            db.add(txn)
+            account.balance = 0
+
+        # 5. 解除卡片绑定：将参与者状态设为 inactive，保留 card_uid 用于历史追溯
+        old_card_uid = participant.card_uid
+        participant.status = 'inactive'
+        # 释放 card_uid 以便卡片可以重新绑定给其他人
+        participant.card_uid = f"RETURNED_{old_card_uid}_{participant.id}"
+
+        db.commit()
+
+        logger.info(
+            f"Admin return card: participant={participant.name}(id={participant.id}), "
+            f"card_uid={old_card_uid}, refunded={refunded_amount:.2f}, "
+            f"balance_before={balance_before:.2f}, operator={current_user.username}"
+        )
+
+        return {
+            "success": True,
+            "message": "退卡成功",
+            "participant_id": participant.id,
+            "participant_name": participant.name,
+            "card_uid": old_card_uid,
+            "balance_refunded": refunded_amount,
+            "balance_before": balance_before,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Admin return card failed: {str(e)}", exc_info=True)
+        return JSONResponse(status_code=500, content={
+            "error_code": "INTERNAL_ERROR",
+            "message": str(e)
+        })
