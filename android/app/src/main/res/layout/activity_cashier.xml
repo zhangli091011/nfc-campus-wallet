@@ -397,6 +397,19 @@
             android:text="退款管理"
             android:textSize="14sp" />
 
+        <!-- View Card Detail Button -->
+        <Button
+            android:id="@+id/viewCardDetailButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="#5C6BC0"
+            android:drawableStart="@android:drawable/ic_menu_info_details"
+            android:drawablePadding="8dp"
+            android:text="查看卡片明细"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
         <!-- Status Section -->
         <LinearLayout
             android:layout_width="match_parent"

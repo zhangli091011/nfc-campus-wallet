@@ -160,8 +160,74 @@ class RefundManagerViewModel(
         val token = sessionManager.authHeader ?: return
         uiState = uiState.copy(isProcessing = true, showRefundDialog = false)
 
+        // booth_cashier 提交退款申请（需管理员审批）
+        // super_admin / event_admin 直接执行退款
+        val userRole = sessionManager.userInfo?.role ?: ""
+        
+        if (userRole == "booth_cashier") {
+            submitRefundRequest(token, transaction.id)
+        } else {
+            executeRefundDirectly(token, transaction.id)
+        }
+    }
+
+    private fun submitRefundRequest(token: String, transactionId: Int) {
+        val requestData = HashMap<String, Any>()
+        requestData["original_transaction_id"] = transactionId
+        requestData["reason"] = "收银端退款申请"
+
+        apiService.createRefundRequest(token, requestData)
+            .enqueue(object : Callback<Map<String, Any>> {
+                override fun onResponse(
+                    call: Call<Map<String, Any>>,
+                    response: Response<Map<String, Any>>,
+                ) {
+                    if (response.isSuccessful && response.body() != null) {
+                        val result = response.body()!!
+                        val resultStatus = result["status"] as? String ?: ""
+                        val message = result["message"] as? String ?: "操作完成"
+
+                        if (resultStatus == "pending") {
+                            // 申请已提交，等待审批
+                            uiState = uiState.copy(
+                                isProcessing = false,
+                                selectedTransaction = null,
+                                successMessage = "✅ 退款申请已提交，等待管理员审批",
+                            )
+                        } else {
+                            // 管理员直接通过（不应该走到这里，但兼容）
+                            val refunded = (result["refunded_amount"] as? Double) ?: 0.0
+                            val newBalance = (result["new_balance"] as? Double) ?: 0.0
+                            uiState = uiState.copy(
+                                isProcessing = false,
+                                selectedTransaction = null,
+                                successMessage = "退款成功！退还 ¥${"%.2f".format(refunded)}，新余额 ¥${"%.2f".format(newBalance)}",
+                            )
+                            onRefundSuccess?.invoke()
+                        }
+                        loadRecentTransactions()
+                    } else {
+                        val errorBody = response.errorBody()?.string() ?: "未知错误"
+                        uiState = uiState.copy(
+                            isProcessing = false,
+                            errorMessage = "退款申请失败: $errorBody",
+                        )
+                    }
+                }
+
+                override fun onFailure(call: Call<Map<String, Any>>, t: Throwable) {
+                    Log.e(TAG, "退款申请请求失败", t)
+                    uiState = uiState.copy(
+                        isProcessing = false,
+                        errorMessage = "网络错误: ${t.message}",
+                    )
+                }
+            })
+    }
+
+    private fun executeRefundDirectly(token: String, transactionId: Int) {
         val request = RefundRequest(
-            transaction.id,
+            transactionId,
             "收银端退款",
         )
 
@@ -178,9 +244,7 @@ class RefundManagerViewModel(
                             selectedTransaction = null,
                             successMessage = "退款成功！退还 ¥${result.refundedAmount}，新余额 ¥${result.newBalance}",
                         )
-                        // 触发震动反馈
                         onRefundSuccess?.invoke()
-                        // 刷新列表
                         loadRecentTransactions()
                     } else {
                         val errorBody = response.errorBody()?.string() ?: "未知错误"

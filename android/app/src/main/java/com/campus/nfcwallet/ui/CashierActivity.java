@@ -101,6 +101,7 @@ public class CashierActivity extends AppCompatActivity {
     private Button rechargeButton;
     private Button clearButton;
     private Button refundButton;
+    private Button viewCardDetailButton;
     
     // UI Components - Status
     private TextView statusText;
@@ -194,6 +195,7 @@ public class CashierActivity extends AppCompatActivity {
         rechargeButton = findViewById(R.id.rechargeButton);
         clearButton = findViewById(R.id.clearButton);
         refundButton = findViewById(R.id.refundButton);
+        viewCardDetailButton = findViewById(R.id.viewCardDetailButton);
         
         // Status
         statusText = findViewById(R.id.statusText);
@@ -207,6 +209,7 @@ public class CashierActivity extends AppCompatActivity {
         clearButton.setOnClickListener(v -> clearCard());
         logoutButton.setOnClickListener(v -> performLogout());
         refundButton.setOnClickListener(v -> openRefundManager());
+        viewCardDetailButton.setOnClickListener(v -> viewCardDetail());
         
         // Initially hide sections
         cardInfoSection.setVisibility(View.GONE);
@@ -410,6 +413,7 @@ public class CashierActivity extends AppCompatActivity {
         currentCardUid = uid;
         cardUidText.setText(uid);
         cardInfoSection.setVisibility(View.VISIBLE);
+        viewCardDetailButton.setVisibility(View.VISIBLE);
         cardLoadingProgress.setVisibility(View.VISIBLE);
         
         // Clear previous data
@@ -1016,6 +1020,7 @@ public class CashierActivity extends AppCompatActivity {
         currentBalance = 0;
         
         cardInfoSection.setVisibility(View.GONE);
+        viewCardDetailButton.setVisibility(View.GONE);
         productsSection.setVisibility(View.VISIBLE);
         cartSection.setVisibility(View.GONE);
         customAmountSection.setVisibility(View.GONE);
@@ -1273,6 +1278,19 @@ public class CashierActivity extends AppCompatActivity {
         
         Intent intent = new Intent(this, RefundManagerActivity.class);
         intent.putExtra("booth_id", boothId);
+        startActivity(intent);
+    }
+    
+    /**
+     * View card detail (查看卡片全部明细).
+     */
+    private void viewCardDetail() {
+        if (currentCardUid == null) {
+            showError("请先刷卡");
+            return;
+        }
+        
+        Intent intent = new Intent(this, com.campus.nfcwallet.ui.cardDetail.CardDetailActivity.class);
         startActivity(intent);
     }
     

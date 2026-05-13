@@ -198,6 +198,10 @@ def create_app() -> FastAPI:
     from routes.card_returns import router as card_returns_router
     app.include_router(card_returns_router, tags=["card-returns"])
     
+    # Refund requests (退款申请审批)
+    from routes.refund_request import router as refund_request_router
+    app.include_router(refund_request_router, tags=["refund-request"])
+    
     # App OTA update (APK 上传与版本检查)
     from routes.app_update import router as app_update_router
     app.include_router(app_update_router, tags=["app-update"])

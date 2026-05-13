@@ -577,4 +577,19 @@ public interface WalletAPIService {
         @Path("booth_id") int boothId,
         @Body Map<String, Object> request
     );
+
+    /**
+     * Submit refund request (退款申请 - 收银员提交，管理员审批).
+     *
+     * POST /refund/requests
+     *
+     * @param authorization Authorization header (Bearer token)
+     * @param request Request body containing original_transaction_id and reason
+     * @return Refund request response (status: pending or direct refund result)
+     */
+    @POST("refund/requests")
+    Call<Map<String, Object>> createRefundRequest(
+        @Header("Authorization") String authorization,
+        @Body Map<String, Object> request
+    );
 }
