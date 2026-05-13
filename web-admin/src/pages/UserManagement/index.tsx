@@ -6,6 +6,7 @@ import {
   Modal,
   Form,
   Input,
+  InputNumber,
   Select,
   message,
   Tag,
@@ -13,6 +14,8 @@ import {
   Badge,
   Tooltip,
   Alert,
+  Typography,
+  Divider,
 } from 'antd'
 import {
   PlusOutlined,
@@ -20,6 +23,8 @@ import {
   BankOutlined,
   CrownOutlined,
   SafetyCertificateOutlined,
+  TeamOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons'
 import {
   getUsers,
@@ -55,6 +60,23 @@ const UserManagement = () => {
   const [roleForm] = Form.useForm()
   const [roleEventId, setRoleEventId] = useState<number>()
   const [roleBoothOptions, setRoleBoothOptions] = useState<Booth[]>([])
+
+  // 批量创建收银员相关状态
+  const [batchModalVisible, setBatchModalVisible] = useState(false)
+  const [batchResultVisible, setBatchResultVisible] = useState(false)
+  const [batchResult, setBatchResult] = useState<{
+    total_created: number
+    accounts: Array<{
+      user_id: number
+      username: string
+      password: string
+      booth_id: number
+      booth_name: string
+    }>
+    errors: string[]
+  } | null>(null)
+  const [batchForm] = Form.useForm()
+  const [batchLoading, setBatchLoading] = useState(false)
 
   useEffect(() => {
     loadUsers()
@@ -214,6 +236,54 @@ const UserManagement = () => {
     }
   }
 
+  // ========== 批量创建收银员 ==========
+  const handleBatchSubmit = async () => {
+    try {
+      const values = await batchForm.validateFields()
+      setBatchLoading(true)
+      const res = await request.post<any, any>('/users/batch-create-cashiers', {
+        booth_ids: values.booth_ids,
+        accounts_per_booth: values.accounts_per_booth || 1,
+        username_prefix: values.username_prefix || 'cashier',
+        password_length: values.password_length || 8,
+      })
+      setBatchResult(res)
+      setBatchModalVisible(false)
+      setBatchResultVisible(true)
+      batchForm.resetFields()
+      loadUsers()
+      message.success(`成功创建 ${res.total_created} 个收银员账号`)
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || '批量创建失败')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  // 导出账号信息为CSV
+  const exportBatchResult = () => {
+    if (!batchResult || !batchResult.accounts.length) return
+    const header = ['用户名', '密码', '摊位ID', '摊位名称']
+    const rows = batchResult.accounts.map(a => [
+      a.username,
+      a.password,
+      a.booth_id.toString(),
+      a.booth_name,
+    ])
+    const csv = '\ufeff' + [header, ...rows].map(row => 
+      row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')
+    ).join('\n')
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cashier_accounts_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success('导出成功')
+  }
+
   // ========== 判断是否为特殊用户 ==========
   const isBankClerk = (record: User) => record.role === 'bank_clerk'
 
@@ -255,6 +325,7 @@ const UserManagement = () => {
           issuer: { text: '充值员', color: 'green' },
           reviewer: { text: '审核员', color: 'purple' },
           bank_clerk: { text: '投资办理员', color: 'gold', icon: <BankOutlined /> },
+          school_inspector: { text: '校方巡查', color: 'cyan', icon: <SafetyCertificateOutlined /> },
         }
         const config = roleMap[role] || { text: role, color: 'default' }
         if (isBankClerk(record)) {
@@ -399,9 +470,14 @@ const UserManagement = () => {
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新建用户
-        </Button>
+        <Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            新建用户
+          </Button>
+          <Button icon={<TeamOutlined />} onClick={() => setBatchModalVisible(true)}>
+            批量创建收银员
+          </Button>
+        </Space>
         <Alert
           message="特殊账户说明"
           description="带有 🏦 标记的「投资办理员」为系统特殊账户，用于官方中央银行投资办理终端，拥有独立的权限体系。"
@@ -466,6 +542,12 @@ const UserManagement = () => {
                   <span>投资办理员（特殊）</span>
                 </Space>
               </Select.Option>
+              <Select.Option value="school_inspector">
+                <Space>
+                  <SafetyCertificateOutlined style={{ color: '#13c2c2' }} />
+                  <span>校方巡查（只读）</span>
+                </Space>
+              </Select.Option>
             </Select>
           </Form.Item>
 
@@ -520,6 +602,17 @@ const UserManagement = () => {
                   <Alert
                     message="投资办理员说明"
                     description="该角色为系统特殊账户，用于官方中央银行投资办理终端。创建后将自动拥有投资相关的摊位查看和股票操作权限。"
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                )
+              }
+              if (role === 'school_inspector') {
+                return (
+                  <Alert
+                    message="校方巡查说明"
+                    description="该角色仅拥有只读查看权限，可以浏览所有后台数据（报表、交易流水、参与者余额、班级搜索等），但无法修改任何数据。"
                     type="info"
                     showIcon
                     style={{ marginBottom: 16 }}

@@ -4,7 +4,7 @@ Authentication and authorization middleware for NFC Campus E-Wallet System.
 Provides JWT token verification and role-based access control.
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import List, Callable
@@ -105,11 +105,15 @@ def require_role(allowed_roles: List[str]) -> Callable:
         ):
             pass
     """
-    def role_checker(current_user: User = Depends(get_current_user)) -> User:
+    def role_checker(
+        request: Request,
+        current_user: User = Depends(get_current_user)
+    ) -> User:
         """
         Check if current user has required role.
         
         Args:
+            request: FastAPI Request object (auto-injected)
             current_user: Current authenticated user
         
         Returns:
@@ -118,6 +122,13 @@ def require_role(allowed_roles: List[str]) -> Callable:
         Raises:
             HTTPException: If user doesn't have required role
         """
+        # 校方巡查（school_inspector）：只读方法自动放行
+        if (
+            current_user.role == "school_inspector"
+            and request.method.upper() in ("GET", "HEAD", "OPTIONS")
+        ):
+            return current_user
+        
         if current_user.role not in allowed_roles:
             logger.warning(
                 f"User {current_user.username} (role={current_user.role}) "

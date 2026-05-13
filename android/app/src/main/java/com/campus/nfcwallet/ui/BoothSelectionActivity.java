@@ -20,6 +20,7 @@ import com.campus.nfcwallet.models.BoothInfo;
 import com.campus.nfcwallet.models.UserInfo;
 import com.campus.nfcwallet.ui.investment.InvestmentComposeActivity;
 import com.campus.nfcwallet.ui.bankTeller.BankTellerActivity;
+import com.campus.nfcwallet.ui.cardReturn.CardReturnActivity;
 import com.campus.nfcwallet.ui.refund.RefundManagerActivity;
 import com.campus.nfcwallet.utils.ErrorHandler;
 import com.campus.nfcwallet.utils.SessionManager;
@@ -56,6 +57,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "💳 信用垫资发行（银行放贷）",
         "💰 充值员（官方中央银行）",
         "🔄 退款管理（摊位售后）",
+        "🪪 退卡办理（退还余额）",
         "📋 摊位列表（管理员视角）",
     };
     
@@ -65,6 +67,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "bank_teller",
         "issuer",
         "refund_manager",
+        "card_return",
         "admin_browse",
     };
     
@@ -184,6 +187,11 @@ public class BoothSelectionActivity extends AppCompatActivity {
                     case "refund_manager":
                         // Show booth list, then navigate to refund manager
                         loadBoothsForRefund();
+                        break;
+                        
+                    case "card_return":
+                        // Go to card return terminal
+                        navigateToCardReturn();
                         break;
                         
                     case "admin_browse":
@@ -382,6 +390,12 @@ public class BoothSelectionActivity extends AppCompatActivity {
     
     private void navigateToBankTeller() {
         Intent intent = new Intent(this, BankTellerActivity.class);
+        startActivity(intent);
+        finish();
+    }
+    
+    private void navigateToCardReturn() {
+        Intent intent = new Intent(this, CardReturnActivity.class);
         startActivity(intent);
         finish();
     }

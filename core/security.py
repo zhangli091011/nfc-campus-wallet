@@ -15,7 +15,7 @@ import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple, Dict, Any
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -485,6 +485,11 @@ class RoleChecker:
     has one of the allowed roles. It should be used in combination with the
     get_current_user dependency to enforce role-based access control (RBAC).
     
+    Special behavior for 'school_inspector' role:
+        - Automatically allowed on all read-only requests (GET/HEAD/OPTIONS)
+        - Denied on all write requests (POST/PUT/PATCH/DELETE) unless
+          'school_inspector' is explicitly listed in allowed_roles
+    
     Example Usage:
         # Allow only super_admin and event_admin
         @app.get("/booths")
@@ -508,6 +513,9 @@ class RoleChecker:
         - Requirement 12.4: Raise 403 when user lacks required role
     """
     
+    # 只读 HTTP 方法：允许 school_inspector (校方巡查) 访问
+    _READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+    
     def __init__(self, allowed_roles: list[str]):
         """
         Initialize the RoleChecker with a list of allowed roles.
@@ -515,7 +523,7 @@ class RoleChecker:
         Args:
             allowed_roles: List of role strings that are allowed to access the route.
                           Valid roles: 'super_admin', 'event_admin', 'booth_cashier',
-                          'issuer', 'reviewer'
+                          'issuer', 'reviewer', 'bank_clerk', 'school_inspector'
         
         Example:
             >>> checker = RoleChecker(["super_admin", "event_admin"])
@@ -524,7 +532,11 @@ class RoleChecker:
         """
         self.allowed_roles = allowed_roles
     
-    def __call__(self, current_user: Any = Depends(get_current_user)) -> None:
+    def __call__(
+        self,
+        request: Request,
+        current_user: Any = Depends(get_current_user)
+    ) -> None:
         """
         Verify that the current user's role is in the allowed roles list.
         
@@ -532,7 +544,15 @@ class RoleChecker:
         It automatically receives the current user via the get_current_user dependency
         and checks if their role is allowed.
         
+        Special handling for 'school_inspector' (校方巡查):
+            - For read-only HTTP methods (GET/HEAD/OPTIONS), access is granted
+              automatically, so this role can view all data without needing to
+              be listed in each endpoint's allowed_roles.
+            - For write HTTP methods (POST/PUT/PATCH/DELETE), access is denied
+              unless 'school_inspector' is explicitly included in allowed_roles.
+        
         Args:
+            request: FastAPI Request object (auto-injected)
             current_user: User object from get_current_user dependency (auto-injected)
             
         Returns:
@@ -541,16 +561,17 @@ class RoleChecker:
         Raises:
             HTTPException(403): If user's role is not in allowed_roles list
             
-        Example:
-            # This is used in routes like:
-            @app.get("/booths", dependencies=[Depends(RoleChecker(["super_admin", "event_admin"]))])
-            def list_booths():
-                return {"booths": [...]}
-            
         Validates Requirements:
             - Requirement 12.3: Check user roles against allowed list
             - Requirement 12.4: Raise 403 Forbidden for unauthorized roles
         """
+        # 校方巡查：只读方法（GET/HEAD/OPTIONS）自动放行
+        if (
+            current_user.role == "school_inspector"
+            and request.method.upper() in self._READ_ONLY_METHODS
+        ):
+            return None
+        
         # Check if user's role is in the allowed roles list
         if current_user.role not in self.allowed_roles:
             raise HTTPException(

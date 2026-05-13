@@ -362,7 +362,7 @@ async def update_user_role(
         UserResponse: 更新后的用户信息
     """
     try:
-        valid_roles = ['super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer', 'bank_clerk']
+        valid_roles = ['super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer', 'bank_clerk', 'school_inspector']
         if role not in valid_roles:
             return JSONResponse(
                 status_code=400,
@@ -515,3 +515,142 @@ async def update_user_status(
                 "message": "An internal error occurred. Please try again later."
             }
         )
+
+
+# ============================================================================
+# 批量创建收银员账号
+# ============================================================================
+
+from pydantic import BaseModel, Field
+from typing import List
+import random
+import string
+import secrets
+
+
+class BatchCreateCashiersRequest(BaseModel):
+    """批量创建收银员请求"""
+    booth_ids: List[int] = Field(..., min_length=1, description="要分配的摊位ID列表")
+    accounts_per_booth: int = Field(1, ge=1, le=10, description="每个摊位创建的账号数量")
+    username_prefix: str = Field("cashier", max_length=20, description="用户名前缀")
+    password_length: int = Field(8, ge=6, le=20, description="随机密码长度")
+
+
+class CashierAccountInfo(BaseModel):
+    """收银员账号信息"""
+    user_id: int
+    username: str
+    password: str  # 原始密码（仅在创建时返回一次）
+    booth_id: int
+    booth_name: str
+
+
+class BatchCreateCashiersResponse(BaseModel):
+    """批量创建响应"""
+    success: bool
+    total_created: int
+    accounts: List[CashierAccountInfo]
+    errors: List[str] = []
+
+
+def _generate_random_password(length: int = 8) -> str:
+    """生成随机密码（包含字母和数字）"""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+def _generate_username(prefix: str, booth_id: int, index: int, db: Session) -> str:
+    """生成唯一用户名"""
+    from models.user import User as UserModel
+    # 格式：cashier_b<boothId>_<index>
+    base = f"{prefix}_b{booth_id}"
+    if index > 1:
+        base = f"{base}_{index}"
+    
+    # 如果已存在，追加随机后缀
+    existing = db.query(UserModel).filter(UserModel.username == base).first()
+    if existing:
+        suffix = ''.join(secrets.choice(string.digits) for _ in range(4))
+        base = f"{base}_{suffix}"
+    
+    return base
+
+
+@router.post("/users/batch-create-cashiers", response_model=BatchCreateCashiersResponse)
+async def batch_create_cashiers(
+    req: BatchCreateCashiersRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    批量创建摊位收银员账号。
+
+    为指定的每个摊位创建N个收银员账号，自动生成用户名和随机密码。
+    返回所有新账号的登录信息（明文密码仅返回一次，请妥善保存）。
+
+    Request Body:
+        - booth_ids: 摊位ID列表
+        - accounts_per_booth: 每个摊位创建账号数（默认1）
+        - username_prefix: 用户名前缀（默认"cashier"）
+        - password_length: 随机密码长度（默认8）
+    """
+    from models.booth import Booth
+    from services.user_service import UserService
+
+    user_service = UserService(db)
+    created_accounts = []
+    errors = []
+
+    # 验证所有摊位存在
+    booths = db.query(Booth).filter(Booth.id.in_(req.booth_ids)).all()
+    booth_map = {b.id: b for b in booths}
+    missing = [bid for bid in req.booth_ids if bid not in booth_map]
+    if missing:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error_code": "VALIDATION_ERROR",
+                "message": f"摊位不存在: {missing}"
+            }
+        )
+
+    # 批量创建
+    for booth_id in req.booth_ids:
+        booth = booth_map[booth_id]
+        for i in range(1, req.accounts_per_booth + 1):
+            try:
+                username = _generate_username(req.username_prefix, booth_id, i, db)
+                password = _generate_random_password(req.password_length)
+
+                user = user_service.create_user(
+                    username=username,
+                    password=password,
+                    role="booth_cashier",
+                    booth_id=booth_id
+                )
+
+                created_accounts.append(CashierAccountInfo(
+                    user_id=user.id,
+                    username=username,
+                    password=password,
+                    booth_id=booth_id,
+                    booth_name=booth.name,
+                ))
+
+                logger.info(
+                    f"Batch created cashier: username={username}, booth_id={booth_id}, "
+                    f"by={current_user.username}"
+                )
+
+            except Exception as e:
+                error_msg = f"摊位 {booth.name}(ID={booth_id}) 第{i}个账号创建失败: {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg, exc_info=True)
+
+    return BatchCreateCashiersResponse(
+        success=len(created_accounts) > 0,
+        total_created=len(created_accounts),
+        accounts=created_accounts,
+        errors=errors,
+    )

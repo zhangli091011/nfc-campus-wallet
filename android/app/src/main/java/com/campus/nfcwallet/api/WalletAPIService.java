@@ -522,4 +522,21 @@ public interface WalletAPIService {
         @Header("Authorization") String authorization,
         @Body Map<String, Object> request
     );
+
+    /**
+     * Get participant loan summary (for card return terminal).
+     *
+     * GET /bank/loan_summary?event_id={event_id}&card_uid={card_uid}
+     *
+     * @param authorization Authorization header (Bearer token)
+     * @param eventId Event ID
+     * @param cardUid Card UID
+     * @return Loan summary with loan_count and total_debt
+     */
+    @GET("bank/loan_summary")
+    Call<Map<String, Object>> getParticipantLoans(
+        @Header("Authorization") String authorization,
+        @Query("event_id") int eventId,
+        @Query("card_uid") String cardUid
+    );
 }

@@ -99,8 +99,8 @@ async def get_transactions(
             transaction_types = [t.strip() for t in type.split(',') if t.strip()]
         
         # 权限验证和过滤逻辑
-        # super_admin 和 event_admin 可以查看所有交易
-        if current_user.role in ('super_admin', 'event_admin'):
+        # super_admin, event_admin, reviewer, school_inspector 可以查看所有交易
+        if current_user.role in ('super_admin', 'event_admin', 'reviewer', 'school_inspector'):
             # 如果指定了 booth_id，使用 get_booth_transactions
             if booth_id is not None:
                 result = transaction_service.get_booth_transactions(

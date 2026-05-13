@@ -123,6 +123,21 @@
                 android:resource="@xml/nfc_tech_filter" />
         </activity>
 
+        <!-- Card Return Activity (Compose - 退卡办理终端) -->
+        <activity
+            android:name=".ui.cardReturn.CardReturnActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.NFCCampusWallet.Investment">
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.nfc.action.TECH_DISCOVERED"
+                android:resource="@xml/nfc_tech_filter" />
+        </activity>
+
         <!-- FileProvider for APK installation -->
         <provider
             android:name="androidx.core.content.FileProvider"
