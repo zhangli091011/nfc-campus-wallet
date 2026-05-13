@@ -528,7 +528,6 @@ async def process_booth_payment(
         
         # 先获取参与者ID用于立减计算
         from services.participant_service import ParticipantService
-        from services.account_service import AccountService
         participant_service_inst = ParticipantService(db)
         participant = participant_service_inst.get_participant_by_card(payment_request.card_uid)
         

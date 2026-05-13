@@ -210,6 +210,19 @@ def create_app() -> FastAPI:
     from routes.app_update import router as app_update_router
     app.include_router(app_update_router, tags=["app-update"])
     
+    # Database backup service (每5分钟全量备份)
+    from services.db_backup_service import start_backup_service, stop_backup_service
+
+    @app.on_event("startup")
+    async def startup_backup_service():
+        start_backup_service()
+        logger.info("Database backup service started (every 5 minutes)")
+
+    @app.on_event("shutdown")
+    async def shutdown_backup_service():
+        stop_backup_service()
+        logger.info("Database backup service stopped")
+
     # Health check endpoint
     @app.get("/health")
     async def health_check():

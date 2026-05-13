@@ -25,6 +25,7 @@ import {
   FileTextOutlined,
   CloudUploadOutlined,
   CreditCardOutlined,
+  GiftOutlined,
 } from '@ant-design/icons'
 import { getUser, clearAuth, isSuperAdmin } from '@/utils/auth'
 import type { MenuProps } from 'antd'
@@ -168,6 +169,11 @@ const Layout = () => {
       key: '/card-returns',
       icon: <CreditCardOutlined />,
       label: '退卡记录',
+    },
+    {
+      key: '/random-discount',
+      icon: <GiftOutlined />,
+      label: '随机立减',
     },
     ...(isSuperAdmin()
       ? [

@@ -11,6 +11,7 @@ from models.account import Account
 from models.booth import Booth
 from models.product import Product
 from models.cash_reconciliation import CashReconciliation
+from models.random_discount import RandomDiscountSetting, RandomDiscountRecord
 
 __all__ = [
     'User',
@@ -22,5 +23,7 @@ __all__ = [
     'Account',
     'Booth',
     'Product',
-    'CashReconciliation'
+    'CashReconciliation',
+    'RandomDiscountSetting',
+    'RandomDiscountRecord'
 ]

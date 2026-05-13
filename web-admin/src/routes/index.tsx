@@ -30,6 +30,7 @@ import AppUpdate from '@/pages/AppUpdate'
 import BankLoanManagement from '@/pages/BankLoanManagement'
 import CardReturnRecords from '@/pages/CardReturnRecords'
 import RefundRequestApproval from '@/pages/RefundRequestApproval'
+import RandomDiscount from '@/pages/RandomDiscount'
 import {
   MerchantLogin,
   MerchantRegister,
@@ -121,6 +122,9 @@ const AppRoutes = () => {
         
         {/* 退款审批 */}
         <Route path="refund-requests" element={<RefundRequestApproval />} />
+        
+        {/* 随机立减管理 */}
+        <Route path="random-discount" element={<RandomDiscount />} />
         
         {/* 报表相关路由 */}
         <Route path="reports/dashboard" element={<ReportsDashboard />} />
