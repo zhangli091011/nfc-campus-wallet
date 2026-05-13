@@ -31,10 +31,10 @@ router = APIRouter(tags=["refund-monitor"])
 class RefundSummary(BaseModel):
     """退款总览"""
     total_refund_count: int
-    total_refund_amount: int
+    total_refund_amount: float
     total_refund_amount_yuan: float
     total_pay_count: int
-    total_pay_amount: int
+    total_pay_amount: float
     total_pay_amount_yuan: float
     overall_refund_rate: float  # 退款率 = 退款笔数 / 支付笔数
 
@@ -46,7 +46,7 @@ class BoothRefundRank(BaseModel):
     class_name: str
     refund_count: int
     pay_count: int
-    refund_amount: int
+    refund_amount: float
     refund_amount_yuan: float
     refund_rate: float  # 退款率
 
@@ -66,7 +66,7 @@ class RefundReasonStat(BaseModel):
     """退款原因分布"""
     reason: str
     count: int
-    amount: int
+    amount: float
     amount_yuan: float
     percentage: float
 
@@ -75,7 +75,7 @@ class RefundDetail(BaseModel):
     """退款明细"""
     id: int
     original_transaction_id: Optional[int]
-    amount: int
+    amount: float
     amount_yuan: float
     booth_id: Optional[int]
     booth_name: Optional[str]
