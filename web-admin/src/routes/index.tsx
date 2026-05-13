@@ -29,6 +29,7 @@ import MacroEconomyDashboard from '@/pages/MacroEconomyDashboard'
 import AppUpdate from '@/pages/AppUpdate'
 import BankLoanManagement from '@/pages/BankLoanManagement'
 import CardReturnRecords from '@/pages/CardReturnRecords'
+import RefundRequestApproval from '@/pages/RefundRequestApproval'
 import {
   MerchantLogin,
   MerchantRegister,
@@ -117,6 +118,9 @@ const AppRoutes = () => {
         
         {/* 退卡记录 */}
         <Route path="card-returns" element={<CardReturnRecords />} />
+        
+        {/* 退款审批 */}
+        <Route path="refund-requests" element={<RefundRequestApproval />} />
         
         {/* 报表相关路由 */}
         <Route path="reports/dashboard" element={<ReportsDashboard />} />

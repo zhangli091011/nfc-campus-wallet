@@ -88,6 +88,11 @@ const Layout = () => {
       label: '退款审批',
     },
     {
+      key: '/refund-requests',
+      icon: <AuditOutlined />,
+      label: '退款申请审批',
+    },
+    {
       key: '/refund-monitor',
       icon: <AlertOutlined />,
       label: '退款监控',
