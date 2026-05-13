@@ -687,37 +687,37 @@ async def process_cash_payment(
         raise HTTPException(status_code=404, detail="摊位不存在")
 
     try:
-        # 创建现金收款流水记录
-        txn = Transaction(
-            uid=None,
-            card_uid=None,
-            event_id=event_id,
-            participant_id=None,
-            account_id=None,
-            type="cash_payment",
-            amount=request.amount,
-            balance_before=0,
-            balance_after=0,
-            merchant_id=None,
-            remark=request.remark or "现金收款",
-            operator_id=str(current_user.id),
+        # 创建现金收款流水记录（使用原生SQL，因为 participant_id 在数据库中可能有NOT NULL约束）
+        from datetime import datetime, timezone as tz
+        now = datetime.now(tz.utc)
+        
+        result = db.execute(
+            text("""INSERT INTO transactions 
+                    (uid, card_uid, event_id, participant_id, account_id, type, amount, 
+                     balance_before, balance_after, merchant_id, remark, operator_id, booth_id, created_at)
+                    VALUES (NULL, NULL, :event_id, 0, NULL, 'cash_payment', :amount,
+                     0, 0, NULL, :remark, :operator_id, :booth_id, :created_at)"""),
+            {
+                "event_id": event_id,
+                "amount": request.amount,
+                "remark": request.remark or "现金收款",
+                "operator_id": str(current_user.id),
+                "booth_id": booth_id,
+                "created_at": now,
+            }
         )
-        # 设置 booth_id（如果 Transaction 模型有此字段）
-        if hasattr(txn, 'booth_id'):
-            txn.booth_id = booth_id
-
-        db.add(txn)
         db.commit()
-        db.refresh(txn)
+        
+        txn_id = result.lastrowid
 
         logger.info(
             f"Cash payment recorded: booth_id={booth_id}, amount=¥{request.amount:.2f}, "
-            f"event_id={event_id}, operator={current_user.username}, txn_id={txn.id}"
+            f"event_id={event_id}, operator={current_user.username}, txn_id={txn_id}"
         )
 
         return {
             "success": True,
-            "transaction_id": txn.id,
+            "transaction_id": txn_id,
             "amount": request.amount,
             "booth_id": booth_id,
             "booth_name": booth.name,
