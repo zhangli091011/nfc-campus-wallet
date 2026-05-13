@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Card,
   Table,
@@ -64,6 +64,20 @@ const categoryOptions = [
   { value: 'other', label: '其他' },
 ]
 
+// 浏览器通知
+function sendNotification(title: string, body: string) {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/favicon.ico' })
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') {
+        new Notification(title, { body, icon: '/favicon.ico' })
+      }
+    })
+  }
+}
+
 const CostEvidenceReview = () => {
   const [evidences, setEvidences] = useState<AdminCostEvidence[]>([])
   const [stats, setStats] = useState<AdminCostEvidenceStats | null>(null)
@@ -78,10 +92,39 @@ const CostEvidenceReview = () => {
   const [previewUrl, setPreviewUrl] = useState('')
   const [reviewingId, setReviewingId] = useState<number | null>(null)
 
+  // 请求通知权限
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
+
   useEffect(() => {
     loadEvidences()
     loadStats()
   }, [currentPage, filterCategory, filterStatus])
+
+  // 5秒自动刷新 + 新待审核通知
+  const prevPendingCountRef = React.useRef<number | null>(null)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadEvidences()
+      loadStats()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [currentPage, filterCategory, filterStatus])
+
+  // 当待审核数量增加时发送浏览器通知
+  useEffect(() => {
+    if (stats === null) return
+    const currentPending = stats.pending_count
+    if (prevPendingCountRef.current !== null && currentPending > prevPendingCountRef.current) {
+      const newCount = currentPending - prevPendingCountRef.current
+      sendNotification(`收到 ${newCount} 条新的退款/凭据审批请求`, `当前共 ${currentPending} 条待审核`)
+    }
+    prevPendingCountRef.current = currentPending
+  }, [stats?.pending_count])
 
   const loadEvidences = async () => {
     setLoading(true)

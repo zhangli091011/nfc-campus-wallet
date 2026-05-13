@@ -14,6 +14,9 @@ import com.campus.nfcwallet.models.RefundResponse
 import com.campus.nfcwallet.models.Transaction
 import com.campus.nfcwallet.utils.SessionManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import retrofit2.Call
 import retrofit2.Callback
@@ -31,6 +34,7 @@ import retrofit2.Response
 class RefundManagerViewModel(
     private val sessionManager: SessionManager,
     private val onRefundSuccess: (() -> Unit)? = null,
+    private val onRefundApproved: (() -> Unit)? = null,
 ) : ViewModel() {
 
     private val TAG = "RefundManagerVM"
@@ -40,10 +44,82 @@ class RefundManagerViewModel(
         private set
 
     private var boothId: Int = -1
+    private var pollingJob: Job? = null
+    private var previousApprovedCount: Int? = null
 
     fun init(boothId: Int) {
         this.boothId = boothId
         loadRecentTransactions()
+        startPolling()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        pollingJob?.cancel()
+    }
+
+    private fun startPolling() {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            while (isActive) {
+                delay(5000)
+                loadRecentTransactionsSilent()
+                checkRefundRequestStatus()
+            }
+        }
+    }
+
+    // 静默刷新交易列表
+    private fun loadRecentTransactionsSilent() {
+        val token = sessionManager.authHeader ?: return
+        apiService.getBoothTransactions(token, boothId, 50)
+            .enqueue(object : Callback<BoothTransactionsResponse> {
+                override fun onResponse(
+                    call: Call<BoothTransactionsResponse>,
+                    response: Response<BoothTransactionsResponse>,
+                ) {
+                    if (response.isSuccessful && response.body() != null) {
+                        uiState = uiState.copy(
+                            transactions = response.body()!!.transactions ?: emptyList(),
+                        )
+                    }
+                }
+
+                override fun onFailure(call: Call<BoothTransactionsResponse>, t: Throwable) {
+                    Log.d(TAG, "静默刷新失败: ${t.message}")
+                }
+            })
+    }
+
+    // 检查退款申请状态变化（收银员提交的申请是否被审批）
+    @Suppress("UNCHECKED_CAST")
+    private fun checkRefundRequestStatus() {
+        val token = sessionManager.authHeader ?: return
+        // 查询已审批的退款申请
+        apiService.getRefundRequests(token, "approved", 50, 0)
+            .enqueue(object : Callback<Map<String, Any>> {
+                override fun onResponse(call: Call<Map<String, Any>>, response: Response<Map<String, Any>>) {
+                    if (response.isSuccessful && response.body() != null) {
+                        val data = response.body()!!
+                        val rawList = data["requests"] as? List<Map<String, Any>> ?: emptyList()
+                        val currentApprovedCount = rawList.size
+
+                        if (previousApprovedCount != null && currentApprovedCount > previousApprovedCount!!) {
+                            // 有新的退款申请被通过
+                            onRefundApproved?.invoke()
+                            uiState = uiState.copy(
+                                successMessage = "🎉 您的退款申请已被管理员通过！"
+                            )
+                            loadRecentTransactionsSilent()
+                        }
+                        previousApprovedCount = currentApprovedCount
+                    }
+                }
+
+                override fun onFailure(call: Call<Map<String, Any>>, t: Throwable) {
+                    // 静默失败
+                }
+            })
     }
 
     // -----------------------------------------------------------------

@@ -1,5 +1,7 @@
 package com.campus.nfcwallet.ui.refund
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -20,8 +22,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.campus.nfcwallet.R
 import com.campus.nfcwallet.ui.LoginActivity
 import com.campus.nfcwallet.utils.SessionManager
 
@@ -47,6 +51,7 @@ class RefundManagerActivity : ComponentActivity() {
                 return RefundManagerViewModel(
                     sessionManager = SessionManager(this@RefundManagerActivity),
                     onRefundSuccess = { vibrateOnRefundSuccess() },
+                    onRefundApproved = { sendRefundApprovedNotification() },
                 ) as T
             }
         }
@@ -202,6 +207,42 @@ class RefundManagerActivity : ComponentActivity() {
         } catch (_: Exception) {
             // 忽略震动失败
         }
+    }
+
+    // -----------------------------------------------------------------
+    // 通知
+    // -----------------------------------------------------------------
+    companion object {
+        const val CHANNEL_ID = "refund_notification_channel"
+    }
+
+    private var notificationId = 2001
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "退款审批通知",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "退款申请审批结果通知"
+            }
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun sendRefundApprovedNotification() {
+        createNotificationChannel()
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("退款申请已通过 ✓")
+            .setContentText("管理员已审批通过您的退款申请")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        manager.notify(notificationId++, notification)
     }
 
     // -----------------------------------------------------------------

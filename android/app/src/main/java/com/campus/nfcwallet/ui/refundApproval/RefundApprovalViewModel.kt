@@ -5,9 +5,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.campus.nfcwallet.api.APIClient
 import com.campus.nfcwallet.api.WalletAPIService
 import com.campus.nfcwallet.utils.SessionManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -30,10 +35,13 @@ data class RefundApprovalUiState(
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val filter: String = "pending", // pending, approved, rejected, all
+    val hasNewNotification: Boolean = false,
+    val notificationMessage: String? = null,
 )
 
 class RefundApprovalViewModel(
     private val sessionManager: SessionManager,
+    private val onNewRequest: (() -> Unit)? = null,
 ) : ViewModel() {
 
     private val TAG = "RefundApprovalVM"
@@ -42,8 +50,74 @@ class RefundApprovalViewModel(
     var uiState by mutableStateOf(RefundApprovalUiState())
         private set
 
+    private var previousPendingCount: Int? = null
+    private var pollingJob: Job? = null
+
     fun init() {
         loadRequests()
+        startPolling()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        pollingJob?.cancel()
+    }
+
+    private fun startPolling() {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            while (isActive) {
+                delay(5000)
+                loadRequestsSilent()
+            }
+        }
+    }
+
+    // 静默刷新（不显示loading状态）
+    private fun loadRequestsSilent() {
+        val token = sessionManager.authHeader ?: return
+        val statusParam = if (uiState.filter == "all") null else uiState.filter
+
+        apiService.getRefundRequests(token, statusParam, 50, 0)
+            .enqueue(object : Callback<Map<String, Any>> {
+                @Suppress("UNCHECKED_CAST")
+                override fun onResponse(call: Call<Map<String, Any>>, response: Response<Map<String, Any>>) {
+                    if (response.isSuccessful && response.body() != null) {
+                        val data = response.body()!!
+                        val rawList = data["requests"] as? List<Map<String, Any>> ?: emptyList()
+                        val items = rawList.map { r ->
+                            RefundRequestItem(
+                                id = (r["id"] as? Double)?.toInt() ?: 0,
+                                requesterName = r["requester_name"] as? String ?: "-",
+                                txnAmount = (r["txn_amount"] as? Double) ?: 0.0,
+                                cardUid = r["card_uid"] as? String,
+                                reason = r["reason"] as? String ?: "",
+                                status = r["status"] as? String ?: "pending",
+                                createdAt = r["created_at"] as? String,
+                                txnTime = r["txn_time"] as? String,
+                            )
+                        }
+
+                        // 检测新的待审批请求
+                        val currentPendingCount = items.count { it.status == "pending" }
+                        if (previousPendingCount != null && currentPendingCount > previousPendingCount!!) {
+                            onNewRequest?.invoke()
+                            uiState = uiState.copy(
+                                hasNewNotification = true,
+                                notificationMessage = "收到 ${currentPendingCount - previousPendingCount!!} 条新退款申请"
+                            )
+                        }
+                        previousPendingCount = currentPendingCount
+
+                        uiState = uiState.copy(requests = items)
+                    }
+                }
+
+                override fun onFailure(call: Call<Map<String, Any>>, t: Throwable) {
+                    // 静默失败，不影响UI
+                    Log.d(TAG, "静默刷新失败: ${t.message}")
+                }
+            })
     }
 
     fun setFilter(filter: String) {
@@ -140,6 +214,6 @@ class RefundApprovalViewModel(
     }
 
     fun dismissMessage() {
-        uiState = uiState.copy(errorMessage = null, successMessage = null)
+        uiState = uiState.copy(errorMessage = null, successMessage = null, hasNewNotification = false, notificationMessage = null)
     }
 }

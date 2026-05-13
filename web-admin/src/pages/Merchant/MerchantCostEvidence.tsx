@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Card,
   Table,
@@ -74,6 +74,20 @@ const statusColorMap: Record<string, string> = {
   rejected: 'error',
 }
 
+// 浏览器通知
+function sendNotification(title: string, body: string) {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/favicon.ico' })
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') {
+        new Notification(title, { body, icon: '/favicon.ico' })
+      }
+    })
+  }
+}
+
 const MerchantCostEvidence = () => {
   const [evidences, setEvidences] = useState<CostEvidence[]>([])
   const [stats, setStats] = useState<CostEvidenceStats | null>(null)
@@ -91,10 +105,48 @@ const MerchantCostEvidence = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const isMobile = useIsMobile()
 
+  // 请求通知权限
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
+
   useEffect(() => {
     loadEvidences()
     loadStats()
   }, [currentPage, filterCategory, filterStatus])
+
+  // 5秒自动刷新 + 审批结果通知
+  const prevApprovedCountRef = useRef<number | null>(null)
+  const prevRejectedCountRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadEvidences()
+      loadStats()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [currentPage, filterCategory, filterStatus])
+
+  // 当审批通过/驳回数量增加时发送浏览器通知
+  useEffect(() => {
+    if (stats === null) return
+    const approvedCount = stats.by_status.find((s) => s.status === 'approved')?.count || 0
+    const rejectedCount = stats.by_status.find((s) => s.status === 'rejected')?.count || 0
+
+    if (prevApprovedCountRef.current !== null && approvedCount > prevApprovedCountRef.current) {
+      const newCount = approvedCount - prevApprovedCountRef.current
+      sendNotification(`${newCount} 条凭据已通过审批 ✓`, '管理员已审核通过您提交的成本凭据')
+    }
+    if (prevRejectedCountRef.current !== null && rejectedCount > prevRejectedCountRef.current) {
+      const newCount = rejectedCount - prevRejectedCountRef.current
+      sendNotification(`${newCount} 条凭据被驳回 ✗`, '管理员驳回了您提交的成本凭据，请检查后重新提交')
+    }
+
+    prevApprovedCountRef.current = approvedCount
+    prevRejectedCountRef.current = rejectedCount
+  }, [stats])
 
   const loadEvidences = async () => {
     setLoading(true)

@@ -131,9 +131,9 @@ async def get_card_return_records(
                 "refunded_amount": refunded_amount,
                 "return_time": return_time,
                 "operator_name": operator_name,
-                "loan_count": int(loan_info["cnt"]) if loan_info else 0,
-                "loan_total_principal": float(loan_info["total_principal"]) if loan_info else 0.0,
-                "loan_remaining_debt": float(loan_info["remaining_debt"]) if loan_info else 0.0,
+                "loan_count": int(loan_info["cnt"]) if loan_info and loan_info["cnt"] is not None else 0,
+                "loan_total_principal": float(loan_info["total_principal"]) if loan_info and loan_info["total_principal"] is not None else 0.0,
+                "loan_remaining_debt": float(loan_info["remaining_debt"]) if loan_info and loan_info["remaining_debt"] is not None else 0.0,
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             })
 

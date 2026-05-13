@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Card,
   Table,
@@ -36,6 +36,20 @@ const statusMap: Record<string, { label: string; color: string }> = {
   rejected: { label: '已驳回', color: 'error' },
 }
 
+// 浏览器通知
+function sendNotification(title: string, body: string) {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/favicon.ico' })
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') {
+        new Notification(title, { body, icon: '/favicon.ico' })
+      }
+    })
+  }
+}
+
 const RefundRequestApproval = () => {
   const [requests, setRequests] = useState<RefundRequestItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -52,6 +66,34 @@ const RefundRequestApproval = () => {
   useEffect(() => {
     loadRequests()
   }, [currentPage, statusFilter])
+
+  // 请求通知权限
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
+
+  // 5秒自动刷新 + 新退款申请通知
+  const prevPendingCountRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadRequests()
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [currentPage, statusFilter])
+
+  // 当待审批数量增加时发送浏览器通知
+  useEffect(() => {
+    if (statusFilter !== 'pending') return
+    const currentPending = totalCount
+    if (prevPendingCountRef.current !== null && currentPending > prevPendingCountRef.current) {
+      const newCount = currentPending - prevPendingCountRef.current
+      sendNotification(`收到 ${newCount} 条新退款申请`, `当前共 ${currentPending} 条待审批`)
+    }
+    prevPendingCountRef.current = currentPending
+  }, [totalCount, statusFilter])
 
   const loadRequests = async () => {
     setLoading(true)
