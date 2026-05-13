@@ -365,6 +365,16 @@
                 android:textSize="16sp" />
 
             <Button
+                android:id="@+id/cashPayButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FF8F00"
+                android:text="现金收款"
+                android:textSize="16sp" />
+
+            <Button
                 android:id="@+id/rechargeButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"

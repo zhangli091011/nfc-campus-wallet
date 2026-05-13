@@ -560,4 +560,21 @@ public interface WalletAPIService {
         @Query("event_id") int eventId,
         @Query("txn_limit") int txnLimit
     );
+
+    /**
+     * Record cash payment (现金收款).
+     *
+     * POST /booths/{booth_id}/cash-payment
+     *
+     * @param authorization Authorization header (Bearer token)
+     * @param boothId Booth ID
+     * @param request Request body containing amount and remark
+     * @return Cash payment response
+     */
+    @POST("booths/{booth_id}/cash-payment")
+    Call<Map<String, Object>> processCashPayment(
+        @Header("Authorization") String authorization,
+        @Path("booth_id") int boothId,
+        @Body Map<String, Object> request
+    );
 }

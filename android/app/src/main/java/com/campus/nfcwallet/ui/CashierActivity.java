@@ -97,6 +97,7 @@ public class CashierActivity extends AppCompatActivity {
     // UI Components - Actions
     private Button queryBalanceButton;
     private Button payButton;
+    private Button cashPayButton;
     private Button rechargeButton;
     private Button clearButton;
     private Button refundButton;
@@ -189,6 +190,7 @@ public class CashierActivity extends AppCompatActivity {
         // Actions
         queryBalanceButton = findViewById(R.id.queryBalanceButton);
         payButton = findViewById(R.id.payButton);
+        cashPayButton = findViewById(R.id.cashPayButton);
         rechargeButton = findViewById(R.id.rechargeButton);
         clearButton = findViewById(R.id.clearButton);
         refundButton = findViewById(R.id.refundButton);
@@ -200,6 +202,7 @@ public class CashierActivity extends AppCompatActivity {
         // Set button listeners
         queryBalanceButton.setOnClickListener(v -> queryBalance());
         payButton.setOnClickListener(v -> processPayment());
+        cashPayButton.setOnClickListener(v -> processCashPayment());
         rechargeButton.setOnClickListener(v -> processRecharge());
         clearButton.setOnClickListener(v -> clearCard());
         logoutButton.setOnClickListener(v -> performLogout());
@@ -802,6 +805,98 @@ public class CashierActivity extends AppCompatActivity {
                 showError(errorMessage);
             }
         });
+    }
+    
+    /**
+     * Process cash payment (现金收款 - 不扣卡内余额).
+     */
+    private void processCashPayment() {
+        // 现金收款不需要刷卡，直接输入金额
+        String amountStr = customAmountInput.getText().toString().trim();
+        if (amountStr.isEmpty()) {
+            showError("请输入现金收款金额");
+            return;
+        }
+        
+        double amount;
+        try {
+            amount = Double.parseDouble(amountStr);
+        } catch (NumberFormatException e) {
+            showError("金额格式错误");
+            return;
+        }
+        
+        if (amount <= 0) {
+            showError("金额必须大于 0");
+            return;
+        }
+        
+        String remark = customRemarkInput.getText().toString().trim();
+        if (remark.isEmpty()) {
+            remark = "现金收款";
+        }
+        
+        final String finalRemark = remark;
+        
+        new AlertDialog.Builder(this)
+            .setTitle("确认现金收款")
+            .setMessage(String.format("现金收款金额: ¥%.2f\n备注: %s\n\n此操作仅记录入账，不扣除任何卡内余额。", amount, finalRemark))
+            .setPositiveButton("确认", (dialog, which) -> executeCashPayment(amount, finalRemark))
+            .setNegativeButton("取消", null)
+            .show();
+    }
+    
+    /**
+     * Execute cash payment API call.
+     */
+    private void executeCashPayment(double amount, String remark) {
+        String authHeader = sessionManager.getAuthHeader();
+        if (authHeader == null) {
+            showError("未登录");
+            return;
+        }
+        
+        if (currentBooth == null) {
+            showError("摊位信息未加载");
+            return;
+        }
+        
+        actionProgress.setVisibility(View.VISIBLE);
+        cashPayButton.setEnabled(false);
+        
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put("amount", amount);
+        requestData.put("remark", remark);
+        
+        apiService.processCashPayment(authHeader, currentBooth.getId(), requestData)
+            .enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    actionProgress.setVisibility(View.GONE);
+                    cashPayButton.setEnabled(true);
+                    
+                    if (response.isSuccessful() && response.body() != null) {
+                        Map<String, Object> result = response.body();
+                        String message = (String) result.get("message");
+                        showSuccess(message != null ? message : String.format("现金收款 ¥%.2f 已记录", amount));
+                        
+                        // 清空输入
+                        customAmountInput.setText("");
+                        customRemarkInput.setText("");
+                    } else {
+                        String error = ErrorHandler.getErrorMessage(response);
+                        showError(error);
+                    }
+                }
+                
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    actionProgress.setVisibility(View.GONE);
+                    cashPayButton.setEnabled(true);
+                    Log.e(TAG, "Cash payment failed", t);
+                    showError("现金收款记录失败: " + (t.getMessage() != null ? t.getMessage() : "网络错误"));
+                }
+            });
     }
     
     /**

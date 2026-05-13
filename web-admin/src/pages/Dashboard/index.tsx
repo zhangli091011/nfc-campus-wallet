@@ -122,6 +122,7 @@ const Dashboard = () => {
           pay: '支付',
           refund: '退款',
           correction: '更正',
+          cash_payment: '现金收款',
         }
         return typeMap[type] || type
       },

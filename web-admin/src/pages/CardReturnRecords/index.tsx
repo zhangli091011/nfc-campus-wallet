@@ -42,6 +42,7 @@ const txnTypeMap: Record<string, { label: string; color: string }> = {
   pay: { label: '消费', color: 'red' },
   refund: { label: '退款', color: 'orange' },
   correction: { label: '更正', color: 'purple' },
+  cash_payment: { label: '现金收款', color: 'gold' },
   loan_issue: { label: '贷款发放', color: 'blue' },
   loan_fee: { label: '贷款手续费', color: 'volcano' },
   stock_buy: { label: '购买股票', color: 'cyan' },

@@ -57,14 +57,10 @@ const AppRoutes = () => {
       {/* 登录页 */}
       <Route path="/login" element={<Login />} />
 
-      {/* 股市大屏（全屏，无Layout） */}
+      {/* 股市大屏（全屏，无Layout，无需登录） */}
       <Route
         path="/stock-dashboard"
-        element={
-          <PrivateRoute>
-            <StockDashboard />
-          </PrivateRoute>
-        }
+        element={<StockDashboard />}
       />
 
       {/* 央行信用风险看板（全屏，无Layout） */}

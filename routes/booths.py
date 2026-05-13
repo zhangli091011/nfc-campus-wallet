@@ -629,6 +629,111 @@ async def process_booth_payment(
         )
 
 
+class CashPaymentRequest(BaseModel):
+    """现金收款请求"""
+    amount: float = Field(..., gt=0, description="现金收款金额（元）")
+    remark: Optional[str] = Field(None, max_length=255, description="备注")
+    event_id: Optional[int] = Field(None, description="活动ID（可选，默认使用当前活动）")
+
+
+@router.post("/booths/{booth_id}/cash-payment")
+async def process_cash_payment(
+    booth_id: int,
+    request: CashPaymentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    记录现金收款（不扣卡内余额）。
+
+    用于摊位收取现金时记录入账，方便后台对账。
+    交易类型为 cash_payment，不关联任何参与者卡片。
+
+    权限：super_admin、event_admin、booth_cashier（仅自己摊位）
+    """
+    from models.transaction import Transaction
+    from datetime import datetime, timezone
+
+    # 权限验证
+    if current_user.role == 'booth_cashier':
+        if current_user.booth_id != booth_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"只能为自己的摊位记录现金收款"
+            )
+    elif current_user.role not in ('super_admin', 'event_admin'):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="权限不足"
+        )
+
+    # 确定活动ID
+    event_id = request.event_id
+    if event_id is None:
+        from services.event_service import EventService
+        event_service = EventService(db)
+        active_event = event_service.get_active_event()
+        if active_event is None:
+            return JSONResponse(
+                status_code=400,
+                content={"error_code": "NO_ACTIVE_EVENT", "message": "没有活跃的活动"}
+            )
+        event_id = active_event.id
+
+    # 验证摊位存在
+    from models.booth import Booth
+    booth = db.query(Booth).filter(Booth.id == booth_id).first()
+    if not booth:
+        raise HTTPException(status_code=404, detail="摊位不存在")
+
+    try:
+        # 创建现金收款流水记录
+        txn = Transaction(
+            uid=None,
+            card_uid=None,
+            event_id=event_id,
+            participant_id=None,
+            account_id=None,
+            type="cash_payment",
+            amount=request.amount,
+            balance_before=0,
+            balance_after=0,
+            merchant_id=None,
+            remark=request.remark or "现金收款",
+            operator_id=str(current_user.id),
+        )
+        # 设置 booth_id（如果 Transaction 模型有此字段）
+        if hasattr(txn, 'booth_id'):
+            txn.booth_id = booth_id
+
+        db.add(txn)
+        db.commit()
+        db.refresh(txn)
+
+        logger.info(
+            f"Cash payment recorded: booth_id={booth_id}, amount=¥{request.amount:.2f}, "
+            f"event_id={event_id}, operator={current_user.username}, txn_id={txn.id}"
+        )
+
+        return {
+            "success": True,
+            "transaction_id": txn.id,
+            "amount": request.amount,
+            "booth_id": booth_id,
+            "booth_name": booth.name,
+            "event_id": event_id,
+            "operator": current_user.username,
+            "message": f"现金收款 ¥{request.amount:.2f} 已记录",
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Cash payment failed: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": str(e)}
+        )
+
 
 @router.get("/booths/{booth_id}/transactions")
 async def get_booth_transactions(

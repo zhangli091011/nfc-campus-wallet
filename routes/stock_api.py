@@ -384,10 +384,9 @@ async def settle_stock_market(
 )
 async def get_market_stats(
     event_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
-    """获取股市统计数据（金额为元）"""
+    """获取股市统计数据（无需认证，供大屏展示）"""
     try:
         service = StockAccountService(db)
         stats = service.get_market_stats(event_id)

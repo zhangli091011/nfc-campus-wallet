@@ -118,6 +118,7 @@ const TransactionHistory = () => {
           pay: { text: '支付', color: 'processing' },
           refund: { text: '退款', color: 'warning' },
           correction: { text: '更正', color: 'default' },
+          cash_payment: { text: '现金收款', color: 'gold' },
         }
         const config = typeMap[type] || { text: type, color: 'default' }
         return <Tag color={config.color}>{config.text}</Tag>
@@ -234,6 +235,7 @@ const TransactionHistory = () => {
           <Select.Option value="pay">支付</Select.Option>
           <Select.Option value="refund">退款</Select.Option>
           <Select.Option value="correction">更正</Select.Option>
+          <Select.Option value="cash_payment">现金收款</Select.Option>
         </Select>
         <RangePicker
           value={dateRange}
