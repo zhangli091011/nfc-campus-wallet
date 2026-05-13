@@ -17,6 +17,18 @@ public class TransactionResponse {
     @SerializedName("transaction_id")
     private int transactionId;
     
+    @SerializedName("discount_applied")
+    private boolean discountApplied;
+    
+    @SerializedName("discount_amount")
+    private Double discountAmount;
+    
+    @SerializedName("original_amount")
+    private Double originalAmount;
+    
+    @SerializedName("actual_amount")
+    private Double actualAmount;
+    
     public TransactionResponse() {
     }
     
@@ -50,12 +62,48 @@ public class TransactionResponse {
         this.transactionId = transactionId;
     }
     
+    public boolean isDiscountApplied() {
+        return discountApplied;
+    }
+    
+    public void setDiscountApplied(boolean discountApplied) {
+        this.discountApplied = discountApplied;
+    }
+    
+    public Double getDiscountAmount() {
+        return discountAmount;
+    }
+    
+    public void setDiscountAmount(Double discountAmount) {
+        this.discountAmount = discountAmount;
+    }
+    
+    public Double getOriginalAmount() {
+        return originalAmount;
+    }
+    
+    public void setOriginalAmount(Double originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+    
+    public Double getActualAmount() {
+        return actualAmount;
+    }
+    
+    public void setActualAmount(Double actualAmount) {
+        this.actualAmount = actualAmount;
+    }
+    
     @Override
     public String toString() {
         return "TransactionResponse{" +
                 "success=" + success +
                 ", newBalance=" + newBalance +
                 ", transactionId=" + transactionId +
+                ", discountApplied=" + discountApplied +
+                ", discountAmount=" + discountAmount +
+                ", originalAmount=" + originalAmount +
+                ", actualAmount=" + actualAmount +
                 '}';
     }
 }

@@ -211,6 +211,11 @@ class TransactionResponse(BaseModel):
     booth_id: Optional[int] = Field(None, description="Booth ID")
     product_id: Optional[int] = Field(None, description="Product ID")
     operator_id: Optional[int] = Field(None, description="Operator User ID")
+    # 随机立减字段
+    discount_applied: bool = Field(False, description="Whether random discount was applied")
+    discount_amount: Optional[float] = Field(None, description="Discount amount in yuan")
+    original_amount: Optional[float] = Field(None, description="Original payment amount before discount in yuan")
+    actual_amount: Optional[float] = Field(None, description="Actual charged amount after discount in yuan")
     
     class Config:
         json_schema_extra = {
@@ -223,7 +228,11 @@ class TransactionResponse(BaseModel):
                 "participant_id": 1,
                 "booth_id": 1,
                 "product_id": 5,
-                "operator_id": 3
+                "operator_id": 3,
+                "discount_applied": True,
+                "discount_amount": 2.50,
+                "original_amount": 25.00,
+                "actual_amount": 22.50
             }
         }
 

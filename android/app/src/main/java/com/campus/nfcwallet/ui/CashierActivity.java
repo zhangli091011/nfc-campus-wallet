@@ -772,7 +772,23 @@ public class CashierActivity extends AppCompatActivity {
                     currentBalance = result.getNewBalance();
                     balanceText.setText(String.format("¥%.2f", currentBalance));
                     
-                    showSuccess(String.format("支付成功\n新余额: ¥%.2f", currentBalance));
+                    // 构建支付成功消息，包含立减信息
+                    String successMessage;
+                    if (result.isDiscountApplied() && result.getDiscountAmount() != null) {
+                        successMessage = String.format(
+                            "🎉 支付成功！随机立减 ¥%.2f\n" +
+                            "原价: ¥%.2f → 实付: ¥%.2f\n" +
+                            "新余额: ¥%.2f",
+                            result.getDiscountAmount(),
+                            result.getOriginalAmount(),
+                            result.getActualAmount(),
+                            currentBalance
+                        );
+                    } else {
+                        successMessage = String.format("支付成功\n新余额: ¥%.2f", currentBalance);
+                    }
+                    
+                    showSuccess(successMessage);
                     
                     // Clear cart and input
                     cartItems.clear();

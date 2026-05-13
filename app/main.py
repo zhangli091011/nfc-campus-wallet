@@ -202,6 +202,10 @@ def create_app() -> FastAPI:
     from routes.refund_request import router as refund_request_router
     app.include_router(refund_request_router, tags=["refund-request"])
     
+    # Random discount system (随机立减)
+    from routes.random_discount import router as random_discount_router
+    app.include_router(random_discount_router, tags=["random-discount"])
+    
     # App OTA update (APK 上传与版本检查)
     from routes.app_update import router as app_update_router
     app.include_router(app_update_router, tags=["app-update"])

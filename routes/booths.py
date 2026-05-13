@@ -5,6 +5,7 @@ Booths routes for Booth Management System.
 """
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse
 from typing import Optional, List
@@ -521,21 +522,51 @@ async def process_booth_payment(
         # 处理摊位支付
         transaction_service = TransactionService(db)
         
+        # 计算随机立减
+        from services.random_discount_service import RandomDiscountService
+        discount_service = RandomDiscountService(db)
+        
+        # 先获取参与者ID用于立减计算
+        from services.participant_service import ParticipantService
+        from services.account_service import AccountService
+        participant_service_inst = ParticipantService(db)
+        participant = participant_service_inst.get_participant_by_card(payment_request.card_uid)
+        
+        discount_result = discount_service.calculate_discount(
+            event_id=event_id,
+            participant_id=participant.id,
+            payment_amount=payment_request.amount
+        )
+        
+        # 使用立减后的实际金额进行支付
+        actual_payment_amount = discount_result.actual_amount if discount_result.applied else payment_request.amount
+        
         result = transaction_service.process_booth_payment(
             event_id=event_id,
             card_uid=payment_request.card_uid,
             booth_id=booth_id,
-            amount_yuan=payment_request.amount,
+            amount_yuan=actual_payment_amount,
             operator_id=current_user.id,
             product_id=payment_request.product_id,
             remark=payment_request.remark
         )
+        
+        # 如果立减生效，记录立减信息
+        if discount_result.applied:
+            discount_service.apply_discount(
+                event_id=event_id,
+                participant_id=participant.id,
+                transaction_id=result.transaction_id,
+                discount_result=discount_result,
+                booth_id=booth_id
+            )
         
         logger.info(
             f"Booth payment successful: booth_id={booth_id}, event_id={event_id}, "
             f"card_uid={payment_request.card_uid}, amount={payment_request.amount} yuan, "
             f"product_id={payment_request.product_id}, operator={current_user.username}, "
             f"txn_id={result.transaction_id}"
+            f"{f', discount={discount_result.discount_amount}' if discount_result.applied else ''}"
         )
         
         # 获取交易详情以返回完整信息
@@ -551,7 +582,11 @@ async def process_booth_payment(
             participant_id=transaction.participant_id if transaction else None,
             booth_id=booth_id,
             product_id=payment_request.product_id,
-            operator_id=current_user.id
+            operator_id=current_user.id,
+            discount_applied=discount_result.applied,
+            discount_amount=discount_result.discount_amount if discount_result.applied else None,
+            original_amount=discount_result.original_amount if discount_result.applied else None,
+            actual_amount=discount_result.actual_amount if discount_result.applied else None
         )
     
     except HTTPException:
