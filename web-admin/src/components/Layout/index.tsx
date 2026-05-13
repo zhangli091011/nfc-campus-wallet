@@ -24,6 +24,7 @@ import {
   AlertOutlined,
   FileTextOutlined,
   CloudUploadOutlined,
+  CreditCardOutlined,
 } from '@ant-design/icons'
 import { getUser, clearAuth, isSuperAdmin } from '@/utils/auth'
 import type { MenuProps } from 'antd'
@@ -157,6 +158,11 @@ const Layout = () => {
       key: '/bank-loans',
       icon: <BankOutlined />,
       label: '银行借贷',
+    },
+    {
+      key: '/card-returns',
+      icon: <CreditCardOutlined />,
+      label: '退卡记录',
     },
     ...(isSuperAdmin()
       ? [

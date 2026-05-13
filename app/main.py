@@ -194,6 +194,10 @@ def create_app() -> FastAPI:
     from routes.card_detail import router as card_detail_router
     app.include_router(card_detail_router, tags=["card-detail"])
     
+    # Card return records (退卡记录查询)
+    from routes.card_returns import router as card_returns_router
+    app.include_router(card_returns_router, tags=["card-returns"])
+    
     # App OTA update (APK 上传与版本检查)
     from routes.app_update import router as app_update_router
     app.include_router(app_update_router, tags=["app-update"])

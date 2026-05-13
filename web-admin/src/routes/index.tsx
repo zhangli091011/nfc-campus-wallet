@@ -28,6 +28,7 @@ import BankCreditDashboard from '@/pages/BankCreditDashboard'
 import MacroEconomyDashboard from '@/pages/MacroEconomyDashboard'
 import AppUpdate from '@/pages/AppUpdate'
 import BankLoanManagement from '@/pages/BankLoanManagement'
+import CardReturnRecords from '@/pages/CardReturnRecords'
 import {
   MerchantLogin,
   MerchantRegister,
@@ -117,6 +118,9 @@ const AppRoutes = () => {
         
         {/* 银行借贷管理 */}
         <Route path="bank-loans" element={<BankLoanManagement />} />
+        
+        {/* 退卡记录 */}
+        <Route path="card-returns" element={<CardReturnRecords />} />
         
         {/* 报表相关路由 */}
         <Route path="reports/dashboard" element={<ReportsDashboard />} />
