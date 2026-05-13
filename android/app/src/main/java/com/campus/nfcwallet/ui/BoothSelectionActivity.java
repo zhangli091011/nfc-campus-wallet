@@ -101,9 +101,6 @@ public class BoothSelectionActivity extends AppCompatActivity {
         adapter = new BoothListAdapter(booths, this::onBoothSelected);
         boothsRecyclerView.setAdapter(adapter);
         
-        // Check for app updates
-        new com.campus.nfcwallet.utils.AppUpdateManager(this).checkForUpdate();
-        
         // Route based on role
         routeByRole();
     }
