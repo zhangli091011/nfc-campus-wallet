@@ -211,11 +211,11 @@ public class CashierActivity extends AppCompatActivity {
         refundButton.setOnClickListener(v -> openRefundManager());
         viewCardDetailButton.setOnClickListener(v -> viewCardDetail());
         
-        // Initially hide sections
+        // Initially hide sections (except custom amount for cash payments)
         cardInfoSection.setVisibility(View.GONE);
         productsSection.setVisibility(View.GONE);
         cartSection.setVisibility(View.GONE);
-        customAmountSection.setVisibility(View.GONE);
+        customAmountSection.setVisibility(View.VISIBLE);
     }
     
     private void initializeServices() {
@@ -1023,7 +1023,7 @@ public class CashierActivity extends AppCompatActivity {
         viewCardDetailButton.setVisibility(View.GONE);
         productsSection.setVisibility(View.VISIBLE);
         cartSection.setVisibility(View.GONE);
-        customAmountSection.setVisibility(View.GONE);
+        customAmountSection.setVisibility(View.VISIBLE);
         
         cartItems.clear();
         cartAdapter.notifyDataSetChanged();

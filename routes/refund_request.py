@@ -59,6 +59,9 @@ async def create_refund_request(
     - booth_cashier 提交后需要 super_admin 审批
     - super_admin / event_admin 提交后自动通过（直接执行退款）
     """
+    # 确保表存在
+    _ensure_table(db)
+
     # 验证原交易存在且为 pay 类型
     original_txn = db.query(Transaction).filter(
         Transaction.id == req.original_transaction_id
@@ -119,10 +122,6 @@ async def create_refund_request(
 
     except Exception as e:
         db.rollback()
-        # 如果表不存在，创建它
-        if "refund_requests" in str(e).lower() and "exist" in str(e).lower():
-            _ensure_table(db)
-            return await create_refund_request(req, current_user, db)
         logger.error(f"Create refund request failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
