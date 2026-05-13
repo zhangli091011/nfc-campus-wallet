@@ -103,7 +103,11 @@ data class CardReturnUiState(
     val resultRefunded: Double = 0.0,
     val resultLoanRepaid: Double = 0.0,
     val resultRemainingDebt: Double = 0.0,
-    val resultMode: String? = null, // "repay_first" or "direct_refund"
+    val resultMode: String? = null, // "repay_first", "direct_refund", "repay_only"
+    val resultNewBalance: Double = 0.0,
+    // 还款输入
+    val showRepayDialog: Boolean = false,
+    val repayAmount: String = "",
 ) {
     val hasCard: Boolean get() = cardUid != null
     val isInfoReady: Boolean get() = participantId != null && !isLoadingInfo
@@ -119,6 +123,10 @@ fun CardReturnScreen(
     state: CardReturnUiState,
     onReturnWithRepay: () -> Unit,
     onReturnWithoutRepay: () -> Unit,
+    onRepayOnly: () -> Unit,
+    onShowRepayDialog: () -> Unit,
+    onDismissRepayDialog: () -> Unit,
+    onRepayAmountChange: (String) -> Unit,
     onReset: () -> Unit,
     onDismissError: () -> Unit,
     onLogout: () -> Unit,
@@ -175,6 +183,7 @@ fun CardReturnScreen(
                         state = state,
                         onReturnWithRepay = onReturnWithRepay,
                         onReturnWithoutRepay = onReturnWithoutRepay,
+                        onShowRepayDialog = onShowRepayDialog,
                     )
                 }
             }
@@ -194,6 +203,59 @@ fun CardReturnScreen(
                 )
             }
         }
+    }
+
+    // 还款金额输入弹窗
+    if (state.showRepayDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissRepayDialog,
+            containerColor = CardReturnColors.SurfaceBg,
+            titleContentColor = CardReturnColors.AccentBright,
+            textContentColor = CardReturnColors.TextPrimary,
+            title = { Text("输入还款金额") },
+            text = {
+                Column {
+                    Text(
+                        text = "当前余额: ¥${"%.2f".format(state.balance)}，待还贷款: ¥${"%.2f".format(state.loanAmount)}",
+                        color = CardReturnColors.TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = state.repayAmount,
+                        onValueChange = onRepayAmountChange,
+                        label = { Text("还款金额（元）") },
+                        placeholder = { Text("${"%.0f".format(minOf(state.balance, state.loanAmount))}") },
+                        singleLine = true,
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CardReturnColors.AccentGold,
+                            unfocusedBorderColor = CardReturnColors.BorderColor,
+                            focusedTextColor = CardReturnColors.TextPrimary,
+                            unfocusedTextColor = CardReturnColors.TextPrimary,
+                            focusedLabelColor = CardReturnColors.AccentGold,
+                            unfocusedLabelColor = CardReturnColors.TextSecondary,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "最大可还: ¥${"%.2f".format(minOf(state.balance, state.loanAmount))}",
+                        color = CardReturnColors.AccentDim,
+                        fontSize = 11.sp,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onRepayOnly) {
+                    Text("确认还款", color = CardReturnColors.AccentGold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissRepayDialog) {
+                    Text("取消", color = CardReturnColors.TextSecondary)
+                }
+            },
+        )
     }
 
     // 错误弹窗
@@ -224,14 +286,14 @@ private fun TopBar(onLogout: () -> Unit) {
         title = {
             Column {
                 Text(
-                    text = "退卡办理终端",
+                    text = "还款 + 退卡终端",
                     color = CardReturnColors.AccentBright,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp,
                 )
                 Text(
-                    text = "CARD RETURN TERMINAL",
+                    text = "REPAY & CARD RETURN TERMINAL",
                     color = CardReturnColors.AccentDim,
                     fontSize = 10.sp,
                     letterSpacing = 2.sp,
@@ -455,9 +517,28 @@ private fun ReturnModeSection(
     state: CardReturnUiState,
     onReturnWithRepay: () -> Unit,
     onReturnWithoutRepay: () -> Unit,
+    onShowRepayDialog: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        SectionLabel(text = "请选择退卡方式", icon = Icons.Default.CreditScore)
+        // 仅还款（不退卡）
+        if (state.hasLoan) {
+            SectionLabel(text = "还款操作（不退卡）", icon = Icons.Default.MonetizationOn)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ReturnModeCard(
+                title = "仅还款",
+                description = "从余额中扣除指定金额偿还贷款，不退卡。" +
+                    "当前余额 ¥${"%.2f".format(state.balance)}，待还贷款 ¥${"%.2f".format(state.loanAmount)}。",
+                accentColor = Color(0xFF42A5F5),
+                isLoading = state.isLoading,
+                isEnabled = !state.isLoading && state.balance > 0,
+                onClick = onShowRepayDialog,
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        SectionLabel(text = "退卡操作", icon = Icons.Default.CreditScore)
         Spacer(modifier = Modifier.height(12.dp))
 
         // 模式1: 余额先偿还贷款
@@ -585,7 +666,7 @@ private fun SuccessResultCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "退卡办理成功",
+                text = if (mode == "repay_only") "还款成功" else "退卡办理成功",
                 color = CardReturnColors.SuccessGreen,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
@@ -593,7 +674,7 @@ private fun SuccessResultCard(
 
             if (mode == "repay_first") {
                 Text(
-                    text = "模式：余额先偿还贷款",
+                    text = "模式：余额先偿还贷款后退卡",
                     color = CardReturnColors.TextSecondary,
                     fontSize = 12.sp,
                 )
@@ -603,35 +684,57 @@ private fun SuccessResultCard(
                     color = CardReturnColors.TextSecondary,
                     fontSize = 12.sp,
                 )
+            } else if (mode == "repay_only") {
+                Text(
+                    text = "模式：仅还款（未退卡）",
+                    color = CardReturnColors.TextSecondary,
+                    fontSize = 12.sp,
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Column(modifier = Modifier.fillMaxWidth()) {
-                AmountRow(
-                    label = "退还现金",
-                    value = "¥${"%.2f".format(refunded)}",
-                    valueColor = CardReturnColors.SuccessGreen,
-                    isBold = true,
-                    fontSize = 20.sp,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                AmountRow(
-                    label = "本次偿还贷款",
-                    value = "¥${"%.2f".format(loanRepaid)}",
-                    valueColor = CardReturnColors.AccentGold,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                AmountRow(
-                    label = "剩余未偿还贷款",
-                    value = "¥${"%.2f".format(remainingDebt)}",
-                    valueColor = if (remainingDebt > 0) CardReturnColors.WarningAmber else CardReturnColors.TextSecondary,
-                )
+                if (mode == "repay_only") {
+                    AmountRow(
+                        label = "本次还款",
+                        value = "¥${"%.2f".format(loanRepaid)}",
+                        valueColor = CardReturnColors.SuccessGreen,
+                        isBold = true,
+                        fontSize = 20.sp,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AmountRow(
+                        label = "剩余未偿还贷款",
+                        value = "¥${"%.2f".format(remainingDebt)}",
+                        valueColor = if (remainingDebt > 0) CardReturnColors.WarningAmber else CardReturnColors.TextSecondary,
+                    )
+                } else {
+                    AmountRow(
+                        label = "退还现金",
+                        value = "¥${"%.2f".format(refunded)}",
+                        valueColor = CardReturnColors.SuccessGreen,
+                        isBold = true,
+                        fontSize = 20.sp,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AmountRow(
+                        label = "本次偿还贷款",
+                        value = "¥${"%.2f".format(loanRepaid)}",
+                        valueColor = CardReturnColors.AccentGold,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AmountRow(
+                        label = "剩余未偿还贷款",
+                        value = "¥${"%.2f".format(remainingDebt)}",
+                        valueColor = if (remainingDebt > 0) CardReturnColors.WarningAmber else CardReturnColors.TextSecondary,
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            if (refunded > 0) {
+            if (mode != "repay_only" && refunded > 0) {
                 Text(
                     text = "请向持卡人现场退还现金 ¥${"%.2f".format(refunded)}",
                     color = CardReturnColors.WarningAmber,

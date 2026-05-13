@@ -20,13 +20,13 @@ import retrofit2.Response
 import kotlin.coroutines.resume
 
 /**
- * 退卡终端 ViewModel
+ * 还款+退卡终端 ViewModel
  *
- * 管理退卡的完整业务流程：
+ * 管理还款和退卡的完整业务流程：
  * 1. NFC 识别学生卡片
  * 2. 查询持卡人信息和余额/贷款状态
- * 3. 选择退卡模式（先还贷 / 直接退余额）
- * 4. 调用 API 执行退卡
+ * 3. 选择操作模式：仅还款 / 先还贷退卡 / 直接退余额
+ * 4. 调用 API 执行操作
  */
 class CardReturnViewModel(
     private val sessionManager: SessionManager,
@@ -152,6 +152,85 @@ class CardReturnViewModel(
     // 模式2: 直接全额退还余额，贷款另行偿还
     fun onReturnWithoutRepay() {
         executeReturn(repayLoanFirst = false)
+    }
+
+    // 显示还款弹窗
+    fun onShowRepayDialog() {
+        val maxRepay = minOf(uiState.balance, uiState.loanAmount)
+        uiState = uiState.copy(
+            showRepayDialog = true,
+            repayAmount = "%.0f".format(maxRepay),
+        )
+    }
+
+    // 关闭还款弹窗
+    fun onDismissRepayDialog() {
+        uiState = uiState.copy(showRepayDialog = false, repayAmount = "")
+    }
+
+    // 还款金额变更
+    fun onRepayAmountChange(value: String) {
+        // 只允许数字和小数点
+        val filtered = value.filter { it.isDigit() || it == '.' }
+        uiState = uiState.copy(repayAmount = filtered)
+    }
+
+    // 仅还款（不退卡）
+    fun onRepayOnly() {
+        val cardUid = uiState.cardUid ?: return
+        val token = sessionManager.authHeader ?: run {
+            uiState = uiState.copy(errorMessage = "登录已过期，请重新登录")
+            return
+        }
+        if (uiState.isLoading) return
+
+        val amount = uiState.repayAmount.toDoubleOrNull()
+        if (amount == null || amount <= 0) {
+            uiState = uiState.copy(errorMessage = "请输入有效的还款金额")
+            return
+        }
+
+        val maxRepay = minOf(uiState.balance, uiState.loanAmount)
+        if (amount > maxRepay) {
+            uiState = uiState.copy(errorMessage = "还款金额不能超过 ¥${"%.2f".format(maxRepay)}")
+            return
+        }
+
+        uiState = uiState.copy(isLoading = true, showRepayDialog = false, errorMessage = null)
+
+        val requestData = HashMap<String, Any>()
+        requestData["event_id"] = eventId
+        requestData["card_uid"] = cardUid
+        requestData["amount"] = amount.toInt()
+        requestData["remark"] = "还款+退卡终端操作还款"
+
+        apiService.repayLoan(token, requestData).enqueue(object : Callback<Map<String, Any>> {
+            override fun onResponse(call: Call<Map<String, Any>>, response: Response<Map<String, Any>>) {
+                if (response.isSuccessful && response.body() != null) {
+                    val result = response.body()!!
+                    val repaid = (result["repaid_amount"] as? Double) ?: amount
+                    val remaining = (result["remaining_debt"] as? Double) ?: 0.0
+                    val newBalance = (result["balance_after"] as? Double) ?: (uiState.balance - amount)
+
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        isSuccess = true,
+                        resultLoanRepaid = repaid,
+                        resultRemainingDebt = remaining,
+                        resultNewBalance = newBalance,
+                        resultMode = "repay_only",
+                    )
+                } else {
+                    val errorMsg = APIClient.getErrorMessage(response) ?: "还款失败 (${response.code()})"
+                    uiState = uiState.copy(isLoading = false, errorMessage = errorMsg)
+                }
+            }
+
+            override fun onFailure(call: Call<Map<String, Any>>, t: Throwable) {
+                Log.e(TAG, "还款请求失败", t)
+                uiState = uiState.copy(isLoading = false, errorMessage = "网络错误: ${t.message}")
+            }
+        })
     }
 
     private fun executeReturn(repayLoanFirst: Boolean) {

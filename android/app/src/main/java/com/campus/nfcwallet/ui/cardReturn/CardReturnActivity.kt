@@ -27,12 +27,13 @@ import com.campus.nfcwallet.ui.LoginActivity
 import com.campus.nfcwallet.utils.SessionManager
 
 /**
- * 退卡终端 Activity
+ * 还款+退卡终端 Activity
  *
- * 供工作人员使用，通过 NFC 识别学生卡片后办理退卡。
- * 支持两种退卡模式：
- * 1. 余额先偿还贷款再退卡（保留贷款记录用于追偿）
- * 2. 直接全额退还余额，贷款另行偿还（保留贷款记录用于追偿）
+ * 供工作人员使用，通过 NFC 识别学生卡片后办理还款或退卡。
+ * 支持三种操作模式：
+ * 1. 仅还款（不退卡）：从余额中扣除指定金额偿还贷款
+ * 2. 余额先偿还贷款再退卡（保留贷款记录用于追偿）
+ * 3. 直接全额退还余额，贷款另行偿还（保留贷款记录用于追偿）
  */
 class CardReturnActivity : ComponentActivity() {
 
@@ -79,6 +80,10 @@ class CardReturnActivity : ComponentActivity() {
                     state = viewModel.uiState,
                     onReturnWithRepay = viewModel::onReturnWithRepay,
                     onReturnWithoutRepay = viewModel::onReturnWithoutRepay,
+                    onRepayOnly = viewModel::onRepayOnly,
+                    onShowRepayDialog = viewModel::onShowRepayDialog,
+                    onDismissRepayDialog = viewModel::onDismissRepayDialog,
+                    onRepayAmountChange = viewModel::onRepayAmountChange,
                     onReset = viewModel::onReset,
                     onDismissError = viewModel::onDismissError,
                     onLogout = { logout() },

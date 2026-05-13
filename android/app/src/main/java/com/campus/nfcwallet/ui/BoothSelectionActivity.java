@@ -58,7 +58,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "💳 信用垫资发行（银行放贷）",
         "💰 充值员（官方中央银行）",
         "🔄 退款管理（摊位售后）",
-        "🪪 退卡办理（退还余额）",
+        "🪪 还款+退卡（还贷/退还余额）",
         "🔍 刷卡查看明细（用户信息）",
         "📋 摊位列表（管理员视角）",
     };

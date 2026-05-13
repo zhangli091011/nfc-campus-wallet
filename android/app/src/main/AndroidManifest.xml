@@ -138,7 +138,7 @@
                 android:resource="@xml/nfc_tech_filter" />
         </activity>
 
-        <!-- Card Return Activity (Compose - 退卡办理终端) -->
+        <!-- Card Return Activity (Compose - 还款+退卡终端) -->
         <activity
             android:name=".ui.cardReturn.CardReturnActivity"
             android:exported="false"
