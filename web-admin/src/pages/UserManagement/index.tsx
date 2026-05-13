@@ -78,6 +78,8 @@ const UserManagement = () => {
   } | null>(null)
   const [batchForm] = Form.useForm()
   const [batchLoading, setBatchLoading] = useState(false)
+  const [allBooths, setAllBooths] = useState<Booth[]>([])
+  const [allBoothsLoading, setAllBoothsLoading] = useState(false)
 
   useEffect(() => {
     loadUsers()
@@ -154,6 +156,35 @@ const UserManagement = () => {
       setRoleBoothOptions(Array.isArray(data) ? data : [])
     } catch (error) {
       setRoleBoothOptions([])
+    }
+  }
+
+  // 加载所有活动的所有摊位（批量创建收银员用）
+  const loadAllBooths = async () => {
+    setAllBoothsLoading(true)
+    try {
+      // 获取所有活动的摊位
+      const allBoothsList: Booth[] = []
+      for (const event of events) {
+        const data = await getBooths({ event_id: event.id, limit: 500 })
+        const eventBooths = Array.isArray(data) ? data : []
+        allBoothsList.push(...eventBooths)
+      }
+      // 如果没有活动，尝试不带 event_id 获取
+      if (events.length === 0) {
+        const data = await getBooths({ limit: 500 })
+        const fallbackBooths = Array.isArray(data) ? data : []
+        allBoothsList.push(...fallbackBooths)
+      }
+      // 去重（按 id）
+      const uniqueBooths = allBoothsList.filter(
+        (booth, index, self) => self.findIndex(b => b.id === booth.id) === index
+      )
+      setAllBooths(uniqueBooths)
+    } catch (error) {
+      setAllBooths([])
+    } finally {
+      setAllBoothsLoading(false)
     }
   }
 
@@ -475,7 +506,7 @@ const UserManagement = () => {
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             新建用户
           </Button>
-          <Button icon={<TeamOutlined />} onClick={() => setBatchModalVisible(true)}>
+          <Button icon={<TeamOutlined />} onClick={() => { loadAllBooths(); setBatchModalVisible(true) }}>
             批量创建收银员
           </Button>
         </Space>
@@ -850,13 +881,14 @@ const UserManagement = () => {
         <Form form={batchForm} layout="vertical" initialValues={{ accounts_per_booth: 1, username_prefix: 'cashier', password_length: 8 }}>
           <Form.Item
             name="booth_ids"
-            label="选择摊位（可多选）"
+            label="选择摊位（可多选，已加载所有活动的摊位）"
             rules={[{ required: true, message: '请选择至少一个摊位' }]}
           >
             <Select
               mode="multiple"
-              placeholder="选择要分配收银员的摊位"
-              options={booths.map(b => ({ label: `${b.name} (ID:${b.id})`, value: b.id }))}
+              placeholder={allBoothsLoading ? '加载摊位中...' : '选择要分配收银员的摊位'}
+              loading={allBoothsLoading}
+              options={allBooths.map(b => ({ label: `${b.name}${b.class_name ? ` (${b.class_name})` : ''} [ID:${b.id}]`, value: b.id }))}
               filterOption={(input, option) =>
                 (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
               }
