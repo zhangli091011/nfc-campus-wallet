@@ -108,7 +108,7 @@ fun InvestmentScreen(
     onDismissVerification: () -> Unit = {},
     onSubmitVerification: (String, String) -> Unit = { _, _ -> },
 ) {
-    val pricePerShare = 10.0
+    val pricePerShare = 5.0
     val totalAmount = state.sharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
     val sellTotal = state.sellSharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
 

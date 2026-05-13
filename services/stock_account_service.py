@@ -28,8 +28,8 @@ from core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-# 固定股价：10元/股
-DEFAULT_STOCK_PRICE = Decimal('10.00')
+# 固定股价：5元/股
+DEFAULT_STOCK_PRICE = Decimal('5.00')
 
 
 class StockAccountService:
@@ -105,7 +105,7 @@ class StockAccountService:
                     f"账户不存在: participant_id={participant.id}, event_id={event_id}"
                 )
             
-            # 4. 计算金额（固定单价10元/股）
+            # 4. 计算金额（固定单价5元/股）
             buy_price = DEFAULT_STOCK_PRICE
             total_amount = buy_price * shares
             

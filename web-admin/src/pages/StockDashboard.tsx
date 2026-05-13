@@ -255,7 +255,7 @@ const StockDashboard: React.FC = () => {
       key: 'price',
       render: (_: any, record: BoothData, index: number) => {
         const price = record.final_price_yuan ?? record.current_price;
-        const initialPrice = 10.0;
+        const initialPrice = 5.0;
         const change = ((price - initialPrice) / initialPrice) * 100;
         const isUp = change >= 0;
         return (

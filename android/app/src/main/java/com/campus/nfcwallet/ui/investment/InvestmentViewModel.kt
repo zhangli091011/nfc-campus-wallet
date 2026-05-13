@@ -282,7 +282,7 @@ class InvestmentViewModel(
         val shares = uiState.sharesInput.toIntOrNull() ?: return
         if (shares <= 0) return
 
-        val totalYuan = shares * 10.0
+        val totalYuan = shares * 5.0
 
         // 余额校验
         if (uiState.accountBalance < totalYuan) {

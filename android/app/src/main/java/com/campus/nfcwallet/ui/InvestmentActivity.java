@@ -360,7 +360,7 @@ public class InvestmentActivity extends AppCompatActivity {
         
         try {
             int shares = Integer.parseInt(sharesStr);
-            double pricePerShare = 10.0;  // 固定单价10元
+            double pricePerShare = 5.0;  // 固定单价5元
             double total = shares * pricePerShare;
             tvTotalAmount.setText(String.format("总金额: ¥%.2f", total));
             tvTotalAmount.setTextColor(Color.parseColor("#FFD700"));  // Gold
@@ -398,8 +398,8 @@ public class InvestmentActivity extends AppCompatActivity {
             return;
         }
         
-        int totalAmountCents = 1000 * shares;  // 10元 = 1000分
-        double totalAmountYuan = shares * 10.0;  // 10元/股
+        int totalAmountCents = 500 * shares;  // 5元 = 500分
+        double totalAmountYuan = shares * 5.0;  // 5元/股
         
         // Check stock balance (both in yuan)
         if (stockBalance < totalAmountYuan) {
@@ -417,7 +417,7 @@ public class InvestmentActivity extends AppCompatActivity {
             .setMessage(String.format(
                 "投资摊位: %s\n" +
                 "购买股数: %d股\n" +
-                "单价: ¥10.00/股\n" +
+                "单价: ¥5.00/股\n" +
                 "总金额: ¥%.2f\n\n" +
                 "确认购买？",
                 selectedBooth.getName(),
