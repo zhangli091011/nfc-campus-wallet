@@ -114,12 +114,12 @@ class LoanRecord(BaseModel):
     student_no: Optional[str] = None
     card_uid: Optional[str] = None
     operator_name: Optional[str] = None
-    principal_amount: int
+    principal_amount: float
     principal_amount_yuan: float
     fee_rate: float
-    fee_amount: int
+    fee_amount: float
     fee_amount_yuan: float
-    disbursed_amount: int
+    disbursed_amount: float
     disbursed_amount_yuan: float
     status: str
     remark: Optional[str] = None
@@ -128,17 +128,17 @@ class LoanRecord(BaseModel):
 
 class CreditDashboardStats(BaseModel):
     """央行宏观风控看板数据"""
-    total_principal: int
+    total_principal: float
     total_principal_yuan: float
-    total_fee: int
+    total_fee: float
     total_fee_yuan: float
-    total_disbursed: int
+    total_disbursed: float
     total_disbursed_yuan: float
     total_loans: int
     total_borrowers: int
     total_participants: int
     penetration_rate: float
-    credit_limit: int
+    credit_limit: float
     credit_limit_yuan: float
     credit_utilization: float
     avg_loan_amount: float
