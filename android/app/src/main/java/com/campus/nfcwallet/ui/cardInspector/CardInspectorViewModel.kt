@@ -7,13 +7,19 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.campus.nfcwallet.api.APIClient
 import com.campus.nfcwallet.api.WalletAPIService
+import com.campus.nfcwallet.ui.cardDetail.AccountDetail
+import com.campus.nfcwallet.ui.cardDetail.CardDetailUiState
+import com.campus.nfcwallet.ui.cardDetail.LoanSummary
+import com.campus.nfcwallet.ui.cardDetail.ParticipantDetail
+import com.campus.nfcwallet.ui.cardDetail.StockHoldingDetail
+import com.campus.nfcwallet.ui.cardDetail.TransactionDetail
 import com.campus.nfcwallet.utils.SessionManager
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
 /**
- * 刷卡查询终端 ViewModel
+ * 刷卡查询终端 ViewModel（校方巡查用）
  *
  * 通过 NFC 识别卡片后，调用后端接口获取持卡人完整明细：
  * - 基本信息（姓名、班级、学号、状态）
@@ -29,7 +35,7 @@ class CardInspectorViewModel(
     private val TAG = "CardInspectorVM"
     private val apiService: WalletAPIService = APIClient.getAPIService()
 
-    var uiState by mutableStateOf(CardInspectorUiState())
+    var uiState by mutableStateOf(CardDetailUiState())
         private set
 
     private var eventId: Int = -1
@@ -41,14 +47,19 @@ class CardInspectorViewModel(
     fun onNfcCardDetected(uid: String) {
         if (uiState.isLoading) return
 
-        uiState = CardInspectorUiState(cardUid = uid, isLoading = true)
+        uiState = CardDetailUiState(cardUid = uid, isLoading = true)
         loadCardDetail(uid)
     }
 
     private fun loadCardDetail(cardUid: String) {
-        val eid = if (eventId > 0) eventId else null
+        val token = sessionManager.authHeader ?: run {
+            uiState = uiState.copy(isLoading = false, errorMessage = "登录已过期，请重新登录")
+            return
+        }
+        val eid = if (eventId > 0) eventId else 0
+        val txnLimit = 50
 
-        apiService.getCardDetail(cardUid, eid).enqueue(object : Callback<Map<String, Any>> {
+        apiService.getCardDetail(token, cardUid, eid, txnLimit).enqueue(object : Callback<Map<String, Any>> {
             override fun onResponse(call: Call<Map<String, Any>>, response: Response<Map<String, Any>>) {
                 if (response.isSuccessful && response.body() != null) {
                     val data = response.body()!!
@@ -70,61 +81,51 @@ class CardInspectorViewModel(
     private fun parseCardDetail(data: Map<String, Any>) {
         try {
             // 解析参与者信息
-            val participant = data["participant"] as? Map<String, Any>
-            val participantInfo = if (participant != null) {
-                ParticipantDetail(
-                    id = (participant["id"] as? Double)?.toInt() ?: 0,
-                    name = participant["name"] as? String ?: "-",
-                    cardUid = participant["card_uid"] as? String ?: "-",
-                    className = participant["class_name"] as? String,
-                    studentNo = participant["student_no"] as? String,
-                    status = participant["status"] as? String ?: "unknown",
-                    createdAt = participant["created_at"] as? String,
-                )
-            } else null
+            val participant = data["participant"] as? Map<String, Any> ?: emptyMap()
+            val account = data["account"] as? Map<String, Any> ?: emptyMap()
+            val loans = data["loans"] as? Map<String, Any> ?: emptyMap()
+            val stockHoldings = data["stock_holdings"] as? List<Map<String, Any>> ?: emptyList()
+            val transactions = data["transactions"] as? List<Map<String, Any>> ?: emptyList()
 
-            // 解析账户信息
-            val account = data["account"] as? Map<String, Any>
-            val accountInfo = if (account != null) {
-                AccountDetail(
-                    balance = (account["balance"] as? Double) ?: 0.0,
-                    creditBorrowed = (account["credit_borrowed"] as? Double) ?: 0.0,
-                    creditFeePaid = (account["credit_fee_paid"] as? Double) ?: 0.0,
-                )
-            } else null
+            val participantInfo = ParticipantDetail(
+                id = (participant["id"] as? Double)?.toInt() ?: 0,
+                name = participant["name"] as? String ?: "-",
+                cardUid = participant["card_uid"] as? String ?: "-",
+                className = participant["class_name"] as? String,
+                studentNo = participant["student_no"] as? String,
+                status = participant["status"] as? String ?: "unknown",
+                createdAt = participant["created_at"] as? String,
+            )
 
-            // 解析贷款信息
-            val loans = data["loans"] as? Map<String, Any>
-            val loanInfo = if (loans != null) {
-                LoanDetail(
-                    activeCount = (loans["active_count"] as? Double)?.toInt() ?: 0,
-                    totalDebt = (loans["total_debt"] as? Double) ?: 0.0,
-                )
-            } else null
+            val accountInfo = AccountDetail(
+                balance = (account["balance"] as? Double) ?: 0.0,
+                creditBorrowed = (account["credit_borrowed"] as? Double) ?: 0.0,
+                creditFeePaid = (account["credit_fee_paid"] as? Double) ?: 0.0,
+            )
 
-            // 解析股票持仓
-            val stockList = data["stock_holdings"] as? List<Map<String, Any>> ?: emptyList()
-            val stockHoldings = stockList.map { item ->
+            val loanInfo = LoanSummary(
+                activeCount = (loans["active_count"] as? Double)?.toInt() ?: 0,
+                totalDebt = (loans["total_debt"] as? Double) ?: 0.0,
+            )
+
+            val holdings = stockHoldings.map { h ->
                 StockHoldingDetail(
-                    boothId = (item["booth_id"] as? Double)?.toInt() ?: 0,
-                    boothName = item["booth_name"] as? String ?: "-",
-                    shares = (item["shares"] as? Double)?.toInt() ?: 0,
-                    totalCost = (item["total_cost"] as? Double) ?: 0.0,
+                    boothId = (h["booth_id"] as? Double)?.toInt() ?: 0,
+                    boothName = h["booth_name"] as? String ?: "-",
+                    shares = (h["shares"] as? Double)?.toInt() ?: 0,
+                    totalInvested = (h["total_invested"] as? Double) ?: 0.0,
                 )
             }
 
-            // 解析交易流水
-            val txnList = data["transactions"] as? List<Map<String, Any>> ?: emptyList()
-            val transactions = txnList.map { item ->
+            val txnList = transactions.map { t ->
                 TransactionDetail(
-                    id = (item["id"] as? Double)?.toInt() ?: 0,
-                    type = item["type"] as? String ?: "unknown",
-                    amount = (item["amount"] as? Double) ?: 0.0,
-                    balanceBefore = (item["balance_before"] as? Double) ?: 0.0,
-                    balanceAfter = (item["balance_after"] as? Double) ?: 0.0,
-                    remark = item["remark"] as? String,
-                    boothId = (item["booth_id"] as? Double)?.toInt(),
-                    createdAt = item["created_at"] as? String,
+                    id = (t["id"] as? Double)?.toInt() ?: 0,
+                    type = t["type"] as? String ?: "unknown",
+                    amount = (t["amount"] as? Double) ?: 0.0,
+                    balanceBefore = t["balance_before"] as? Double,
+                    balanceAfter = t["balance_after"] as? Double,
+                    remark = t["remark"] as? String,
+                    createdAt = t["created_at"] as? String,
                 )
             }
 
@@ -132,9 +133,9 @@ class CardInspectorViewModel(
                 isLoading = false,
                 participant = participantInfo,
                 account = accountInfo,
-                loan = loanInfo,
-                stockHoldings = stockHoldings,
-                transactions = transactions,
+                loans = loanInfo,
+                stockHoldings = holdings,
+                transactions = txnList,
             )
         } catch (e: Exception) {
             Log.e(TAG, "解析数据失败", e)
@@ -143,7 +144,7 @@ class CardInspectorViewModel(
     }
 
     fun onReset() {
-        uiState = CardInspectorUiState()
+        uiState = CardDetailUiState()
     }
 
     fun onDismissError() {
