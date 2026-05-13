@@ -18,6 +18,7 @@ class UserRole(str, Enum):
     issuer = "issuer"
     reviewer = "reviewer"
     bank_clerk = "bank_clerk"  # 投资办理员（官方中央银行）
+    school_inspector = "school_inspector"  # 校方巡查（只读权限）
     merchant = "merchant"  # 商户（自主注册管理商铺）
 
 

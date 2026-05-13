@@ -92,7 +92,7 @@ class UserService:
             )
         
         # Validate role
-        valid_roles = ['super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer', 'bank_clerk']
+        valid_roles = ['super_admin', 'event_admin', 'booth_cashier', 'issuer', 'reviewer', 'bank_clerk', 'school_inspector']
         if role not in valid_roles:
             logger.warning(f"User creation failed: Invalid role '{role}'")
             raise ValidationError(

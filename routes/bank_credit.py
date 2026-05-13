@@ -718,6 +718,7 @@ class ReturnCardRequest(BaseModel):
     event_id: int = Field(..., description="活动ID")
     card_uid: str = Field(..., min_length=1, max_length=32, description="NFC卡片UID")
     refund_balance: bool = Field(True, description="是否退还余额")
+    repay_loan_first: bool = Field(False, description="是否先用余额偿还贷款再退卡")
     remark: Optional[str] = Field(None, max_length=255, description="备注")
     timestamp: Optional[int] = Field(None, exclude=True)
     signature: Optional[str] = Field(None, exclude=True)
@@ -735,12 +736,17 @@ async def return_card(
     """
     退卡接口（手机端银行柜员使用）。
 
+    两种模式：
+    1. repay_loan_first=True: 余额全额用于偿还贷款，剩余余额退还，保留贷款记录用于追偿
+    2. repay_loan_first=False: 直接全额退还余额，贷款另行偿还，保留贷款记录用于追偿
+
     流程：
     1. 验证参与者存在
-    2. 检查未清贷款（有则拒绝）
-    3. 退还余额（写入流水）
-    4. 解除卡片绑定
-    5. 保留交易流水
+    2. 如果 repay_loan_first=True，用余额偿还贷款（部分或全部）
+    3. 退还剩余余额（写入流水）
+    4. 将贷款状态标记为 'card_returned'（保留追偿信息）
+    5. 解除卡片绑定
+    6. 保留交易流水
     """
     if current_user.role not in ("bank_clerk", "super_admin", "event_admin"):
         raise HTTPException(status_code=403, detail="权限不足")
@@ -757,7 +763,7 @@ async def return_card(
             Account.event_id == req.event_id
         ).first()
 
-        # 检查未清贷款
+        # 查询未清贷款
         outstanding = db.execute(
             text("""SELECT COUNT(*) as cnt, COALESCE(SUM(principal_amount), 0) as total
                     FROM bank_loans
@@ -765,33 +771,95 @@ async def return_card(
             {"pid": participant.id, "eid": req.event_id}
         ).mappings().first()
 
-        if outstanding and outstanding["cnt"] > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"有 {outstanding['cnt']} 笔未清贷款（共 ¥{float(outstanding['total']):.2f}），请先还清贷款"
-            )
+        loan_count = int(outstanding["cnt"]) if outstanding else 0
+        loan_total = float(outstanding["total"]) if outstanding else 0.0
 
-        # 退还余额
         balance_before = float(account.balance) if account else 0.0
+        repaid_amount = 0.0
         refunded = 0.0
 
-        if account and balance_before > 0 and req.refund_balance:
-            txn = Transaction(
+        # 模式1: 余额先偿还贷款
+        if req.repay_loan_first and loan_count > 0 and balance_before > 0 and account:
+            repay_amount = min(balance_before, loan_total)
+            repaid_amount = repay_amount
+
+            # 写入还款流水
+            txn_repay = Transaction(
                 uid=None,
                 card_uid=req.card_uid,
                 event_id=req.event_id,
                 participant_id=participant.id,
                 account_id=account.id,
                 type="correction",
-                amount=balance_before,
+                amount=repay_amount,
                 balance_before=balance_before,
+                balance_after=balance_before - repay_amount,
+                merchant_id=None,
+                remark="退卡-余额偿还贷款",
+                operator_id=str(current_user.id)
+            )
+            db.add(txn_repay)
+            account.balance = float(account.balance) - repay_amount
+            balance_before = float(account.balance)
+
+            # 更新贷款记录（按FIFO偿还）
+            active_loans = db.execute(
+                text("""SELECT id, principal_amount FROM bank_loans
+                        WHERE participant_id = :pid AND event_id = :eid AND status = 'active'
+                        ORDER BY created_at ASC"""),
+                {"pid": participant.id, "eid": req.event_id}
+            ).mappings().all()
+
+            remaining_repay = repay_amount
+            for loan in active_loans:
+                if remaining_repay <= 0:
+                    break
+                loan_amount = float(loan["principal_amount"])
+                if remaining_repay >= loan_amount:
+                    # 全额偿还此笔贷款
+                    db.execute(
+                        text("""UPDATE bank_loans SET status = 'repaid', repaid_at = NOW()
+                                WHERE id = :lid"""),
+                        {"lid": loan["id"]}
+                    )
+                    remaining_repay -= loan_amount
+                else:
+                    # 部分偿还 - 减少本金，保留为 card_returned 状态
+                    new_principal = loan_amount - remaining_repay
+                    db.execute(
+                        text("""UPDATE bank_loans SET principal_amount = :new_amt, status = 'card_returned'
+                                WHERE id = :lid"""),
+                        {"lid": loan["id"], "new_amt": new_principal}
+                    )
+                    remaining_repay = 0
+
+        # 将剩余未清贷款标记为 card_returned（保留追偿信息）
+        if loan_count > 0:
+            db.execute(
+                text("""UPDATE bank_loans SET status = 'card_returned'
+                        WHERE participant_id = :pid AND event_id = :eid AND status = 'active'"""),
+                {"pid": participant.id, "eid": req.event_id}
+            )
+
+        # 退还剩余余额
+        current_balance = float(account.balance) if account else 0.0
+        if account and current_balance > 0 and req.refund_balance:
+            txn_refund = Transaction(
+                uid=None,
+                card_uid=req.card_uid,
+                event_id=req.event_id,
+                participant_id=participant.id,
+                account_id=account.id,
+                type="correction",
+                amount=current_balance,
+                balance_before=current_balance,
                 balance_after=0,
                 merchant_id=None,
                 remark=req.remark or "退卡退款",
                 operator_id=str(current_user.id)
             )
-            db.add(txn)
-            refunded = balance_before
+            db.add(txn_refund)
+            refunded = current_balance
             account.balance = 0
         elif account:
             account.balance = 0
@@ -803,9 +871,12 @@ async def return_card(
 
         db.commit()
 
+        remaining_debt = loan_total - repaid_amount
+
         logger.info(
             f"[CARD_RETURNED] participant={participant.name}, card={old_card_uid}, "
-            f"refunded={refunded:.2f}, operator={current_user.username}"
+            f"repaid={repaid_amount:.2f}, refunded={refunded:.2f}, "
+            f"remaining_debt={remaining_debt:.2f}, operator={current_user.username}"
         )
 
         return {
@@ -814,6 +885,9 @@ async def return_card(
             "participant_name": participant.name,
             "card_uid": old_card_uid,
             "balance_refunded": refunded,
+            "loan_repaid": repaid_amount,
+            "remaining_debt": remaining_debt,
+            "loan_count": loan_count,
         }
 
     except HTTPException:
@@ -822,6 +896,41 @@ async def return_card(
         db.rollback()
         logger.error(f"Return card failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Loan Summary: GET /bank/loan_summary
+# ============================================================================
+
+@router.get("/loan_summary")
+async def get_loan_summary(
+    event_id: int,
+    card_uid: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    查询参与者的贷款摘要（退卡端使用）。
+    返回活跃贷款数量和总金额。
+    """
+    if current_user.role not in ("bank_clerk", "super_admin", "event_admin"):
+        raise HTTPException(status_code=403, detail="权限不足")
+
+    participant = db.query(Participant).filter(Participant.card_uid == card_uid).first()
+    if not participant:
+        return {"loan_count": 0, "total_debt": 0.0}
+
+    result = db.execute(
+        text("""SELECT COUNT(*) as cnt, COALESCE(SUM(principal_amount), 0) as total
+                FROM bank_loans
+                WHERE participant_id = :pid AND event_id = :eid AND status = 'active'"""),
+        {"pid": participant.id, "eid": event_id}
+    ).mappings().first()
+
+    return {
+        "loan_count": int(result["cnt"]) if result else 0,
+        "total_debt": float(result["total"]) if result else 0.0,
+    }
 
 
 # ============================================================================

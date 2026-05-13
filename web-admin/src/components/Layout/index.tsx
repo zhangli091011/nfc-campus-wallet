@@ -153,6 +153,11 @@ const Layout = () => {
       icon: <DollarCircleOutlined />,
       label: '投资管理',
     },
+    {
+      key: '/bank-loans',
+      icon: <BankOutlined />,
+      label: '银行借贷',
+    },
     ...(isSuperAdmin()
       ? [
           {

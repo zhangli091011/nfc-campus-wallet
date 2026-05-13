@@ -10,7 +10,8 @@ export interface LoanRecord {
   participant_id: number
   participant_name: string | null
   class_name: string | null
-  student_id: string | null
+  student_no: string | null
+  card_uid: string | null
   operator_name: string | null
   principal_amount: number
   principal_amount_yuan: number
