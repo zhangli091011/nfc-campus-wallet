@@ -539,4 +539,25 @@ public interface WalletAPIService {
         @Query("event_id") int eventId,
         @Query("card_uid") String cardUid
     );
+
+    // ==================== Card Detail (刷卡查看明细) ====================
+
+    /**
+     * Get comprehensive card detail (participant info + balance + loans + transactions).
+     *
+     * GET /card-detail/{card_uid}?event_id={event_id}&txn_limit={txn_limit}
+     *
+     * @param authorization Authorization header (Bearer token)
+     * @param cardUid Card UID
+     * @param eventId Event ID
+     * @param txnLimit Transaction limit (default 50)
+     * @return Full card detail map
+     */
+    @GET("card-detail/{card_uid}")
+    Call<Map<String, Object>> getCardDetail(
+        @Header("Authorization") String authorization,
+        @Path("card_uid") String cardUid,
+        @Query("event_id") int eventId,
+        @Query("txn_limit") int txnLimit
+    );
 }

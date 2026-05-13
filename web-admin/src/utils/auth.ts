@@ -75,3 +75,13 @@ export const isAdmin = (): boolean => {
 export const isSuperAdmin = (): boolean => {
   return hasRole(['super_admin'])
 }
+
+// 检查是否是校方巡查（只读角色）
+export const isSchoolInspector = (): boolean => {
+  return hasRole(['school_inspector'])
+}
+
+// 检查是否拥有写入权限（非只读角色）
+export const canWrite = (): boolean => {
+  return !isSchoolInspector()
+}

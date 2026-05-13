@@ -20,6 +20,7 @@ import com.campus.nfcwallet.models.BoothInfo;
 import com.campus.nfcwallet.models.UserInfo;
 import com.campus.nfcwallet.ui.investment.InvestmentComposeActivity;
 import com.campus.nfcwallet.ui.bankTeller.BankTellerActivity;
+import com.campus.nfcwallet.ui.cardDetail.CardDetailActivity;
 import com.campus.nfcwallet.ui.cardReturn.CardReturnActivity;
 import com.campus.nfcwallet.ui.refund.RefundManagerActivity;
 import com.campus.nfcwallet.utils.ErrorHandler;
@@ -58,6 +59,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "💰 充值员（官方中央银行）",
         "🔄 退款管理（摊位售后）",
         "🪪 退卡办理（退还余额）",
+        "🔍 刷卡查看明细（用户信息）",
         "📋 摊位列表（管理员视角）",
     };
     
@@ -68,6 +70,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "issuer",
         "refund_manager",
         "card_return",
+        "card_detail",
         "admin_browse",
     };
     
@@ -135,6 +138,12 @@ public class BoothSelectionActivity extends AppCompatActivity {
                 navigateToCentralBankBooth();
                 break;
                 
+            case "school_inspector":
+                // 巡查员 - 直接进入刷卡查看明细
+                Log.i(TAG, "School inspector role detected, navigating to Card Detail");
+                navigateToCardDetail();
+                break;
+                
             case "booth_cashier":
                 // Booth cashier with assigned booth
                 if (boothId != null && boothId > 0) {
@@ -192,6 +201,11 @@ public class BoothSelectionActivity extends AppCompatActivity {
                     case "card_return":
                         // Go to card return terminal
                         navigateToCardReturn();
+                        break;
+                        
+                    case "card_detail":
+                        // Go to card detail inspector
+                        navigateToCardDetail();
                         break;
                         
                     case "admin_browse":
@@ -396,6 +410,12 @@ public class BoothSelectionActivity extends AppCompatActivity {
     
     private void navigateToCardReturn() {
         Intent intent = new Intent(this, CardReturnActivity.class);
+        startActivity(intent);
+        finish();
+    }
+    
+    private void navigateToCardDetail() {
+        Intent intent = new Intent(this, CardDetailActivity.class);
         startActivity(intent);
         finish();
     }

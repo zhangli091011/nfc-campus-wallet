@@ -505,6 +505,155 @@ async def get_participant_by_card(
 
 
 
+@router.get("/participants/card-detail/{card_uid}")
+async def get_card_detail(
+    card_uid: str,
+    event_id: Optional[int] = Query(None, description="活动ID（可选，不传则返回所有活动的数据）"),
+    db: Session = Depends(get_db)
+):
+    """
+    通过卡片UID查询持卡人完整明细信息。
+
+    返回：参与者基本信息 + 账户余额 + 贷款信息 + 最近交易流水
+
+    Path Parameters:
+        - card_uid: NFC卡片UID
+
+    Query Parameters:
+        - event_id: 活动ID（可选）
+
+    Returns:
+        {
+            "participant": {...},
+            "account": {...},
+            "loans": {...},
+            "transactions": [...]
+        }
+    """
+    from models.account import Account
+    from models.transaction import Transaction as TransactionModel
+    from sqlalchemy import text
+
+    try:
+        participant_service = ParticipantService(db)
+
+        # 查找参与者
+        try:
+            participant = participant_service.get_participant_by_card(card_uid)
+        except (ParticipantNotFoundError, InvalidCardUIDError) as e:
+            return JSONResponse(
+                status_code=400,
+                content={"error_code": e.error_code, "message": e.message}
+            )
+
+        # 基本信息
+        participant_data = {
+            "id": participant.id,
+            "name": participant.name,
+            "card_uid": participant.card_uid,
+            "class_name": participant.class_name,
+            "student_no": participant.student_no,
+            "status": participant.status,
+            "created_at": participant.created_at.isoformat() if participant.created_at else None,
+        }
+
+        # 账户信息
+        account_query = db.query(Account).filter(Account.participant_id == participant.id)
+        if event_id:
+            account_query = account_query.filter(Account.event_id == event_id)
+        account = account_query.first()
+
+        account_data = None
+        if account:
+            account_data = {
+                "event_id": account.event_id,
+                "balance": float(account.balance) if account.balance is not None else 0.0,
+                "credit_borrowed": float(account.credit_borrowed) if account.credit_borrowed is not None else 0.0,
+                "credit_fee_paid": float(account.credit_fee_paid) if account.credit_fee_paid is not None else 0.0,
+            }
+
+        # 贷款信息
+        loan_filter = {"pid": participant.id}
+        loan_sql = """SELECT COUNT(*) as cnt, COALESCE(SUM(principal_amount), 0) as total
+                      FROM bank_loans
+                      WHERE participant_id = :pid AND status = 'active'"""
+        if event_id:
+            loan_sql += " AND event_id = :eid"
+            loan_filter["eid"] = event_id
+
+        try:
+            loan_result = db.execute(text(loan_sql), loan_filter).mappings().first()
+            loans_data = {
+                "active_count": int(loan_result["cnt"]) if loan_result else 0,
+                "total_debt": float(loan_result["total"]) if loan_result else 0.0,
+            }
+        except Exception:
+            loans_data = {"active_count": 0, "total_debt": 0.0}
+
+        # 最近交易流水（最多50条）
+        txn_query = db.query(TransactionModel).filter(
+            TransactionModel.participant_id == participant.id
+        )
+        if event_id:
+            txn_query = txn_query.filter(TransactionModel.event_id == event_id)
+        txn_query = txn_query.order_by(TransactionModel.created_at.desc()).limit(50)
+        transactions = txn_query.all()
+
+        transactions_data = []
+        for txn in transactions:
+            transactions_data.append({
+                "id": txn.id,
+                "type": txn.type,
+                "amount": float(txn.amount),
+                "balance_before": float(txn.balance_before) if txn.balance_before is not None else 0.0,
+                "balance_after": float(txn.balance_after) if txn.balance_after is not None else 0.0,
+                "remark": txn.remark,
+                "booth_id": txn.booth_id,
+                "created_at": txn.created_at.isoformat() if txn.created_at else None,
+            })
+
+        # 股票持仓信息
+        stock_holdings_data = []
+        if event_id:
+            try:
+                stock_rows = db.execute(
+                    text("""SELECT sh.booth_id, b.name as booth_name, sh.shares, sh.total_cost
+                            FROM stock_holdings sh
+                            LEFT JOIN booths b ON sh.booth_id = b.id
+                            WHERE sh.participant_id = :pid AND sh.event_id = :eid AND sh.shares > 0"""),
+                    {"pid": participant.id, "eid": event_id}
+                ).mappings().all()
+                for row in stock_rows:
+                    stock_holdings_data.append({
+                        "booth_id": row["booth_id"],
+                        "booth_name": row["booth_name"],
+                        "shares": int(row["shares"]),
+                        "total_cost": float(row["total_cost"]) if row["total_cost"] else 0.0,
+                    })
+            except Exception:
+                pass  # stock_holdings 表可能不存在
+
+        logger.info(
+            f"Card detail retrieved: card_uid={card_uid}, participant={participant.name}, "
+            f"txn_count={len(transactions_data)}"
+        )
+
+        return {
+            "participant": participant_data,
+            "account": account_data,
+            "loans": loans_data,
+            "stock_holdings": stock_holdings_data,
+            "transactions": transactions_data,
+        }
+
+    except Exception as e:
+        logger.error(f"Unexpected error in card detail: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": str(e)}
+        )
+
+
 @router.delete("/participants/{participant_id}", status_code=204)
 async def delete_participant(
     participant_id: int,

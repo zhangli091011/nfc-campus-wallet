@@ -17,13 +17,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from sqlalchemy import create_engine, text
 
-from core.config import get_settings
+from core.config import get_settings, load_settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def apply_migration() -> None:
+    load_settings()
     settings = get_settings()
     engine = create_engine(settings.database_url)
 
