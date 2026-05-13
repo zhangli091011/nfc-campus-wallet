@@ -36,6 +36,7 @@ import {
 } from '@/services/user'
 import { getBooths, type Booth } from '@/services/booth'
 import { getEvents, type Event } from '@/services/event'
+import request from '@/utils/request'
 import { User } from '@/utils/auth'
 import dayjs from 'dayjs'
 
@@ -494,7 +495,11 @@ const UserManagement = () => {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        rowClassName={(record) => isBankClerk(record) ? 'bank-clerk-row' : ''}
+        rowClassName={(record) => {
+          if (isBankClerk(record)) return 'bank-clerk-row'
+          if (record.role === 'school_inspector') return 'school-inspector-row'
+          return ''
+        }}
       />
 
       {/* 新建用户 Modal */}
@@ -726,6 +731,12 @@ const UserManagement = () => {
                   <span>投资办理员（特殊）</span>
                 </Space>
               </Select.Option>
+              <Select.Option value="school_inspector">
+                <Space>
+                  <SafetyCertificateOutlined style={{ color: '#13c2c2' }} />
+                  <span>校方巡查（只读）</span>
+                </Space>
+              </Select.Option>
             </Select>
           </Form.Item>
 
@@ -785,6 +796,17 @@ const UserManagement = () => {
                   />
                 )
               }
+              if (role === 'school_inspector') {
+                return (
+                  <Alert
+                    message="校方巡查说明"
+                    description="该角色仅拥有只读查看权限，可以浏览所有后台数据（报表、交易流水、参与者余额、班级搜索等），但无法修改任何数据。"
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                )
+              }
               return null
             }}
           </Form.Item>
@@ -803,7 +825,109 @@ const UserManagement = () => {
         .bank-clerk-row > td {
           background: transparent !important;
         }
+        .school-inspector-row {
+          background: linear-gradient(90deg, #e6fffb 0%, #fff 40%) !important;
+          border-left: 3px solid #13c2c2 !important;
+        }
+        .school-inspector-row:hover > td {
+          background: #e6fffb !important;
+        }
+        .school-inspector-row > td {
+          background: transparent !important;
+        }
       `}</style>
+
+      {/* 批量创建收银员 Modal */}
+      <Modal
+        title="批量创建收银员账号"
+        open={batchModalVisible}
+        onOk={handleBatchSubmit}
+        onCancel={() => setBatchModalVisible(false)}
+        okText="创建"
+        confirmLoading={batchLoading}
+        width={600}
+      >
+        <Form form={batchForm} layout="vertical" initialValues={{ accounts_per_booth: 1, username_prefix: 'cashier', password_length: 8 }}>
+          <Form.Item
+            name="booth_ids"
+            label="选择摊位（可多选）"
+            rules={[{ required: true, message: '请选择至少一个摊位' }]}
+          >
+            <Select
+              mode="multiple"
+              placeholder="选择要分配收银员的摊位"
+              options={booths.map(b => ({ label: `${b.name} (ID:${b.id})`, value: b.id }))}
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+            />
+          </Form.Item>
+          <Space size="large">
+            <Form.Item name="accounts_per_booth" label="每摊位账号数">
+              <InputNumber min={1} max={10} />
+            </Form.Item>
+            <Form.Item name="password_length" label="密码长度">
+              <InputNumber min={6} max={20} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="username_prefix" label="用户名前缀">
+            <Input placeholder="cashier" style={{ width: 200 }} />
+          </Form.Item>
+          <Alert
+            message="说明"
+            description="系统将为每个选中的摊位自动创建收银员账号，用户名格式为：前缀_b摊位ID。密码随机生成，创建后可导出CSV。"
+            type="info"
+            showIcon
+          />
+        </Form>
+      </Modal>
+
+      {/* 批量创建结果 Modal */}
+      <Modal
+        title={`创建完成 - 共 ${batchResult?.total_created || 0} 个账号`}
+        open={batchResultVisible}
+        onCancel={() => setBatchResultVisible(false)}
+        width={700}
+        footer={[
+          <Button key="export" type="primary" icon={<DownloadOutlined />} onClick={exportBatchResult}>
+            导出 CSV
+          </Button>,
+          <Button key="close" onClick={() => setBatchResultVisible(false)}>
+            关闭
+          </Button>,
+        ]}
+      >
+        {batchResult && (
+          <>
+            {batchResult.errors.length > 0 && (
+              <Alert
+                message={`${batchResult.errors.length} 个账号创建失败`}
+                description={batchResult.errors.join('\n')}
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )}
+            <Table
+              dataSource={batchResult.accounts}
+              rowKey="user_id"
+              size="small"
+              pagination={false}
+              scroll={{ y: 400 }}
+              columns={[
+                { title: '用户名', dataIndex: 'username', key: 'username' },
+                { title: '密码', dataIndex: 'password', key: 'password', render: (p: string) => <Typography.Text code copyable>{p}</Typography.Text> },
+                { title: '摊位', dataIndex: 'booth_name', key: 'booth_name' },
+                { title: '摊位ID', dataIndex: 'booth_id', key: 'booth_id', width: 80 },
+              ]}
+            />
+            <Divider />
+            <Typography.Text type="secondary">
+              ⚠️ 密码仅显示一次，请立即导出保存。关闭此窗口后无法再次查看密码。
+            </Typography.Text>
+          </>
+        )}
+      </Modal>
     </div>
   )
 }
