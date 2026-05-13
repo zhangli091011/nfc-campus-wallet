@@ -153,6 +153,12 @@
                 android:resource="@xml/nfc_tech_filter" />
         </activity>
 
+        <!-- Refund Approval Activity (Compose - 退款申请审批) -->
+        <activity
+            android:name=".ui.refundApproval.RefundApprovalActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.NFCCampusWallet.Investment" />
         <!-- FileProvider for APK installation -->
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -185,7 +185,7 @@ const StockDashboard: React.FC = () => {
     if (selectedEventId) {
       loadData();
       if (refreshTimer.current) clearInterval(refreshTimer.current);
-      refreshTimer.current = setInterval(loadData, 5000);
+      refreshTimer.current = setInterval(loadData, 30000);
     }
     return () => {
       if (refreshTimer.current) clearInterval(refreshTimer.current);

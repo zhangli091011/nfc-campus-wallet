@@ -582,14 +582,47 @@ public interface WalletAPIService {
      * Submit refund request (退款申请 - 收银员提交，管理员审批).
      *
      * POST /refund/requests
-     *
-     * @param authorization Authorization header (Bearer token)
-     * @param request Request body containing original_transaction_id and reason
-     * @return Refund request response (status: pending or direct refund result)
      */
     @POST("refund/requests")
     Call<Map<String, Object>> createRefundRequest(
         @Header("Authorization") String authorization,
         @Body Map<String, Object> request
+    );
+
+    /**
+     * Get refund requests list.
+     *
+     * GET /refund/requests
+     */
+    @GET("refund/requests")
+    Call<Map<String, Object>> getRefundRequests(
+        @Header("Authorization") String authorization,
+        @Query("status") String status,
+        @Query("limit") int limit,
+        @Query("offset") int offset
+    );
+
+    /**
+     * Approve refund request.
+     *
+     * POST /refund/requests/{id}/approve
+     */
+    @POST("refund/requests/{id}/approve")
+    Call<Map<String, Object>> approveRefundRequest(
+        @Header("Authorization") String authorization,
+        @Path("id") int requestId,
+        @Body Map<String, Object> body
+    );
+
+    /**
+     * Reject refund request.
+     *
+     * POST /refund/requests/{id}/reject
+     */
+    @POST("refund/requests/{id}/reject")
+    Call<Map<String, Object>> rejectRefundRequest(
+        @Header("Authorization") String authorization,
+        @Path("id") int requestId,
+        @Body Map<String, Object> body
     );
 }

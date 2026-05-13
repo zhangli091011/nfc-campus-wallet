@@ -58,6 +58,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "💳 信用垫资发行（银行放贷）",
         "💰 充值员（官方中央银行）",
         "🔄 退款管理（摊位售后）",
+        "✅ 退款申请审批（管理员）",
         "🪪 还款+退卡（还贷/退还余额）",
         "🔍 刷卡查看明细（用户信息）",
         "📋 摊位列表（管理员视角）",
@@ -69,6 +70,7 @@ public class BoothSelectionActivity extends AppCompatActivity {
         "bank_teller",
         "issuer",
         "refund_manager",
+        "refund_approval",
         "card_return",
         "card_detail",
         "admin_browse",
@@ -196,6 +198,11 @@ public class BoothSelectionActivity extends AppCompatActivity {
                     case "refund_manager":
                         // Show booth list, then navigate to refund manager
                         loadBoothsForRefund();
+                        break;
+                        
+                    case "refund_approval":
+                        // Go to refund request approval screen
+                        navigateToRefundApproval();
                         break;
                         
                     case "card_return":
@@ -410,6 +417,12 @@ public class BoothSelectionActivity extends AppCompatActivity {
     
     private void navigateToCardReturn() {
         Intent intent = new Intent(this, CardReturnActivity.class);
+        startActivity(intent);
+        finish();
+    }
+    
+    private void navigateToRefundApproval() {
+        Intent intent = new Intent(this, com.campus.nfcwallet.ui.refundApproval.RefundApprovalActivity.class);
         startActivity(intent);
         finish();
     }
