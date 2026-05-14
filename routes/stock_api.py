@@ -11,6 +11,7 @@ Stock API Routes - 股票交易API
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional, Dict
@@ -298,6 +299,85 @@ async def get_orders(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error_code": "INTERNAL_ERROR", "message": "查询失败"}
+        )
+
+
+# ============ Market Close (收盘) ============
+
+class MarketCloseRequest(BaseModel):
+    event_id: int
+
+@router.post(
+    "/close-market",
+    summary="一键收盘（暂停所有股票交易）"
+)
+async def close_market(
+    request: MarketCloseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["event_admin", "super_admin"]))
+):
+    """
+    一键收盘：将活动下所有股票状态设为 suspended，禁止买卖。
+    股价停止变动（因为不再有新交易）。
+    """
+    try:
+        service = StockAccountService(db)
+        result = service.close_market(request.event_id)
+        return result
+    except (ResourceNotFoundError, BusinessLogicError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error_code": "CLOSE_MARKET_ERROR", "message": str(e)}
+        )
+    except Exception as e:
+        logger.error(f"收盘失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "收盘失败"}
+        )
+
+
+# ============ Full Liquidation (全部清算) ============
+
+class LiquidateRequest(BaseModel):
+    event_id: int
+    fee_rate: float = 0.05
+
+@router.post(
+    "/liquidate",
+    summary="一键全部清算（结算并退还资金到参与者账户）"
+)
+async def liquidate_market(
+    request: LiquidateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["event_admin", "super_admin"]))
+):
+    """
+    一键全部清算：
+    1. 先收盘（如果尚未收盘）
+    2. 计算最终股价
+    3. 将结算金额退还到每个参与者的主账户
+    4. 标记所有订单为 settled
+    """
+    try:
+        service = StockAccountService(db)
+        result = service.liquidate_market(
+            event_id=request.event_id,
+            fee_rate=request.fee_rate
+        )
+        return result
+    except (ResourceNotFoundError, BusinessLogicError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error_code": "LIQUIDATION_ERROR", "message": str(e)}
+        )
+    except Exception as e:
+        logger.error(f"全部清算失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "清算失败"}
         )
 
 

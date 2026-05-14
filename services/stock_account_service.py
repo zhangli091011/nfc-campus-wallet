@@ -48,6 +48,10 @@ INITIAL_STOCK_PRICE = Decimal('5.00')
 # 官方手续费率 (5%)
 OFFICIAL_FEE_RATE = Decimal('0.05')
 
+# 做市商卖出折扣系数（卖出价 = 当前动态股价 × SELL_DISCOUNT_FACTOR）
+# 0.9 表示卖出价为买入价的90%，10%为做市商价差（防止频繁套利）
+SELL_DISCOUNT_FACTOR = Decimal('0.90')
+
 # 综合分权重配置（6维度评分）
 SCORE_WEIGHTS = {
     'revenue': Decimal('0.20'),        # 营业额 20%
@@ -316,10 +320,10 @@ class StockAccountService:
         # 3. 获取动态价格（使用核心引擎）
         prices = self._calculate_pari_mutuel_prices(event_id)
         
-        # 4. 获取每个摊位的详细数据
+        # 4. 获取每个摊位的详细数据（仅 holding 订单计入当前持仓）
         orders = self.db.query(StockOrder).filter(
             StockOrder.event_id == event_id,
-            StockOrder.status.in_(['holding', 'sold'])
+            StockOrder.status == 'holding'
         ).all()
         
         booth_shares: Dict[int, int] = {}
@@ -426,26 +430,33 @@ class StockAccountService:
         
         booth_ids = [b.id for b in all_booths]
         
-        # 获取所有持仓订单（holding + sold 都算入池子）
-        orders = self.db.query(StockOrder).filter(
+        # 获取当前持仓订单（仅 holding，sold 不再计入分母）
+        holding_orders = self.db.query(StockOrder).filter(
+            StockOrder.event_id == event_id,
+            StockOrder.status == 'holding'
+        ).all()
+        
+        # 获取所有历史订单（holding + sold）用于计算资金池（分子）
+        all_orders = self.db.query(StockOrder).filter(
             StockOrder.event_id == event_id,
             StockOrder.status.in_(['holding', 'sold'])
         ).all()
         
-        # 按摊位统计总股数
+        # 按摊位统计当前持仓股数（仅 holding，sold 已移除）
         booth_shares: Dict[int, int] = {bid: 0 for bid in booth_ids}
-        for o in orders:
+        for o in holding_orders:
             if o.booth_id in booth_shares:
                 booth_shares[o.booth_id] += o.shares
         
-        # 第一步：全局资金池（实际投入金额）
+        # 第一步：全局资金池（基于所有历史买入金额）
         total_shares_all = sum(booth_shares.values())
         if total_shares_all == 0:
-            # 没有任何交易，全部返回初始价
+            # 没有任何持仓，全部返回初始价
             return {bid: float(INITIAL_STOCK_PRICE) for bid in booth_ids}
         
-        # Pool = Σ(实际买入金额) × (1 - F)
-        total_investment = sum(float(o.total_amount) for o in orders)
+        # Pool = Σ(所有历史买入金额) × (1 - F)
+        # 注意：sold 订单的买入金额仍计入池子，保证池子不因卖出而缩水
+        total_investment = sum(float(o.total_amount) for o in all_orders)
         pool = total_investment * (1 - float(OFFICIAL_FEE_RATE))
         
         # 第二步：批量加载所有摊位经营数据（6维度）
@@ -562,18 +573,24 @@ class StockAccountService:
         
         booth_ids = [b.id for b in all_booths]
         
-        # 持仓订单
-        orders = self.db.query(StockOrder).filter(
+        # 当前持仓订单（仅 holding，用于计算股数分母）
+        holding_orders = self.db.query(StockOrder).filter(
+            StockOrder.event_id == event_id,
+            StockOrder.status == 'holding'
+        ).all()
+        
+        # 所有历史订单（holding + sold，用于计算资金池分子）
+        all_orders = self.db.query(StockOrder).filter(
             StockOrder.event_id == event_id,
             StockOrder.status.in_(['holding', 'sold'])
         ).all()
         
         booth_shares: Dict[int, int] = {bid: 0 for bid in booth_ids}
-        for o in orders:
+        for o in holding_orders:
             if o.booth_id in booth_shares:
                 booth_shares[o.booth_id] += o.shares
         
-        total_investment = sum(float(o.total_amount) for o in orders)
+        total_investment = sum(float(o.total_amount) for o in all_orders)
         fee = total_investment * float(OFFICIAL_FEE_RATE)
         pool = total_investment - fee
         
@@ -663,8 +680,10 @@ class StockAccountService:
                 'fee': round(fee, 2),
                 'net_pool': round(pool, 2),
                 'fee_rate': float(OFFICIAL_FEE_RATE),
-                'order_count': len(orders),
-                'investor_count': len(set(o.participant_id for o in orders)),
+                'sell_discount_factor': float(SELL_DISCOUNT_FACTOR),
+                'order_count': len(all_orders),
+                'holding_count': len(holding_orders),
+                'investor_count': len(set(o.participant_id for o in all_orders)),
             },
             'weights': {k: float(v) for k, v in SCORE_WEIGHTS.items()},
             'totals': {k: round(v, 4) for k, v in totals.items()},
@@ -724,6 +743,12 @@ class StockAccountService:
         
         if not booth.is_active():
             raise ValidationError(f"摊位状态异常: {booth.status}")
+        
+        # 检查该摊位的股票是否已收盘/结算
+        from models.stock import Stock as StockModel
+        stock = self.db.query(StockModel).filter(StockModel.booth_id == booth_id).first()
+        if stock and stock.status in ('suspended', 'settled'):
+            raise ValidationError(f"该股票已{'收盘' if stock.status == 'suspended' else '结算'}，无法买入")
         
         # 3. 开启事务并使用悲观锁
         try:
@@ -857,6 +882,14 @@ class StockAccountService:
         if booth.event_id != event_id:
             raise ValidationError(f"摊位 {booth_id} 不属于活动 {event_id}")
         
+        # 检查该摊位的股票是否已收盘/结算
+        from models.stock import Stock as StockModel
+        stock = self.db.query(StockModel).filter(StockModel.booth_id == booth_id).first()
+        if stock and stock.status == 'settled':
+            raise ValidationError(f"该股票已结算，无法卖出")
+        if stock and stock.status == 'suspended':
+            raise ValidationError(f"该股票已收盘，无法卖出")
+        
         # 3. 查询该参与者在该摊位的持仓订单（状态为 holding）
         holding_orders = self.db.query(StockOrder).filter(
             and_(
@@ -892,8 +925,11 @@ class StockAccountService:
                     f"账户不存在: participant_id={participant.id}, event_id={event_id}"
                 )
             
-            # 5. 以当前动态股价卖出
-            sell_price = Decimal(str(self.get_dynamic_price(booth_id, event_id)))
+            # 5. 以做市商折扣价卖出（卖出价 = 当前动态股价 × 折扣系数）
+            dynamic_price = Decimal(str(self.get_dynamic_price(booth_id, event_id)))
+            sell_price = (dynamic_price * SELL_DISCOUNT_FACTOR).quantize(Decimal('0.01'))
+            # 卖出价下限保护（不低于0.50元）
+            sell_price = max(sell_price, Decimal('0.50'))
             total_amount = sell_price * shares
             
             # 6. 按 FIFO 顺序消减持仓订单
@@ -1267,6 +1303,170 @@ class StockAccountService:
         except Exception as e:
             self.db.rollback()
             logger.error(f"结算失败: {e}", exc_info=True)
+            raise
+    
+    # ============ Market Close (收盘) ============
+    
+    def close_market(self, event_id: int) -> Dict:
+        """
+        一键收盘：暂停活动下所有股票交易。
+        将所有 holding 状态的订单保持不变，但阻止新的买卖。
+        通过在 event 级别标记来实现。
+        """
+        from models.stock import Stock
+        
+        event = self.db.query(Event).filter(Event.id == event_id).first()
+        if not event:
+            raise ResourceNotFoundError(f"活动不存在: {event_id}")
+        
+        # 将该活动下所有 active 状态的股票设为 suspended
+        stocks = self.db.query(Stock).filter(
+            Stock.event_id == event_id,
+            Stock.status == 'active'
+        ).all()
+        
+        if not stocks:
+            # 检查是否已经收盘
+            suspended = self.db.query(Stock).filter(
+                Stock.event_id == event_id,
+                Stock.status == 'suspended'
+            ).count()
+            if suspended > 0:
+                raise BusinessLogicError(f"活动 {event_id} 已经收盘")
+            raise BusinessLogicError(f"活动 {event_id} 没有活跃的股票")
+        
+        count = 0
+        for stock in stocks:
+            stock.status = 'suspended'
+            count += 1
+        
+        self.db.commit()
+        
+        logger.info(f"收盘成功: event_id={event_id}, suspended_count={count}")
+        
+        return {
+            'success': True,
+            'event_id': event_id,
+            'suspended_count': count,
+            'message': f'已收盘，{count} 只股票已暂停交易'
+        }
+    
+    # ============ Full Liquidation (全部清算) ============
+    
+    def liquidate_market(self, event_id: int, fee_rate: float = 0.05) -> Dict:
+        """
+        一键全部清算：
+        1. 先收盘（如果尚未收盘）
+        2. 使用 Pari-mutuel 模型计算最终股价
+        3. 将结算金额退还到每个参与者的主账户
+        4. 标记所有订单为 settled
+        """
+        from models.stock import Stock
+        
+        event = self.db.query(Event).filter(Event.id == event_id).first()
+        if not event:
+            raise ResourceNotFoundError(f"活动不存在: {event_id}")
+        
+        # 检查是否已结算
+        orders = self.db.query(StockOrder).filter(
+            StockOrder.event_id == event_id
+        ).all()
+        
+        if not orders:
+            raise BusinessLogicError(f"活动 {event_id} 没有股票订单")
+        
+        if any(o.status == 'settled' for o in orders):
+            raise BusinessLogicError(f"活动 {event_id} 已完成清算")
+        
+        # 1. 先收盘（将所有 active 股票设为 suspended）
+        active_stocks = self.db.query(Stock).filter(
+            Stock.event_id == event_id,
+            Stock.status == 'active'
+        ).all()
+        for stock in active_stocks:
+            stock.status = 'suspended'
+        
+        # 2. 获取当前动态股价作为最终结算价
+        prices = self.get_all_dynamic_prices(event_id)
+        
+        # 3. 计算全局资金池（所有历史买入金额）
+        all_invested_orders = [o for o in orders if o.status in ('holding', 'sold')]
+        total_investment = sum(float(o.total_amount) for o in all_invested_orders)
+        fee = total_investment * fee_rate
+        net_pool = total_investment - fee
+        
+        # 4. 按参与者聚合，计算每人应得金额并退还（仅结算 holding 订单，sold 已在抛售时结算）
+        unsettled_orders = [o for o in orders if o.status == 'holding']
+        participant_returns: Dict[int, Decimal] = {}
+        booth_final_prices: Dict[int, float] = {}
+        
+        try:
+            for order in unsettled_orders:
+                booth_id = order.booth_id
+                final_price = Decimal(str(prices.get(booth_id, float(INITIAL_STOCK_PRICE))))
+                settlement_amount = final_price * order.shares
+                
+                # 更新订单
+                order.settlement_price = final_price
+                order.settlement_amount = settlement_amount
+                order.status = 'settled'
+                order.settled_at = datetime.now(CST)
+                
+                # 累计参与者应得
+                if order.participant_id not in participant_returns:
+                    participant_returns[order.participant_id] = Decimal('0')
+                participant_returns[order.participant_id] += settlement_amount
+                
+                booth_final_prices[booth_id] = float(final_price)
+            
+            # 5. 退还资金到参与者主账户
+            returned_count = 0
+            total_returned = Decimal('0')
+            
+            for participant_id, amount in participant_returns.items():
+                account = self.db.query(Account).filter(
+                    and_(
+                        Account.participant_id == participant_id,
+                        Account.event_id == event_id
+                    )
+                ).first()
+                
+                if account:
+                    account.balance += amount
+                    total_returned += amount
+                    returned_count += 1
+            
+            # 6. 将所有股票标记为 settled
+            all_stocks = self.db.query(Stock).filter(
+                Stock.event_id == event_id
+            ).all()
+            for stock in all_stocks:
+                stock.status = 'settled'
+            
+            self.db.commit()
+            
+            logger.info(
+                f"全部清算完成: event_id={event_id}, "
+                f"orders={len(unsettled_orders)}, participants={returned_count}, "
+                f"total_returned={total_returned}元"
+            )
+            
+            return {
+                'success': True,
+                'event_id': event_id,
+                'total_investment': total_investment,
+                'fee_collected': fee,
+                'net_pool': net_pool,
+                'order_count': len(holding_orders),
+                'participant_count': returned_count,
+                'total_returned': float(total_returned),
+                'booth_final_prices': booth_final_prices,
+                'message': f'清算完成，{returned_count} 位投资者已收到退款，共退还 ¥{float(total_returned):.2f}'
+            }
+        
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"全部清算失败: {e}", exc_info=True)
             raise
     
     # ============ Statistics ============

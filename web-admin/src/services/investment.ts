@@ -114,3 +114,27 @@ export const getParticipantOrders = (participantId: number, eventId?: number) =>
 /** 执行期末结算 */
 export const settleStockMarket = (data: SettlementRequest) =>
   request.post<any, SettlementResponse>(`/stock/settle`, data)
+
+/** 一键收盘（暂停所有股票交易） */
+export const closeMarket = (eventId: number) =>
+  request.post<any, {
+    success: boolean
+    event_id: number
+    suspended_count: number
+    message: string
+  }>('/stock/close-market', { event_id: eventId })
+
+/** 一键全部清算（结算并退还资金） */
+export const liquidateMarket = (data: { event_id: number; fee_rate?: number }) =>
+  request.post<any, {
+    success: boolean
+    event_id: number
+    total_investment: number
+    fee_collected: number
+    net_pool: number
+    order_count: number
+    participant_count: number
+    total_returned: number
+    booth_final_prices: Record<number, number>
+    message: string
+  }>('/stock/liquidate', data)

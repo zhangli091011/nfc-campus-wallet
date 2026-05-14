@@ -29,6 +29,8 @@ import { getEvents, Event } from '@/services/event'
 import {
   getMarketStats,
   settleStockMarket,
+  closeMarket,
+  liquidateMarket,
   MarketStats,
   SettlementResponse,
 } from '@/services/investment'
@@ -125,6 +127,91 @@ const InvestmentManagement: React.FC = () => {
           message.success('结算成功')
         } catch (e: any) {
           message.error('结算失败: ' + (e?.message || '未知错误'))
+        }
+      },
+    })
+  }
+
+  const handleCloseMarket = () => {
+    if (!selectedEventId) {
+      message.warning('请选择活动')
+      return
+    }
+
+    Modal.confirm({
+      title: '确认一键收盘？',
+      content: (
+        <Space direction="vertical">
+          <div>
+            活动ID: <strong>{selectedEventId}</strong>
+          </div>
+          <div style={{ color: '#fa8c16' }}>
+            ⚠️ 收盘后所有股票将暂停交易，股价停止变动。
+          </div>
+          <div style={{ color: '#999' }}>
+            收盘后仍可执行清算操作。
+          </div>
+        </Space>
+      ),
+      okText: '确认收盘',
+      cancelText: '取消',
+      okButtonProps: { style: { background: '#fa8c16', borderColor: '#fa8c16' } },
+      onOk: async () => {
+        try {
+          const result = await closeMarket(selectedEventId)
+          message.success(result.message || '收盘成功')
+          loadStats()
+        } catch (e: any) {
+          message.error('收盘失败: ' + (e?.response?.data?.detail?.message || e?.message || '未知错误'))
+        }
+      },
+    })
+  }
+
+  const handleLiquidate = () => {
+    if (!selectedEventId) {
+      message.warning('请选择活动')
+      return
+    }
+    if (stats?.is_settled) {
+      message.warning('该活动已经清算过了')
+      return
+    }
+
+    Modal.confirm({
+      title: '确认一键全部清算？',
+      content: (
+        <Space direction="vertical">
+          <div>
+            活动ID: <strong>{selectedEventId}</strong>
+          </div>
+          <div>
+            手续费率: <strong>{(feeRate * 100).toFixed(1)}%</strong>
+          </div>
+          <div style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+            ⚠️ 清算将执行以下操作（不可撤销）：
+          </div>
+          <div style={{ color: '#ff4d4f' }}>
+            1. 收盘（暂停所有交易）<br />
+            2. 以当前股价计算结算金额<br />
+            3. 将结算金额退还到每位投资者账户<br />
+            4. 标记所有订单为已结算
+          </div>
+        </Space>
+      ),
+      okText: '确认清算',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          const result = await liquidateMarket({
+            event_id: selectedEventId,
+            fee_rate: feeRate,
+          })
+          message.success(result.message || '清算成功')
+          loadStats()
+        } catch (e: any) {
+          message.error('清算失败: ' + (e?.response?.data?.detail?.message || e?.message || '未知错误'))
         }
       },
     })
@@ -308,12 +395,26 @@ const InvestmentManagement: React.FC = () => {
               disabled={stats?.is_settled}
             />
             <Button
+              type="default"
+              style={{ background: '#fa8c16', borderColor: '#fa8c16', color: '#fff' }}
+              onClick={handleCloseMarket}
+              disabled={!selectedEventId || stats?.is_settled}
+            >
+              一键收盘
+            </Button>
+            <Button
               type="primary"
               danger
+              onClick={handleLiquidate}
+              disabled={!selectedEventId || stats?.is_settled}
+            >
+              一键全部清算
+            </Button>
+            <Button
               onClick={handleSettle}
               disabled={!selectedEventId || stats?.is_settled}
             >
-              执行结算
+              仅结算（不退款）
             </Button>
           </Space>
         }
