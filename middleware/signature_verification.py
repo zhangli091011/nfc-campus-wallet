@@ -69,7 +69,7 @@ class SignatureVerificationMiddleware(BaseHTTPMiddleware):
             "/refund", "/correction", "/stocks", "/exports",
             "/cash-reconciliation", "/trade", "/bank/",
             "/bank-credit", "/merchant", "/admin",
-            "/app-update", "/card-detail",
+            "/app-update", "/card-detail", "/transactions",
         ]
         # Paths that support event mode (no signature required when event_id + card_uid provided)
         self.event_mode_paths = {"/recharge", "/pay", "/balance", "/bank/issue_loan"}
