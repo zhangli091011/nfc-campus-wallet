@@ -301,7 +301,7 @@ class StockAccountService:
         核心：Pari-mutuel 彩池定价引擎
         
         四步法：
-        1. 全局资金池 Pool = (Σ Q_i × P_0) × (1 - F)
+        1. 全局资金池 Pool = Σ(actual_buy_amount) × (1 - F)
         2. 摊位综合分 S_i = α×R_norm + β×P_norm + γ×T_norm（归一化后加权）
         3. 分红占比 Ratio_i = S_i / ΣS_j
         4. 最终股价 Price_i = (Pool × Ratio_i) / Q_i
@@ -332,13 +332,15 @@ class StockAccountService:
             if o.booth_id in booth_shares:
                 booth_shares[o.booth_id] += o.shares
         
-        # 第一步：全局资金池
+        # 第一步：全局资金池（使用实际投入金额）
         total_shares_all = sum(booth_shares.values())
         if total_shares_all == 0:
             # 没有任何交易，全部返回初始价
             return {bid: float(INITIAL_STOCK_PRICE) for bid in booth_ids}
         
-        pool = float(INITIAL_STOCK_PRICE) * total_shares_all * (1 - float(OFFICIAL_FEE_RATE))
+        # 实际投入金额（支持动态买入价）
+        total_investment = sum(float(o.total_amount) for o in orders)
+        pool = total_investment * (1 - float(OFFICIAL_FEE_RATE))
         
         # 第二步：计算每个摊位的经营数据（原始值）
         booth_raw_data: Dict[int, Dict] = {}
@@ -487,8 +489,8 @@ class StockAccountService:
                     f"账户不存在: participant_id={participant.id}, event_id={event_id}"
                 )
             
-            # 4. 计算金额（固定单价5元/股）
-            buy_price = INITIAL_STOCK_PRICE
+            # 4. 计算金额（使用当前动态股价）
+            buy_price = Decimal(str(self.get_dynamic_price(booth_id, event_id)))
             total_amount = buy_price * shares
             
             # 5. 检查余额

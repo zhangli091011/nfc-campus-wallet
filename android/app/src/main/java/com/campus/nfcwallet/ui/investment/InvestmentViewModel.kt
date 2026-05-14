@@ -330,7 +330,7 @@ class InvestmentViewModel(
     }
 
     // -------------------------------------------------------------
-    // 确认投资：直接从主账户购买股票
+    // 确认投资：以当前动态股价从主账户购买股票
     // -------------------------------------------------------------
     fun onConfirmInvestment() {
         val uid = uiState.cardUid ?: return
@@ -338,7 +338,8 @@ class InvestmentViewModel(
         val shares = uiState.sharesInput.toIntOrNull() ?: return
         if (shares <= 0) return
 
-        val totalYuan = shares * 5.0
+        val pricePerShare = getCurrentPrice(booth.id)
+        val totalYuan = shares * pricePerShare
 
         // 余额校验
         if (uiState.accountBalance < totalYuan) {

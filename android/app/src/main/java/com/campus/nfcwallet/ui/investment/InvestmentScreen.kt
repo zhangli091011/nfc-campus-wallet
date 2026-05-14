@@ -111,7 +111,9 @@ fun InvestmentScreen(
 ) {
     val pricePerShare = state.selectedBooth?.let { getCurrentPrice(it.id) } ?: 5.0
     val totalAmount = state.sharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
-    val sellTotal = state.sellSharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
+    // 卖出使用所选持仓的当前动态股价
+    val sellPricePerShare = state.selectedHolding?.let { getCurrentPrice(it.boothId) } ?: pricePerShare
+    val sellTotal = state.sellSharesInput.toIntOrNull()?.let { it * sellPricePerShare } ?: 0.0
 
     Scaffold(
         containerColor = InvestmentColors.Background,
@@ -171,6 +173,7 @@ fun InvestmentScreen(
                     totalAmount = totalAmount,
                     onBoothSelected = onBoothSelected,
                     onSharesChanged = onSharesChanged,
+                    getCurrentPrice = getCurrentPrice,
                 )
             }
 
@@ -200,7 +203,7 @@ fun InvestmentScreen(
                     holdings = state.holdings,
                     selectedHolding = state.selectedHolding,
                     sellSharesInput = state.sellSharesInput,
-                    pricePerShare = pricePerShare,
+                    pricePerShare = sellPricePerShare,
                     sellTotal = sellTotal,
                     onHoldingSelected = onHoldingSelected,
                     onSellSharesChanged = onSellSharesChanged,
@@ -522,6 +525,7 @@ private fun InvestmentFormCard(
     totalAmount: Double,
     onBoothSelected: (BoothOption) -> Unit,
     onSharesChanged: (String) -> Unit,
+    getCurrentPrice: (Int) -> Double = { 5.0 },
 ) {
     TechCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -535,6 +539,7 @@ private fun InvestmentFormCard(
                 booths = booths,
                 selectedBooth = selectedBooth,
                 onBoothSelected = onBoothSelected,
+                getCurrentPrice = getCurrentPrice,
             )
 
             Spacer(Modifier.height(20.dp))
@@ -652,6 +657,7 @@ private fun BoothDropdown(
     booths: List<BoothOption>,
     selectedBooth: BoothOption?,
     onBoothSelected: (BoothOption) -> Unit,
+    getCurrentPrice: (Int) -> Double = { 5.0 },
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -708,16 +714,28 @@ private fun BoothDropdown(
                 booths.forEach { booth ->
                     DropdownMenuItem(
                         text = {
-                            Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        booth.name,
+                                        color = InvestmentColors.TextPrimary,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        booth.className,
+                                        color = InvestmentColors.TextDim,
+                                        fontSize = 11.sp,
+                                    )
+                                }
                                 Text(
-                                    booth.name,
-                                    color = InvestmentColors.TextPrimary,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                                Text(
-                                    booth.className,
-                                    color = InvestmentColors.TextDim,
-                                    fontSize = 11.sp,
+                                    String.format("¥%.2f", getCurrentPrice(booth.id)),
+                                    color = InvestmentColors.Gold,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
                                 )
                             }
                         },
