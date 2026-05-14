@@ -28,6 +28,7 @@ export const getTransactions = (params: {
   booth_id?: number
   product_id?: number
   type?: string
+  remark?: string
   start_date?: string
   end_date?: string
   limit?: number

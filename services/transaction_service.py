@@ -780,6 +780,7 @@ class TransactionService:
         self,
         booth_id: int,
         product_id: Optional[int] = None,
+        remark: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         limit: int = 100,
@@ -838,6 +839,10 @@ class TransactionService:
             # 应用商品过滤
             if product_id is not None:
                 query = query.filter(Transaction.product_id == product_id)
+            
+            # 应用备注关键词过滤
+            if remark:
+                query = query.filter(Transaction.remark.like(f"%{remark}%"))
             
             # 应用日期过滤
             if start_date:

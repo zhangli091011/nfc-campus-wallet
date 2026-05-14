@@ -31,6 +31,7 @@ async def get_transactions(
     booth_id: Optional[int] = Query(None, description="Filter by booth ID"),
     product_id: Optional[int] = Query(None, description="Filter by product ID"),
     type: Optional[str] = Query(None, description="Filter by transaction type(s), comma-separated"),
+    remark: Optional[str] = Query(None, description="Filter by remark keyword (fuzzy match)"),
     start_date: Optional[str] = Query(None, description="Start date filter (ISO format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (ISO format: YYYY-MM-DD)"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of transactions to return"),
@@ -109,6 +110,7 @@ async def get_transactions(
                 result = transaction_service.get_booth_transactions(
                     booth_id=booth_id,
                     product_id=product_id,
+                    remark=remark,
                     start_date=start_date,
                     end_date=end_date,
                     limit=limit,
@@ -156,6 +158,7 @@ async def get_transactions(
             result = transaction_service.get_booth_transactions(
                 booth_id=current_user.booth_id,
                 product_id=product_id,
+                remark=remark,
                 start_date=start_date,
                 end_date=end_date,
                 limit=limit,
@@ -169,6 +172,7 @@ async def get_transactions(
                 result = transaction_service.get_booth_transactions(
                     booth_id=booth_id,
                     product_id=product_id,
+                    remark=remark,
                     start_date=start_date,
                     end_date=end_date,
                     limit=limit,

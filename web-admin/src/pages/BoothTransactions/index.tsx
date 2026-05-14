@@ -30,6 +30,7 @@ const BoothTransactions = () => {
   const [selectedEventId, setSelectedEventId] = useState<number>()
   const [selectedBoothId, setSelectedBoothId] = useState<number>()
   const [selectedType, setSelectedType] = useState<string>()
+  const [remarkKeyword, setRemarkKeyword] = useState<string>('')
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [pagination, setPagination] = useState({ current: 1, pageSize: 50 })
 
@@ -102,6 +103,10 @@ const BoothTransactions = () => {
         params.type = selectedType
       }
 
+      if (remarkKeyword.trim()) {
+        params.remark = remarkKeyword.trim()
+      }
+
       if (dateRange) {
         params.start_date = dateRange[0].format('YYYY-MM-DD')
         params.end_date = dateRange[1].format('YYYY-MM-DD')
@@ -120,6 +125,7 @@ const BoothTransactions = () => {
 
   const handleReset = () => {
     setSelectedType(undefined)
+    setRemarkKeyword('')
     setDateRange(null)
     setPagination({ current: 1, pageSize: 50 })
   }
@@ -387,6 +393,17 @@ const BoothTransactions = () => {
           <Select.Option value="stock_sell">股票卖出</Select.Option>
           <Select.Option value="recharge">充值</Select.Option>
         </Select>
+        <Input.Search
+          style={{ width: 200 }}
+          placeholder="搜索备注关键词"
+          value={remarkKeyword}
+          onChange={(e) => setRemarkKeyword(e.target.value)}
+          onSearch={() => {
+            setPagination({ current: 1, pageSize: 50 })
+            loadTransactions()
+          }}
+          allowClear
+        />
         <RangePicker
           value={dateRange}
           onChange={(dates) => {
