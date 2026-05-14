@@ -1,8 +1,14 @@
 """
 Stock Market Service - Business logic for stock trading.
 
-股票交易服务 - 直接从主账户扣款购买股票（含悲观锁）。
-所有金额以"元"为单位 (Decimal)。
+全局奖金池动态定价模型（Pari-mutuel）：
+- 所有学生买股票的钱汇总成全局资金池
+- 官方扣除手续费（如5%）
+- 摊位根据经营表现（收入、利润、人流）计算综合分
+- 摊位分到的资金 = 池子 × (摊位分 / 总分)
+- 最终股价 = 摊位分到的资金 / 该摊位总股数
+
+零和博弈：学生赚的钱来自其他学生亏的钱，官方稳赚手续费。
 """
 
 from sqlalchemy.orm import Session
@@ -28,86 +34,391 @@ from core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-# 基础股价：5元/股
-DEFAULT_STOCK_PRICE = Decimal('5.00')
+# 初始发行价
+INITIAL_STOCK_PRICE = Decimal('5.00')
+
+# 官方手续费率 (5%)
+OFFICIAL_FEE_RATE = Decimal('0.05')
+
+# 综合分权重配置
+SCORE_WEIGHTS = {
+    'revenue': Decimal('0.20'),      # 收入权重 20%
+    'profit': Decimal('0.60'),       # 利润权重 60%（最重要）
+    'traffic': Decimal('0.20'),      # 人流权重 20%
+}
 
 
 class StockAccountService:
-    """股票交易服务类（使用主账户）"""
+    """股票交易服务类（全局彩池模式）"""
     
     def __init__(self, db: Session):
         self.db = db
     
-    def get_dynamic_price(self, booth_id: int, event_id: int = None) -> float:
-        """
-        计算摊位的动态股价。
-        
-        算法：基础价 × (1 + 投资热度系数)
-        热度系数 = (净买入股数 / 100) × 0.1，上限±50%
-        
-        这样每净买入100股，股价上涨10%；每净卖出100股，股价下跌10%。
-        """
-        query = self.db.query(StockOrder).filter(StockOrder.booth_id == booth_id)
-        if event_id:
-            query = query.filter(StockOrder.event_id == event_id)
-        
-        orders = query.all()
-        
-        # 计算净买入股数
-        holding_shares = sum(o.shares for o in orders if o.status == 'holding')
-        sold_shares = sum(o.shares for o in orders if o.status == 'sold')
-        net_shares = holding_shares  # 当前持仓量决定股价
-        
-        # 热度系数：每100股涨10%，上限±50%
-        heat_factor = (net_shares / 100.0) * 0.1
-        heat_factor = max(-0.5, min(0.5, heat_factor))
-        
-        dynamic_price = float(DEFAULT_STOCK_PRICE) * (1 + heat_factor)
-        # 最低不低于1元
-        dynamic_price = max(1.0, round(dynamic_price, 2))
-        
-        return dynamic_price
+    # ==================== 全局资金池计算 ====================
     
-    def get_all_dynamic_prices(self, event_id: int = None) -> Dict[int, float]:
-        """获取所有摊位的动态股价"""
-        # 获取摊位：优先按 event_id 查询，否则获取所有活跃摊位
-        if event_id:
-            booths = self.db.query(Booth).filter(
-                Booth.event_id == event_id,
+    def calculate_global_pool(self, event_id: int) -> Dict:
+        """
+        计算全局资金池
+        
+        Pool = (Σ Q_i × P_0) × (1 - F)
+        Q_i = 摊位i的总买入股数
+        P_0 = 初始发行价
+        F = 官方手续费率
+        """
+        # 获取所有订单
+        orders = self.db.query(StockOrder).filter(
+            StockOrder.event_id == event_id,
+            StockOrder.status.in_(['holding', 'settled', 'sold'])
+        ).all()
+        
+        # 计算总投入（买入金额）
+        total_investment = sum(float(o.total_amount) for o in orders)
+        
+        # 官方手续费
+        fee = total_investment * float(OFFICIAL_FEE_RATE)
+        
+        # 净池（给学生的分红池）
+        net_pool = total_investment - fee
+        
+        return {
+            'total_investment': total_investment,
+            'fee': fee,
+            'net_pool': net_pool,
+            'order_count': len(orders),
+            'investor_count': len(set(o.participant_id for o in orders)),
+        }
+    
+    # ==================== 摊位综合分计算 ====================
+    
+    def calculate_booth_score(self, booth_id: int, event_id: int) -> Dict:
+        """
+        计算摊位综合经营分
+        
+        S_i = α × R_norm + β × P_norm + γ × T_norm
+        
+        归一化处理：各项数据除以全场总和，转为百分比后再加权。
+        """
+        # 1. 获取该摊位数据
+        revenue = self._get_booth_revenue(booth_id, event_id)
+        profit = self._get_booth_profit(booth_id, event_id)
+        traffic = self._get_booth_traffic(booth_id, event_id)
+        
+        # 2. 获取全场总数据（用于归一化）
+        all_booths = self.db.query(Booth).filter(
+            Booth.event_id == event_id,
+            Booth.status == 'active'
+        ).all()
+        if not all_booths:
+            all_booths = self.db.query(Booth).filter(
                 Booth.status == 'active'
             ).all()
-            # 如果指定活动下没有摊位，回退到所有活跃摊位
-            if not booths:
-                booths = self.db.query(Booth).filter(Booth.status == 'active').all()
-        else:
-            booths = self.db.query(Booth).filter(Booth.status == 'active').all()
         
-        # 获取所有订单
-        query = self.db.query(StockOrder)
-        if event_id:
-            query = query.filter(StockOrder.event_id == event_id)
-        orders = query.all()
+        total_revenue = sum(
+            self._get_booth_revenue(b.id, event_id) 
+            for b in all_booths
+        ) or 1
         
-        # 按摊位分组计算
-        booth_orders: Dict[int, list] = {}
+        total_profit = sum(
+            self._get_booth_profit(b.id, event_id) 
+            for b in all_booths
+        ) or 1
+        
+        total_traffic = sum(
+            self._get_booth_traffic(b.id, event_id) 
+            for b in all_booths
+        ) or 1
+        
+        # 3. 归一化（转为百分比）
+        norm_revenue = revenue / total_revenue if total_revenue > 0 else 0
+        norm_profit = profit / total_profit if total_profit > 0 else 0
+        norm_traffic = traffic / total_traffic if total_traffic > 0 else 0
+        
+        # 4. 加权计算综合分
+        score = (
+            float(SCORE_WEIGHTS['revenue']) * norm_revenue +
+            float(SCORE_WEIGHTS['profit']) * norm_profit +
+            float(SCORE_WEIGHTS['traffic']) * norm_traffic
+        )
+        
+        return {
+            'revenue': revenue,
+            'profit': profit,
+            'traffic': traffic,
+            'norm_revenue': norm_revenue,
+            'norm_profit': norm_profit,
+            'norm_traffic': norm_traffic,
+            'score': score,
+        }
+    
+    def _get_booth_revenue(self, booth_id: int, event_id: int) -> float:
+        """获取摊位总收入"""
+        from models.transaction import Transaction
+        transactions = self.db.query(Transaction).filter(
+            Transaction.event_id == event_id,
+            Transaction.booth_id == booth_id,
+            Transaction.type.in_(['payment', 'recharge'])
+        ).all()
+        return sum(float(t.amount) for t in transactions if t.amount > 0)
+    
+    def _get_booth_profit(self, booth_id: int, event_id: int) -> float:
+        """获取摊位利润（收入 - 成本，无成本数据时按70%毛利估算）"""
+        revenue = self._get_booth_revenue(booth_id, event_id)
+        
+        # 尝试从成本凭据获取实际成本
+        try:
+            from models.cost_evidence import CostEvidence
+            cost_records = self.db.query(CostEvidence).filter(
+                CostEvidence.booth_id == booth_id,
+                CostEvidence.status == 'approved'
+            ).all()
+            if cost_records:
+                total_cost = sum(float(c.amount) for c in cost_records)
+                return max(0, revenue - total_cost)
+        except Exception:
+            pass
+        
+        # 无成本数据时，假设毛利率70%
+        return revenue * 0.70
+    
+    def _get_booth_traffic(self, booth_id: int, event_id: int) -> int:
+        """获取摊位人流（订单数，含NFC支付和现金支付）"""
+        from models.transaction import Transaction
+        return self.db.query(Transaction).filter(
+            Transaction.event_id == event_id,
+            Transaction.booth_id == booth_id,
+            Transaction.type.in_(['payment', 'cash_payment'])
+        ).count()
+    
+    # ==================== 全局彩池定价 ====================
+    
+    def calculate_all_booth_prices(self, event_id: int) -> Dict:
+        """
+        计算所有摊位的最终股价（完整版，含详细数据）
+        
+        使用 Pari-mutuel 彩池模型：
+        Final Price_i = (Pool × Ratio_i) / Q_i
+        Ratio_i = S_i / ΣS_j
+        """
+        # 1. 获取所有活跃摊位
+        booths = self.db.query(Booth).filter(
+            Booth.event_id == event_id,
+            Booth.status == 'active'
+        ).all()
+        if not booths:
+            booths = self.db.query(Booth).filter(
+                Booth.status == 'active'
+            ).all()
+        
+        if not booths:
+            return {'pool_info': {'total_investment': 0, 'fee': 0, 'net_pool': 0}, 'booths': []}
+        
+        # 2. 计算全局资金池
+        pool_info = self.calculate_global_pool(event_id)
+        net_pool = pool_info['net_pool']
+        
+        # 3. 获取动态价格（使用核心引擎）
+        prices = self._calculate_pari_mutuel_prices(event_id)
+        
+        # 4. 获取每个摊位的详细数据
+        orders = self.db.query(StockOrder).filter(
+            StockOrder.event_id == event_id,
+            StockOrder.status.in_(['holding', 'sold'])
+        ).all()
+        
+        booth_shares: Dict[int, int] = {}
         for o in orders:
-            if o.booth_id not in booth_orders:
-                booth_orders[o.booth_id] = []
-            booth_orders[o.booth_id].append(o)
+            if o.booth_id not in booth_shares:
+                booth_shares[o.booth_id] = 0
+            booth_shares[o.booth_id] += o.shares
         
-        prices = {}
+        # 5. 构建结果
+        results = []
         for booth in booths:
-            orders_list = booth_orders.get(booth.id, [])
-            holding_shares = sum(o.shares for o in orders_list if o.status == 'holding')
+            shares = booth_shares.get(booth.id, 0)
+            current_price = prices.get(booth.id, float(INITIAL_STOCK_PRICE))
+            revenue = self._get_booth_revenue(booth.id, event_id)
+            profit = self._get_booth_profit(booth.id, event_id)
+            traffic = self._get_booth_traffic(booth.id, event_id)
             
-            heat_factor = (holding_shares / 100.0) * 0.1
-            heat_factor = max(-0.5, min(0.5, heat_factor))
-            dynamic_price = float(DEFAULT_STOCK_PRICE) * (1 + heat_factor)
-            dynamic_price = max(1.0, round(dynamic_price, 2))
+            # 涨跌幅
+            price_change = (current_price - float(INITIAL_STOCK_PRICE)) / float(INITIAL_STOCK_PRICE) * 100
             
-            prices[booth.id] = dynamic_price
+            results.append({
+                'booth_id': booth.id,
+                'booth_name': booth.name,
+                'class_name': booth.class_name or '',
+                'shares': shares,
+                'revenue': revenue,
+                'profit': profit,
+                'traffic': traffic,
+                'current_price': current_price,
+                'initial_price': float(INITIAL_STOCK_PRICE),
+                'price_change': round(price_change, 2),
+            })
+        
+        # 按股价降序排列
+        results.sort(key=lambda x: x['current_price'], reverse=True)
+        
+        return {
+            'pool_info': pool_info,
+            'booths': results,
+        }
+    
+    # ==================== 实时动态股价（Pari-mutuel 模型） ====================
+    
+    def get_dynamic_price(self, booth_id: int, event_id: int) -> float:
+        """
+        获取单个摊位的实时动态股价（Pari-mutuel 模型）
+        
+        公式：Final Price_i = (Pool × Ratio_i) / Q_i
+        - Pool = (Σ Q_j × P_0) × (1 - F)
+        - Ratio_i = S_i / ΣS_j
+        
+        如果没有任何交易数据，返回初始发行价。
+        """
+        try:
+            prices = self._calculate_pari_mutuel_prices(event_id)
+            return prices.get(booth_id, float(INITIAL_STOCK_PRICE))
+        except Exception as e:
+            logger.warning(f"动态股价计算失败(booth={booth_id}): {e}")
+            return float(INITIAL_STOCK_PRICE)
+    
+    def get_all_dynamic_prices(self, event_id: int) -> Dict[int, float]:
+        """
+        获取所有摊位的实时动态股价（Pari-mutuel 模型）
+        
+        Returns:
+            Dict[booth_id, price]: 摊位ID → 当前股价
+        """
+        try:
+            return self._calculate_pari_mutuel_prices(event_id)
+        except Exception as e:
+            logger.warning(f"批量动态股价计算失败: {e}")
+            return {}
+    
+    def _calculate_pari_mutuel_prices(self, event_id: int) -> Dict[int, float]:
+        """
+        核心：Pari-mutuel 彩池定价引擎
+        
+        四步法：
+        1. 全局资金池 Pool = (Σ Q_i × P_0) × (1 - F)
+        2. 摊位综合分 S_i = α×R_norm + β×P_norm + γ×T_norm（归一化后加权）
+        3. 分红占比 Ratio_i = S_i / ΣS_j
+        4. 最终股价 Price_i = (Pool × Ratio_i) / Q_i
+        """
+        # 获取所有活跃摊位
+        all_booths = self.db.query(Booth).filter(
+            Booth.event_id == event_id
+        ).all()
+        if not all_booths:
+            all_booths = self.db.query(Booth).filter(
+                Booth.status == 'active'
+            ).all()
+        
+        if not all_booths:
+            return {}
+        
+        booth_ids = [b.id for b in all_booths]
+        
+        # 获取所有持仓订单（holding + sold 都算入池子）
+        orders = self.db.query(StockOrder).filter(
+            StockOrder.event_id == event_id,
+            StockOrder.status.in_(['holding', 'sold'])
+        ).all()
+        
+        # 按摊位统计总股数
+        booth_shares: Dict[int, int] = {bid: 0 for bid in booth_ids}
+        for o in orders:
+            if o.booth_id in booth_shares:
+                booth_shares[o.booth_id] += o.shares
+        
+        # 第一步：全局资金池
+        total_shares_all = sum(booth_shares.values())
+        if total_shares_all == 0:
+            # 没有任何交易，全部返回初始价
+            return {bid: float(INITIAL_STOCK_PRICE) for bid in booth_ids}
+        
+        pool = float(INITIAL_STOCK_PRICE) * total_shares_all * (1 - float(OFFICIAL_FEE_RATE))
+        
+        # 第二步：计算每个摊位的经营数据（原始值）
+        booth_raw_data: Dict[int, Dict] = {}
+        total_revenue = 0.0
+        total_profit = 0.0
+        total_traffic = 0
+        
+        for booth in all_booths:
+            revenue = self._get_booth_revenue(booth.id, event_id)
+            profit = self._get_booth_profit(booth.id, event_id)
+            traffic = self._get_booth_traffic(booth.id, event_id)
+            
+            booth_raw_data[booth.id] = {
+                'revenue': revenue,
+                'profit': profit,
+                'traffic': traffic,
+            }
+            total_revenue += revenue
+            total_profit += profit
+            total_traffic += traffic
+        
+        # 第三步：归一化 + 加权计算综合分
+        booth_scores: Dict[int, float] = {}
+        total_score = 0.0
+        
+        for booth in all_booths:
+            data = booth_raw_data[booth.id]
+            
+            # 归一化（各项除以全场总和，转为百分比）
+            norm_r = data['revenue'] / total_revenue if total_revenue > 0 else 0
+            norm_p = data['profit'] / total_profit if total_profit > 0 else 0
+            norm_t = data['traffic'] / total_traffic if total_traffic > 0 else 0
+            
+            # 加权综合分
+            score = (
+                float(SCORE_WEIGHTS['revenue']) * norm_r +
+                float(SCORE_WEIGHTS['profit']) * norm_p +
+                float(SCORE_WEIGHTS['traffic']) * norm_t
+            )
+            
+            # 保底分（防止完全没经营数据的摊位分为0）
+            score = max(score, 0.001)
+            
+            booth_scores[booth.id] = score
+            total_score += score
+        
+        if total_score == 0:
+            total_score = 1.0
+        
+        # 第四步：计算最终股价
+        prices: Dict[int, float] = {}
+        for booth in all_booths:
+            shares = booth_shares.get(booth.id, 0)
+            score = booth_scores.get(booth.id, 0)
+            
+            # 分红占比
+            ratio = score / total_score
+            
+            # 摊位分到的资金
+            booth_pool = pool * ratio
+            
+            if shares > 0:
+                # 最终股价 = 摊位分到的资金 / 该摊位总股数
+                price = booth_pool / shares
+            else:
+                # 没人买的摊位：用初始价，但根据经营分给一个预期涨跌
+                # 预期价 = 初始价 × (ratio × 摊位数)，模拟"如果有人买会怎样"
+                expected_multiplier = ratio * len(all_booths)
+                price = float(INITIAL_STOCK_PRICE) * max(0.5, min(2.0, expected_multiplier))
+            
+            # 股价下限保护（不低于0.5元）
+            price = max(0.50, price)
+            prices[booth.id] = round(price, 2)
         
         return prices
+    
+    # 兼容旧方法名
+    def get_realtime_price(self, booth_id: int, event_id: int) -> float:
+        """兼容旧接口，内部调用 get_dynamic_price"""
+        return self.get_dynamic_price(booth_id, event_id)
     
     # ============ Stock Buy (with Pessimistic Lock) ============
     
@@ -177,7 +488,7 @@ class StockAccountService:
                 )
             
             # 4. 计算金额（固定单价5元/股）
-            buy_price = DEFAULT_STOCK_PRICE
+            buy_price = INITIAL_STOCK_PRICE
             total_amount = buy_price * shares
             
             # 5. 检查余额

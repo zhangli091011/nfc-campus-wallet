@@ -24,7 +24,7 @@ from core.exceptions import (
     BusinessLogicError
 )
 from models.user import User
-from services.stock_account_service import StockAccountService
+from services.stock_account_service import StockAccountService, INITIAL_STOCK_PRICE
 from schemas.stock_account import (
     AccountTransferResponse,
     StockBuyRequest,
@@ -482,7 +482,7 @@ async def get_booth_stock_stats(
 
 @router.get(
     "/prices/{event_id}",
-    summary="获取所有摊位实时股价（动态计算）"
+    summary="获取所有摊位实时股价（Pari-mutuel 动态计算）"
 )
 async def get_dynamic_prices(
     event_id: int,
@@ -491,8 +491,10 @@ async def get_dynamic_prices(
     """
     获取所有摊位的实时动态股价（无需认证，供手机端和大屏展示）。
     
-    股价算法：基础价(¥5) × (1 + 热度系数)
-    热度系数 = 当前持仓量 / 100 × 0.1，上限±50%
+    股价算法：Pari-mutuel 全局彩池模型
+    - Pool = (Σ Q_i × P_0) × (1 - F)
+    - Score_i = α×Revenue + β×Profit + γ×Traffic（归一化加权）
+    - Price_i = (Pool × Score_i/ΣScore) / Q_i
     
     Returns:
         各摊位的实时股价列表
@@ -510,13 +512,14 @@ async def get_dynamic_prices(
         for booth_id, price in prices.items():
             booth = booth_map.get(booth_id)
             if booth:
+                base_price = float(INITIAL_STOCK_PRICE)
                 result.append({
                     "booth_id": booth_id,
                     "booth_name": booth.name,
                     "class_name": booth.class_name or "",
                     "current_price": price,
-                    "base_price": 5.0,
-                    "change_percent": round((price - 5.0) / 5.0 * 100, 2),
+                    "base_price": base_price,
+                    "change_percent": round((price - base_price) / base_price * 100, 2),
                 })
         
         # 按股价降序
