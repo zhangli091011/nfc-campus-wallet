@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Table, Space, Select, DatePicker, Button, Tag, Card, Statistic, Row, Col, Modal, Input, message } from 'antd'
 import {
   SearchOutlined,
@@ -11,6 +11,7 @@ import {
 import {
   getTransactions,
   transferTransaction,
+  batchTransferTransactions,
   type Transaction,
   type TransactionListResponse,
 } from '@/services/transaction'
@@ -38,6 +39,13 @@ const BoothTransactions = () => {
   const [targetBoothId, setTargetBoothId] = useState<number>()
   const [transferReason, setTransferReason] = useState('')
   const [transferLoading, setTransferLoading] = useState(false)
+
+  // 批量转移状态
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [batchTransferModalVisible, setBatchTransferModalVisible] = useState(false)
+  const [batchTargetBoothId, setBatchTargetBoothId] = useState<number>()
+  const [batchTransferReason, setBatchTransferReason] = useState('')
+  const [batchTransferLoading, setBatchTransferLoading] = useState(false)
 
   useEffect(() => {
     loadEvents()
@@ -150,6 +158,53 @@ const BoothTransactions = () => {
       message.error(error?.response?.data?.detail?.message || '转移失败')
     } finally {
       setTransferLoading(false)
+    }
+  }
+
+  // 打开批量转移弹窗
+  const handleBatchTransfer = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先选择要转移的交易')
+      return
+    }
+    setBatchTargetBoothId(undefined)
+    setBatchTransferReason('')
+    setBatchTransferModalVisible(true)
+  }
+
+  // 确认批量转移
+  const handleConfirmBatchTransfer = async () => {
+    if (!batchTargetBoothId) {
+      message.warning('请选择目标商铺')
+      return
+    }
+
+    if (batchTargetBoothId === selectedBoothId) {
+      message.warning('目标商铺不能与当前商铺相同')
+      return
+    }
+
+    setBatchTransferLoading(true)
+    try {
+      const res = await batchTransferTransactions({
+        transaction_ids: selectedRowKeys as number[],
+        target_booth_id: batchTargetBoothId,
+        reason: batchTransferReason,
+      })
+      message.success(res.message || `成功转移 ${res.success_count} 笔交易`)
+      if (res.failed_count > 0) {
+        message.warning(`${res.failed_count} 笔交易转移失败`)
+      }
+      if (res.not_found_count > 0) {
+        message.warning(`${res.not_found_count} 笔交易未找到`)
+      }
+      setBatchTransferModalVisible(false)
+      setSelectedRowKeys([])
+      loadTransactions()
+    } catch (error: any) {
+      message.error(error?.response?.data?.detail?.message || '批量转移失败')
+    } finally {
+      setBatchTransferLoading(false)
     }
   }
 
@@ -345,6 +400,16 @@ const BoothTransactions = () => {
         <Button icon={<ReloadOutlined />} onClick={handleReset}>
           重置
         </Button>
+        {selectedRowKeys.length > 0 && (
+          <Button
+            type="primary"
+            icon={<SwapOutlined />}
+            onClick={handleBatchTransfer}
+            style={{ background: '#722ed1' }}
+          >
+            批量转移 ({selectedRowKeys.length})
+          </Button>
+        )}
       </Space>
 
       {/* 统计卡片 */}
@@ -401,6 +466,10 @@ const BoothTransactions = () => {
         dataSource={transactions}
         rowKey="id"
         loading={loading}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys),
+        }}
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
@@ -481,6 +550,70 @@ const BoothTransactions = () => {
             placeholder="请输入转移原因（如：收银员误操作，应归属XX商铺）"
             value={transferReason}
             onChange={(e) => setTransferReason(e.target.value)}
+          />
+        </div>
+      </Modal>
+
+      {/* 批量转移弹窗 */}
+      <Modal
+        title={
+          <span>
+            <SwapOutlined style={{ marginRight: 8 }} />
+            批量转移流水到其他商铺
+          </span>
+        }
+        open={batchTransferModalVisible}
+        onOk={handleConfirmBatchTransfer}
+        onCancel={() => setBatchTransferModalVisible(false)}
+        confirmLoading={batchTransferLoading}
+        okText="确认批量转移"
+        cancelText="取消"
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p>
+            <strong>已选择：</strong>{selectedRowKeys.length} 笔交易
+          </p>
+          <p>
+            <strong>当前商铺：</strong>{selectedBooth?.name || '-'}
+          </p>
+          <p>
+            <strong>选中金额合计：</strong>¥
+            {transactions
+              .filter((t) => selectedRowKeys.includes(t.id))
+              .reduce((sum, t) => sum + t.amount, 0)
+              .toFixed(2)}
+          </p>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>
+            目标商铺：
+          </label>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="选择要转移到的商铺"
+            value={batchTargetBoothId}
+            onChange={setBatchTargetBoothId}
+            showSearch
+            filterOption={(input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={booths
+              .filter((b) => b.id !== selectedBoothId)
+              .map((b) => ({
+                label: `${b.name} (${b.class_name})`,
+                value: b.id,
+              }))}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>
+            转移原因：
+          </label>
+          <Input.TextArea
+            rows={3}
+            placeholder="请输入转移原因（如：收银员误操作，应归属XX商铺）"
+            value={batchTransferReason}
+            onChange={(e) => setBatchTransferReason(e.target.value)}
           />
         </div>
       </Modal>

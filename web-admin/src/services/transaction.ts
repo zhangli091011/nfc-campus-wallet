@@ -73,3 +73,23 @@ export const transferTransaction = (transactionId: number, data: {
     message: string
   }>(`/transactions/${transactionId}/transfer`, data)
 }
+
+// 批量转移交易到另一个摊位
+export const batchTransferTransactions = (data: {
+  transaction_ids: number[]
+  target_booth_id: number
+  reason?: string
+}) => {
+  return request.post<any, {
+    success: boolean
+    total_requested: number
+    success_count: number
+    failed_count: number
+    not_found_count: number
+    failed_ids: number[]
+    not_found_ids: number[]
+    target_booth_id: number
+    target_booth_name: string
+    message: string
+  }>('/transactions/batch-transfer', data)
+}

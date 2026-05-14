@@ -379,3 +379,134 @@ async def transfer_transaction(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error_code": "INTERNAL_ERROR", "message": "转移失败，请重试"}
         )
+
+
+# ============ Batch Transaction Transfer ============
+
+class BatchTransactionTransferRequest(BaseModel):
+    """请求体：批量将交易转移到另一个摊位"""
+    transaction_ids: list[int]
+    target_booth_id: int
+    reason: str = ""
+
+
+@router.post("/transactions/batch-transfer")
+async def batch_transfer_transactions(
+    request: BatchTransactionTransferRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["event_admin", "super_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    批量将多笔交易转移到另一个摊位（用于修正账目错误）。
+    
+    仅修改交易的 booth_id 字段，不影响金额和余额。
+    需要 event_admin 或 super_admin 权限。
+    
+    Request Body:
+        - transaction_ids: 要转移的交易ID列表
+        - target_booth_id: 目标摊位ID
+        - reason: 转移原因（可选）
+    
+    Returns:
+        批量转移结果
+    """
+    if not request.transaction_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error_code": "EMPTY_LIST", "message": "交易ID列表不能为空"}
+        )
+
+    if len(request.transaction_ids) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error_code": "TOO_MANY", "message": "单次批量转移不能超过500笔"}
+        )
+
+    try:
+        # 1. 查询目标摊位
+        target_booth = db.query(Booth).filter(
+            Booth.id == request.target_booth_id
+        ).first()
+
+        if not target_booth:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error_code": "BOOTH_NOT_FOUND", "message": f"目标摊位 {request.target_booth_id} 不存在"}
+            )
+
+        # 2. 查询所有交易
+        transactions = db.query(TransactionModel).filter(
+            TransactionModel.id.in_(request.transaction_ids)
+        ).all()
+
+        if not transactions:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error_code": "TRANSACTIONS_NOT_FOUND", "message": "未找到任何匹配的交易"}
+            )
+
+        # 3. 批量执行转移
+        success_count = 0
+        failed_ids = []
+        found_ids = {t.id for t in transactions}
+
+        # 找出不存在的交易ID
+        not_found_ids = [tid for tid in request.transaction_ids if tid not in found_ids]
+
+        for transaction in transactions:
+            try:
+                original_booth_id = transaction.booth_id
+                original_booth_name = ""
+                if original_booth_id:
+                    original_booth = db.query(Booth).filter(Booth.id == original_booth_id).first()
+                    original_booth_name = original_booth.name if original_booth else f"ID:{original_booth_id}"
+
+                # 执行转移
+                transaction.booth_id = request.target_booth_id
+
+                # 追加备注
+                transfer_note = f"[批量转移] 从「{original_booth_name or '无摊位'}」转至「{target_booth.name}」"
+                if request.reason:
+                    transfer_note += f"，原因：{request.reason}"
+                transfer_note += f"（操作人：{current_user.username}）"
+
+                if transaction.remark:
+                    transaction.remark = f"{transaction.remark} | {transfer_note}"
+                else:
+                    transaction.remark = transfer_note
+
+                success_count += 1
+            except Exception:
+                failed_ids.append(transaction.id)
+
+        db.commit()
+
+        logger.info(
+            f"批量交易转移完成: success={success_count}, failed={len(failed_ids)}, "
+            f"not_found={len(not_found_ids)}, target_booth={request.target_booth_id}, "
+            f"operator={current_user.username}, reason={request.reason}"
+        )
+
+        return {
+            "success": True,
+            "total_requested": len(request.transaction_ids),
+            "success_count": success_count,
+            "failed_count": len(failed_ids),
+            "not_found_count": len(not_found_ids),
+            "failed_ids": failed_ids,
+            "not_found_ids": not_found_ids,
+            "target_booth_id": target_booth.id,
+            "target_booth_name": target_booth.name,
+            "message": f"成功转移 {success_count} 笔交易至「{target_booth.name}」"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"批量交易转移失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "批量转移失败，请重试"}
+        )
