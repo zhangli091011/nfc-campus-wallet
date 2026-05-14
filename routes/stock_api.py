@@ -478,3 +478,56 @@ async def get_booth_stock_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error_code": "INTERNAL_ERROR", "message": "查询失败"}
         )
+
+
+# ============ Dynamic Prices ============
+
+@router.get(
+    "/prices/{event_id}",
+    summary="获取所有摊位实时股价（动态计算）"
+)
+async def get_dynamic_prices(
+    event_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    获取所有摊位的实时动态股价（无需认证，供手机端和大屏展示）。
+    
+    股价算法：基础价(¥5) × (1 + 热度系数)
+    热度系数 = 当前持仓量 / 100 × 0.1，上限±50%
+    
+    Returns:
+        各摊位的实时股价列表
+    """
+    try:
+        service = StockAccountService(db)
+        prices = service.get_all_dynamic_prices(event_id)
+        
+        # 获取摊位信息
+        from models.booth import Booth
+        booths = db.query(Booth).filter(Booth.status == 'active').all()
+        booth_map = {b.id: b for b in booths}
+        
+        result = []
+        for booth_id, price in prices.items():
+            booth = booth_map.get(booth_id)
+            if booth:
+                result.append({
+                    "booth_id": booth_id,
+                    "booth_name": booth.name,
+                    "class_name": booth.class_name or "",
+                    "current_price": price,
+                    "base_price": 5.0,
+                    "change_percent": round((price - 5.0) / 5.0 * 100, 2),
+                })
+        
+        # 按股价降序
+        result.sort(key=lambda x: x['current_price'], reverse=True)
+        return result
+    
+    except Exception as e:
+        logger.error(f"获取动态股价失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "查询失败"}
+        )

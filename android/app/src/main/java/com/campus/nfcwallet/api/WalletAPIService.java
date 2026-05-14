@@ -435,6 +435,19 @@ public interface WalletAPIService {
         @Query("event_id") Integer eventId
     );
     
+    /**
+     * Get dynamic stock prices for all booths.
+     * 
+     * GET /api/stock/prices/{event_id}
+     * 
+     * @param eventId Event ID
+     * @return List of booth stock prices
+     */
+    @GET("stock/prices/{event_id}")
+    Call<List<java.util.Map<String, Object>>> getStockPrices(
+        @Path("event_id") int eventId
+    );
+    
     // ==================== Refund ====================
 
     /**

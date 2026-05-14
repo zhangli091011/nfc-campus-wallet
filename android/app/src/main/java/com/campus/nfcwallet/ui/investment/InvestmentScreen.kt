@@ -107,8 +107,9 @@ fun InvestmentScreen(
     onConfirmSell: () -> Unit = {},
     onDismissVerification: () -> Unit = {},
     onSubmitVerification: (String, String) -> Unit = { _, _ -> },
+    getCurrentPrice: (Int) -> Double = { 5.0 },
 ) {
-    val pricePerShare = 5.0
+    val pricePerShare = state.selectedBooth?.let { getCurrentPrice(it.id) } ?: 5.0
     val totalAmount = state.sharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
     val sellTotal = state.sellSharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
 

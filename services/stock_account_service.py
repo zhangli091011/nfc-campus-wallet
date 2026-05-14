@@ -28,7 +28,7 @@ from core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-# 固定股价：5元/股
+# 基础股价：5元/股
 DEFAULT_STOCK_PRICE = Decimal('5.00')
 
 
@@ -37,6 +37,77 @@ class StockAccountService:
     
     def __init__(self, db: Session):
         self.db = db
+    
+    def get_dynamic_price(self, booth_id: int, event_id: int = None) -> float:
+        """
+        计算摊位的动态股价。
+        
+        算法：基础价 × (1 + 投资热度系数)
+        热度系数 = (净买入股数 / 100) × 0.1，上限±50%
+        
+        这样每净买入100股，股价上涨10%；每净卖出100股，股价下跌10%。
+        """
+        query = self.db.query(StockOrder).filter(StockOrder.booth_id == booth_id)
+        if event_id:
+            query = query.filter(StockOrder.event_id == event_id)
+        
+        orders = query.all()
+        
+        # 计算净买入股数
+        holding_shares = sum(o.shares for o in orders if o.status == 'holding')
+        sold_shares = sum(o.shares for o in orders if o.status == 'sold')
+        net_shares = holding_shares  # 当前持仓量决定股价
+        
+        # 热度系数：每100股涨10%，上限±50%
+        heat_factor = (net_shares / 100.0) * 0.1
+        heat_factor = max(-0.5, min(0.5, heat_factor))
+        
+        dynamic_price = float(DEFAULT_STOCK_PRICE) * (1 + heat_factor)
+        # 最低不低于1元
+        dynamic_price = max(1.0, round(dynamic_price, 2))
+        
+        return dynamic_price
+    
+    def get_all_dynamic_prices(self, event_id: int = None) -> Dict[int, float]:
+        """获取所有摊位的动态股价"""
+        # 获取摊位：优先按 event_id 查询，否则获取所有活跃摊位
+        if event_id:
+            booths = self.db.query(Booth).filter(
+                Booth.event_id == event_id,
+                Booth.status == 'active'
+            ).all()
+            # 如果指定活动下没有摊位，回退到所有活跃摊位
+            if not booths:
+                booths = self.db.query(Booth).filter(Booth.status == 'active').all()
+        else:
+            booths = self.db.query(Booth).filter(Booth.status == 'active').all()
+        
+        # 获取所有订单
+        query = self.db.query(StockOrder)
+        if event_id:
+            query = query.filter(StockOrder.event_id == event_id)
+        orders = query.all()
+        
+        # 按摊位分组计算
+        booth_orders: Dict[int, list] = {}
+        for o in orders:
+            if o.booth_id not in booth_orders:
+                booth_orders[o.booth_id] = []
+            booth_orders[o.booth_id].append(o)
+        
+        prices = {}
+        for booth in booths:
+            orders_list = booth_orders.get(booth.id, [])
+            holding_shares = sum(o.shares for o in orders_list if o.status == 'holding')
+            
+            heat_factor = (holding_shares / 100.0) * 0.1
+            heat_factor = max(-0.5, min(0.5, heat_factor))
+            dynamic_price = float(DEFAULT_STOCK_PRICE) * (1 + heat_factor)
+            dynamic_price = max(1.0, round(dynamic_price, 2))
+            
+            prices[booth.id] = dynamic_price
+        
+        return prices
     
     # ============ Stock Buy (with Pessimistic Lock) ============
     
@@ -379,7 +450,7 @@ class StockAccountService:
                     'class_name': booth.class_name if booth else '',
                     'shares': 0,
                     'total_cost': Decimal('0'),
-                    'current_price': float(DEFAULT_STOCK_PRICE),
+                    'current_price': self.get_dynamic_price(bid, event_id),
                 }
             booth_holdings[bid]['shares'] += order.shares
             booth_holdings[bid]['total_cost'] += order.total_amount
@@ -723,7 +794,7 @@ class StockAccountService:
                 'total_investment': total_investment,
                 'total_investment_yuan': total_investment,
                 'investor_count': investor_count,
-                'current_price': float(DEFAULT_STOCK_PRICE),
+                'current_price': self.get_dynamic_price(booth.id, event_id),
                 'is_settled': is_settled,
                 'final_price': None,
                 'final_price_yuan': None
@@ -767,7 +838,7 @@ class StockAccountService:
             'total_investment': total_investment,
             'total_investment_yuan': total_investment,
             'investor_count': investor_count,
-            'current_price': float(DEFAULT_STOCK_PRICE),
+            'current_price': self.get_dynamic_price(booth_id, event_id),
             'is_settled': is_settled,
             'final_price': None,
             'final_price_yuan': None

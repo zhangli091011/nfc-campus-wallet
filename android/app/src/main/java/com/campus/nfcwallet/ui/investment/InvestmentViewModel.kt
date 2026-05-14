@@ -18,6 +18,8 @@ import com.campus.nfcwallet.models.StockSellRequest
 import com.campus.nfcwallet.models.StockSellResponse
 import com.campus.nfcwallet.utils.SessionManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import retrofit2.Call
 import retrofit2.Callback
@@ -43,10 +45,64 @@ class InvestmentViewModel(
 
     private var currentParticipant: ParticipantInfo? = null
     private var eventId: Int = -1
+    
+    // 动态股价缓存 (booth_id -> price)
+    private var dynamicPrices: Map<Int, Double> = emptyMap()
+    private var priceRefreshJob: kotlinx.coroutines.Job? = null
 
     fun init(eventId: Int) {
         this.eventId = eventId
         loadBooths()
+        startPriceRefresh()
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        priceRefreshJob?.cancel()
+    }
+    
+    // -------------------------------------------------------------
+    // 定时刷新股价（每15秒）
+    // -------------------------------------------------------------
+    private fun startPriceRefresh() {
+        priceRefreshJob?.cancel()
+        priceRefreshJob = viewModelScope.launch(Dispatchers.IO) {
+            while (true) {
+                loadDynamicPrices()
+                delay(15_000L)
+            }
+        }
+    }
+    
+    private fun loadDynamicPrices() {
+        try {
+            val response = apiService.getStockPrices(eventId).execute()
+            if (response.isSuccessful && response.body() != null) {
+                val priceList = response.body()!!
+                val priceMap = mutableMapOf<Int, Double>()
+                for (item in priceList) {
+                    val boothId = (item["booth_id"] as? Number)?.toInt() ?: continue
+                    val price = (item["current_price"] as? Number)?.toDouble() ?: 5.0
+                    priceMap[boothId] = price
+                }
+                dynamicPrices = priceMap
+                
+                // 更新持仓中的当前股价
+                if (uiState.holdings.isNotEmpty()) {
+                    val updatedHoldings = uiState.holdings.map { h ->
+                        val newPrice = dynamicPrices[h.boothId] ?: h.currentPrice
+                        h.copy(currentPrice = newPrice, marketValue = newPrice * h.shares)
+                    }
+                    uiState = uiState.copy(holdings = updatedHoldings)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "刷新股价失败: ${e.message}")
+        }
+    }
+    
+    fun getCurrentPrice(boothId: Int): Double {
+        return dynamicPrices[boothId] ?: 5.0
     }
 
     // -------------------------------------------------------------

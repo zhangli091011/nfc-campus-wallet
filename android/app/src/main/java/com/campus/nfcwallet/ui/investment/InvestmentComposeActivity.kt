@@ -78,6 +78,7 @@ class InvestmentComposeActivity : ComponentActivity() {
                     onConfirmSell = viewModel::onConfirmSell,
                     onDismissVerification = viewModel::onDismissVerificationDialog,
                     onSubmitVerification = viewModel::onSubmitVerification,
+                    getCurrentPrice = viewModel::getCurrentPrice,
                 )
             }
         }
