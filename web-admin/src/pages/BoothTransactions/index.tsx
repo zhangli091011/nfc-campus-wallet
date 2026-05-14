@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
-import { Table, Space, Select, DatePicker, Button, Tag, Card, Statistic, Row, Col } from 'antd'
+import { Table, Space, Select, DatePicker, Button, Tag, Card, Statistic, Row, Col, Modal, Input, message } from 'antd'
 import {
   SearchOutlined,
   ReloadOutlined,
   ShopOutlined,
   DollarOutlined,
   TransactionOutlined,
+  SwapOutlined,
 } from '@ant-design/icons'
 import {
   getTransactions,
+  transferTransaction,
   type Transaction,
   type TransactionListResponse,
 } from '@/services/transaction'
@@ -29,6 +31,13 @@ const BoothTransactions = () => {
   const [selectedType, setSelectedType] = useState<string>()
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [pagination, setPagination] = useState({ current: 1, pageSize: 50 })
+
+  // 转移弹窗状态
+  const [transferModalVisible, setTransferModalVisible] = useState(false)
+  const [transferringTxn, setTransferringTxn] = useState<Transaction | null>(null)
+  const [targetBoothId, setTargetBoothId] = useState<number>()
+  const [transferReason, setTransferReason] = useState('')
+  const [transferLoading, setTransferLoading] = useState(false)
 
   useEffect(() => {
     loadEvents()
@@ -105,6 +114,43 @@ const BoothTransactions = () => {
     setSelectedType(undefined)
     setDateRange(null)
     setPagination({ current: 1, pageSize: 50 })
+  }
+
+  // 打开转移弹窗
+  const handleTransfer = (record: Transaction) => {
+    setTransferringTxn(record)
+    setTargetBoothId(undefined)
+    setTransferReason('')
+    setTransferModalVisible(true)
+  }
+
+  // 确认转移
+  const handleConfirmTransfer = async () => {
+    if (!transferringTxn || !targetBoothId) {
+      message.warning('请选择目标商铺')
+      return
+    }
+
+    if (targetBoothId === selectedBoothId) {
+      message.warning('目标商铺不能与当前商铺相同')
+      return
+    }
+
+    setTransferLoading(true)
+    try {
+      const res = await transferTransaction(transferringTxn.id, {
+        target_booth_id: targetBoothId,
+        reason: transferReason,
+      })
+      message.success(res.message || '转移成功')
+      setTransferModalVisible(false)
+      // 刷新列表
+      loadTransactions()
+    } catch (error: any) {
+      message.error(error?.response?.data?.detail?.message || '转移失败')
+    } finally {
+      setTransferLoading(false)
+    }
   }
 
   // 统计数据
@@ -201,6 +247,7 @@ const BoothTransactions = () => {
       title: '备注',
       dataIndex: 'remark',
       key: 'remark',
+      width: 200,
       ellipsis: true,
       render: (remark: string | null) => remark || '-',
     },
@@ -210,6 +257,22 @@ const BoothTransactions = () => {
       key: 'created_at',
       width: 170,
       render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm:ss'),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      fixed: 'right' as const,
+      render: (_: any, record: Transaction) => (
+        <Button
+          type="link"
+          size="small"
+          icon={<SwapOutlined />}
+          onClick={() => handleTransfer(record)}
+        >
+          转移
+        </Button>
+      ),
     },
   ]
 
@@ -349,9 +412,78 @@ const BoothTransactions = () => {
             setPagination({ current: page, pageSize })
           },
         }}
-        scroll={{ x: 1400 }}
+        scroll={{ x: 1600 }}
         locale={{ emptyText: selectedBoothId ? '暂无交易记录' : '请先选择商铺' }}
       />
+
+      {/* 转移弹窗 */}
+      <Modal
+        title={
+          <span>
+            <SwapOutlined style={{ marginRight: 8 }} />
+            转移流水到其他商铺
+          </span>
+        }
+        open={transferModalVisible}
+        onOk={handleConfirmTransfer}
+        onCancel={() => setTransferModalVisible(false)}
+        confirmLoading={transferLoading}
+        okText="确认转移"
+        cancelText="取消"
+      >
+        {transferringTxn && (
+          <div style={{ marginBottom: 16 }}>
+            <p>
+              <strong>交易ID：</strong>#{transferringTxn.id}
+            </p>
+            <p>
+              <strong>交易类型：</strong>{transferringTxn.type}
+            </p>
+            <p>
+              <strong>金额：</strong>¥{transferringTxn.amount.toFixed(2)}
+            </p>
+            <p>
+              <strong>当前商铺：</strong>{selectedBooth?.name || '-'}
+            </p>
+            <p>
+              <strong>交易时间：</strong>
+              {dayjs(transferringTxn.created_at).format('YYYY-MM-DD HH:mm:ss')}
+            </p>
+          </div>
+        )}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>
+            目标商铺：
+          </label>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="选择要转移到的商铺"
+            value={targetBoothId}
+            onChange={setTargetBoothId}
+            showSearch
+            filterOption={(input, option) =>
+              (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            options={booths
+              .filter((b) => b.id !== selectedBoothId)
+              .map((b) => ({
+                label: `${b.name} (${b.class_name})`,
+                value: b.id,
+              }))}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>
+            转移原因：
+          </label>
+          <Input.TextArea
+            rows={3}
+            placeholder="请输入转移原因（如：收银员误操作，应归属XX商铺）"
+            value={transferReason}
+            onChange={(e) => setTransferReason(e.target.value)}
+          />
+        </div>
+      </Modal>
     </div>
   )
 }

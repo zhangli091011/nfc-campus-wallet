@@ -8,12 +8,15 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse
 from typing import Optional
+from pydantic import BaseModel
 import logging
 
 from core.database import get_db
-from core.security import get_current_user
+from core.security import get_current_user, RoleChecker
 from services.transaction_service import TransactionService
 from models.user import User
+from models.transaction import Transaction as TransactionModel
+from models.booth import Booth
 from core.exceptions import ResourceNotFoundError, ValidationError
 from services.event_service import EventNotFoundError
 
@@ -269,4 +272,110 @@ async def get_transactions(
                 "error_code": "INTERNAL_ERROR",
                 "message": "An internal error occurred. Please try again later."
             }
+        )
+
+
+# ============ Transaction Transfer ============
+
+class TransactionTransferRequest(BaseModel):
+    """请求体：将交易转移到另一个摊位"""
+    target_booth_id: int
+    reason: str = ""
+
+
+@router.post("/transactions/{transaction_id}/transfer")
+async def transfer_transaction(
+    transaction_id: int,
+    request: TransactionTransferRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["event_admin", "super_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    将一笔交易转移到另一个摊位（用于修正账目错误）。
+    
+    仅修改交易的 booth_id 字段，不影响金额和余额。
+    需要 event_admin 或 super_admin 权限。
+    
+    Path Parameters:
+        - transaction_id: 要转移的交易ID
+    
+    Request Body:
+        - target_booth_id: 目标摊位ID
+        - reason: 转移原因（可选）
+    
+    Returns:
+        转移后的交易信息
+    """
+    try:
+        # 1. 查询交易
+        transaction = db.query(TransactionModel).filter(
+            TransactionModel.id == transaction_id
+        ).first()
+        
+        if not transaction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error_code": "TRANSACTION_NOT_FOUND", "message": f"交易 {transaction_id} 不存在"}
+            )
+        
+        # 2. 查询目标摊位
+        target_booth = db.query(Booth).filter(
+            Booth.id == request.target_booth_id
+        ).first()
+        
+        if not target_booth:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error_code": "BOOTH_NOT_FOUND", "message": f"目标摊位 {request.target_booth_id} 不存在"}
+            )
+        
+        # 3. 记录原始摊位信息
+        original_booth_id = transaction.booth_id
+        original_booth_name = ""
+        if original_booth_id:
+            original_booth = db.query(Booth).filter(Booth.id == original_booth_id).first()
+            original_booth_name = original_booth.name if original_booth else f"ID:{original_booth_id}"
+        
+        # 4. 执行转移
+        transaction.booth_id = request.target_booth_id
+        
+        # 5. 追加备注记录转移操作
+        transfer_note = f"[流水转移] 从「{original_booth_name or '无摊位'}」转至「{target_booth.name}」"
+        if request.reason:
+            transfer_note += f"，原因：{request.reason}"
+        transfer_note += f"（操作人：{current_user.username}）"
+        
+        if transaction.remark:
+            transaction.remark = f"{transaction.remark} | {transfer_note}"
+        else:
+            transaction.remark = transfer_note
+        
+        db.commit()
+        db.refresh(transaction)
+        
+        logger.info(
+            f"交易转移成功: txn_id={transaction_id}, "
+            f"from_booth={original_booth_id} to_booth={request.target_booth_id}, "
+            f"operator={current_user.username}, reason={request.reason}"
+        )
+        
+        return {
+            "success": True,
+            "transaction_id": transaction.id,
+            "original_booth_id": original_booth_id,
+            "original_booth_name": original_booth_name or None,
+            "target_booth_id": target_booth.id,
+            "target_booth_name": target_booth.name,
+            "message": f"交易 #{transaction_id} 已从「{original_booth_name or '无摊位'}」转移至「{target_booth.name}」"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"交易转移失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "转移失败，请重试"}
         )

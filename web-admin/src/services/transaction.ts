@@ -57,3 +57,19 @@ export const correction = (data: {
 }) => {
   return request.post('/correction', data)
 }
+
+// 转移交易到另一个摊位
+export const transferTransaction = (transactionId: number, data: {
+  target_booth_id: number
+  reason?: string
+}) => {
+  return request.post<any, {
+    success: boolean
+    transaction_id: number
+    original_booth_id: number | null
+    original_booth_name: string | null
+    target_booth_id: number
+    target_booth_name: string
+    message: string
+  }>(`/transactions/${transactionId}/transfer`, data)
+}
