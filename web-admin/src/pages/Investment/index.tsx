@@ -30,6 +30,7 @@ import {
   getMarketStats,
   settleStockMarket,
   closeMarket,
+  reopenMarket,
   liquidateMarket,
   MarketStats,
   SettlementResponse,
@@ -163,6 +164,39 @@ const InvestmentManagement: React.FC = () => {
           loadStats()
         } catch (e: any) {
           message.error('收盘失败: ' + (e?.response?.data?.detail?.message || e?.message || '未知错误'))
+        }
+      },
+    })
+  }
+
+  const handleReopenMarket = () => {
+    if (!selectedEventId) {
+      message.warning('请选择活动')
+      return
+    }
+
+    Modal.confirm({
+      title: '确认重新开盘？',
+      content: (
+        <Space direction="vertical">
+          <div>
+            活动ID: <strong>{selectedEventId}</strong>
+          </div>
+          <div style={{ color: '#52c41a' }}>
+            ✅ 开盘后所有暂停的股票将恢复交易。
+          </div>
+        </Space>
+      ),
+      okText: '确认开盘',
+      cancelText: '取消',
+      okButtonProps: { style: { background: '#52c41a', borderColor: '#52c41a' } },
+      onOk: async () => {
+        try {
+          const result = await reopenMarket(selectedEventId)
+          message.success(result.message || '开盘成功')
+          loadStats()
+        } catch (e: any) {
+          message.error('开盘失败: ' + (e?.response?.data?.detail?.message || e?.message || '未知错误'))
         }
       },
     })
@@ -401,6 +435,14 @@ const InvestmentManagement: React.FC = () => {
               disabled={!selectedEventId || stats?.is_settled}
             >
               一键收盘
+            </Button>
+            <Button
+              type="default"
+              style={{ background: '#52c41a', borderColor: '#52c41a', color: '#fff' }}
+              onClick={handleReopenMarket}
+              disabled={!selectedEventId || stats?.is_settled}
+            >
+              重新开盘
             </Button>
             <Button
               type="primary"

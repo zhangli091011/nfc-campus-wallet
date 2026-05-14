@@ -338,6 +338,41 @@ async def close_market(
         )
 
 
+# ============ Reopen Market (重新开盘) ============
+
+class MarketReopenRequest(BaseModel):
+    event_id: int
+
+@router.post(
+    "/reopen-market",
+    summary="重新开盘（恢复所有股票交易）"
+)
+async def reopen_market(
+    request: MarketReopenRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["event_admin", "super_admin"]))
+):
+    """
+    重新开盘：将活动下所有 suspended 状态的股票恢复为 active，允许买卖。
+    """
+    try:
+        service = StockAccountService(db)
+        result = service.reopen_market(request.event_id)
+        return result
+    except (ResourceNotFoundError, BusinessLogicError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error_code": "REOPEN_MARKET_ERROR", "message": str(e)}
+        )
+    except Exception as e:
+        logger.error(f"开盘失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "开盘失败"}
+        )
+
+
 # ============ Full Liquidation (全部清算) ============
 
 class LiquidateRequest(BaseModel):

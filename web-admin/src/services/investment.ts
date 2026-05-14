@@ -124,6 +124,15 @@ export const closeMarket = (eventId: number) =>
     message: string
   }>('/stock/close-market', { event_id: eventId })
 
+/** 重新开盘（恢复所有股票交易） */
+export const reopenMarket = (eventId: number) =>
+  request.post<any, {
+    success: boolean
+    event_id: number
+    reopened_count: number
+    message: string
+  }>('/stock/reopen-market', { event_id: eventId })
+
 /** 一键全部清算（结算并退还资金） */
 export const liquidateMarket = (data: { event_id: number; fee_rate?: number }) =>
   request.post<any, {

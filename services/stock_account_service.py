@@ -1385,6 +1385,51 @@ class StockAccountService:
             'message': f'已收盘，{count} 只股票已暂停交易'
         }
     
+    # ============ Reopen Market (重新开盘) ============
+    
+    def reopen_market(self, event_id: int) -> Dict:
+        """
+        重新开盘：将活动下所有 suspended 状态的股票恢复为 active，允许买卖。
+        已结算(settled)的股票不会被恢复。
+        """
+        from models.stock import Stock
+        
+        event = self.db.query(Event).filter(Event.id == event_id).first()
+        if not event:
+            raise ResourceNotFoundError(f"活动不存在: {event_id}")
+        
+        # 将该活动下所有 suspended 状态的股票设为 active
+        stocks = self.db.query(Stock).filter(
+            Stock.event_id == event_id,
+            Stock.status == 'suspended'
+        ).all()
+        
+        if not stocks:
+            # 检查是否有 active 的（已经开盘了）
+            active = self.db.query(Stock).filter(
+                Stock.event_id == event_id,
+                Stock.status == 'active'
+            ).count()
+            if active > 0:
+                raise BusinessLogicError(f"活动 {event_id} 已经处于开盘状态")
+            raise BusinessLogicError(f"活动 {event_id} 没有可恢复的股票（可能已清算）")
+        
+        count = 0
+        for stock in stocks:
+            stock.status = 'active'
+            count += 1
+        
+        self.db.commit()
+        
+        logger.info(f"重新开盘成功: event_id={event_id}, reopened_count={count}")
+        
+        return {
+            'success': True,
+            'event_id': event_id,
+            'reopened_count': count,
+            'message': f'已重新开盘，{count} 只股票已恢复交易'
+        }
+    
     # ============ Full Liquidation (全部清算) ============
     
     def liquidate_market(self, event_id: int, fee_rate: float = 0.05) -> Dict:
