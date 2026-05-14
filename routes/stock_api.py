@@ -503,16 +503,20 @@ async def get_dynamic_prices(
         service = StockAccountService(db)
         prices = service.get_all_dynamic_prices(event_id)
         
-        # 获取摊位信息
+        # 获取摊位信息和经营数据
         from models.booth import Booth
         booths = db.query(Booth).filter(Booth.status == 'active').all()
         booth_map = {b.id: b for b in booths}
+        
+        # 获取6维度经营数据（复用缓存）
+        booth_data_cache = getattr(service, '_booth_data_cache', {})
         
         result = []
         for booth_id, price in prices.items():
             booth = booth_map.get(booth_id)
             if booth:
                 base_price = float(INITIAL_STOCK_PRICE)
+                data = booth_data_cache.get(booth_id, {})
                 result.append({
                     "booth_id": booth_id,
                     "booth_name": booth.name,
@@ -520,6 +524,13 @@ async def get_dynamic_prices(
                     "current_price": price,
                     "base_price": base_price,
                     "change_percent": round((price - base_price) / base_price * 100, 2),
+                    # 6维度经营数据
+                    "revenue": round(data.get('revenue', 0), 2),
+                    "profit": round(data.get('profit', 0), 2),
+                    "traffic": data.get('traffic', 0),
+                    "avg_ticket": round(data.get('avg_ticket', 0), 2),
+                    "investor_count": data.get('investor_count', 0),
+                    "growth": round(data.get('growth', 0), 2),
                 })
         
         # 按股价降序
@@ -531,4 +542,168 @@ async def get_dynamic_prices(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error_code": "INTERNAL_ERROR", "message": "查询失败"}
+        )
+
+
+# ============ K-Line Data ============
+
+@router.get(
+    "/kline/{event_id}",
+    summary="获取所有摊位的K线数据（大屏用）"
+)
+async def get_kline_data(
+    event_id: int,
+    interval: int = Query(5, description="K线时间间隔（分钟）"),
+    db: Session = Depends(get_db)
+):
+    """
+    获取活动下所有摊位的K线数据。
+    
+    基于股票订单的时间序列，按指定时间间隔聚合生成K线数据。
+    每根K线包含：开盘价、收盘价、最高价、最低价、成交量。
+    
+    由于是固定股价模型，K线的价格变化基于累计投资额的变化来模拟。
+    """
+    from models.stock_account import StockOrder
+    from models.booth import Booth
+    from sqlalchemy import func
+    from datetime import datetime, timezone, timedelta
+    from decimal import Decimal
+    
+    try:
+        # 获取活动下所有摊位
+        booths = db.query(Booth).filter(Booth.event_id == event_id).all()
+        if not booths:
+            return []
+        
+        booth_map = {b.id: b for b in booths}
+        
+        # 获取所有订单，按时间排序
+        orders = db.query(StockOrder).filter(
+            StockOrder.event_id == event_id
+        ).order_by(StockOrder.created_at.asc()).all()
+        
+        if not orders:
+            # 没有订单时，为每个摊位返回一个初始K线点
+            base_price = float(INITIAL_STOCK_PRICE)
+            return [{
+                "booth_id": b.id,
+                "booth_name": b.name,
+                "class_name": b.class_name or "",
+                "kline": [{
+                    "time": datetime.now(timezone.utc).strftime("%H:%M"),
+                    "open": base_price,
+                    "close": base_price,
+                    "high": base_price,
+                    "low": base_price,
+                    "volume": 0,
+                }]
+            } for b in booths]
+        
+        # 确定时间范围
+        first_time = orders[0].created_at
+        last_time = orders[-1].created_at
+        
+        # 按摊位分组订单
+        booth_orders = {}
+        for o in orders:
+            if o.booth_id not in booth_orders:
+                booth_orders[o.booth_id] = []
+            booth_orders[o.booth_id].append(o)
+        
+        base_price = float(INITIAL_STOCK_PRICE)
+        interval_delta = timedelta(minutes=interval)
+        
+        result = []
+        for booth in booths:
+            orders_list = booth_orders.get(booth.id, [])
+            
+            if not orders_list:
+                # 没有订单的摊位，生成平线
+                result.append({
+                    "booth_id": booth.id,
+                    "booth_name": booth.name,
+                    "class_name": booth.class_name or "",
+                    "kline": [{
+                        "time": first_time.strftime("%H:%M"),
+                        "open": base_price,
+                        "close": base_price,
+                        "high": base_price,
+                        "low": base_price,
+                        "volume": 0,
+                    }]
+                })
+                continue
+            
+            # 生成K线数据
+            # 模拟股价：基于累计投资额的增长来计算价格变化
+            # price = base_price * (1 + cumulative_shares / 100)
+            kline_data = []
+            current_start = first_time
+            cumulative_shares = 0
+            prev_close = base_price
+            
+            while current_start <= last_time + interval_delta:
+                current_end = current_start + interval_delta
+                
+                # 找到这个时间窗口内的订单
+                window_orders = [
+                    o for o in orders_list 
+                    if current_start <= o.created_at < current_end
+                ]
+                
+                if window_orders:
+                    window_shares = sum(o.shares for o in window_orders)
+                    
+                    # 计算这个窗口内的价格变化
+                    open_price = prev_close
+                    prices_in_window = []
+                    
+                    for o in window_orders:
+                        cumulative_shares += o.shares
+                        price = base_price * (1 + cumulative_shares / 100.0)
+                        prices_in_window.append(price)
+                    
+                    close_price = prices_in_window[-1]
+                    high_price = max(open_price, max(prices_in_window))
+                    low_price = min(open_price, min(prices_in_window))
+                    
+                    kline_data.append({
+                        "time": current_start.strftime("%H:%M"),
+                        "open": round(open_price, 2),
+                        "close": round(close_price, 2),
+                        "high": round(high_price, 2),
+                        "low": round(low_price, 2),
+                        "volume": window_shares,
+                    })
+                    prev_close = close_price
+                else:
+                    # 没有交易的时间段，价格不变
+                    kline_data.append({
+                        "time": current_start.strftime("%H:%M"),
+                        "open": round(prev_close, 2),
+                        "close": round(prev_close, 2),
+                        "high": round(prev_close, 2),
+                        "low": round(prev_close, 2),
+                        "volume": 0,
+                    })
+                
+                current_start = current_end
+            
+            result.append({
+                "booth_id": booth.id,
+                "booth_name": booth.name,
+                "class_name": booth.class_name or "",
+                "kline": kline_data,
+            })
+        
+        # 按最新收盘价降序
+        result.sort(key=lambda x: x['kline'][-1]['close'] if x['kline'] else 0, reverse=True)
+        return result
+    
+    except Exception as e:
+        logger.error(f"获取K线数据失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "获取K线数据失败"}
         )

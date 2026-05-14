@@ -109,8 +109,8 @@ fun InvestmentScreen(
     onSubmitVerification: (String, String) -> Unit = { _, _ -> },
     getCurrentPrice: (Int) -> Double = { 5.0 },
 ) {
-    // 买入固定发行价 5元/股
-    val buyPricePerShare = 5.0
+    // 浮动买入价 = 当前动态股价
+    val buyPricePerShare = state.selectedBooth?.let { getCurrentPrice(it.id) } ?: 5.0
     val totalAmount = state.sharesInput.toIntOrNull()?.let { it * buyPricePerShare } ?: 0.0
     // 卖出使用所选持仓的当前动态股价（预估结算价）
     val sellPricePerShare = state.selectedHolding?.let { getCurrentPrice(it.boothId) } ?: 5.0

@@ -1,21 +1,26 @@
 """
 Stock Market Service - Business logic for stock trading.
 
-全局奖金池动态定价模型（Pari-mutuel 公平版）：
-- 固定买入价 P₀ = 5元/股，所有人公平入场
+全局奖金池动态定价模型（Pari-mutuel 6维度版）：
+- 浮动买入价 = 当前动态股价（实时变化）
 - 所有学生买股票的钱汇总成全局资金池
 - 官方扣除手续费（5%）
-- 摊位根据经营表现（收入30%、利润40%、人流30%）计算综合分
+- 摊位根据6维度经营表现计算综合分：
+  · 营业额 20% — 总收入
+  · 净利润 25% — 收入减成本
+  · 人流量 15% — 订单数
+  · 客单价 15% — 平均每单金额（产品竞争力）
+  · 投资人数 10% — 市场信心指标
+  · 增长率 15% — 近期vs历史表现趋势
 - 摊位分到的资金 = 池子 × (摊位分 / 总分)
 - 最终股价 = 摊位分到的资金 / 该摊位总股数
 
 零和博弈：学生赚的钱来自其他学生亏的钱，官方稳赚手续费。
-公平性：所有人以相同价格买入，收益完全取决于选股眼光。
 """
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from typing import List, Optional, Dict, Tuple
 import logging
@@ -43,11 +48,14 @@ INITIAL_STOCK_PRICE = Decimal('5.00')
 # 官方手续费率 (5%)
 OFFICIAL_FEE_RATE = Decimal('0.05')
 
-# 综合分权重配置（更公平的配比）
+# 综合分权重配置（6维度评分）
 SCORE_WEIGHTS = {
-    'revenue': Decimal('0.30'),      # 收入权重 30%
-    'profit': Decimal('0.40'),       # 利润权重 40%
-    'traffic': Decimal('0.30'),      # 人流权重 30%
+    'revenue': Decimal('0.20'),        # 营业额 20%
+    'profit': Decimal('0.25'),         # 净利润 25%
+    'traffic': Decimal('0.15'),        # 人流量 15%
+    'avg_ticket': Decimal('0.15'),     # 客单价 15%（高客单价=产品有竞争力）
+    'investor_count': Decimal('0.10'), # 投资人数 10%（市场信心指标）
+    'growth': Decimal('0.15'),         # 增长率 15%（近期表现趋势）
 }
 
 
@@ -95,61 +103,39 @@ class StockAccountService:
     
     def calculate_booth_score(self, booth_id: int, event_id: int) -> Dict:
         """
-        计算摊位综合经营分
+        计算摊位综合经营分（6维度）
         
-        S_i = α × R_norm + β × P_norm + γ × T_norm
-        
-        归一化处理：各项数据除以全场总和，转为百分比后再加权。
+        S_i = Σ(weight_k × norm_k) for k in [revenue, profit, traffic, avg_ticket, investor_count, growth]
         """
-        # 1. 获取该摊位数据
-        revenue = self._get_booth_revenue(booth_id, event_id)
-        profit = self._get_booth_profit(booth_id, event_id)
-        traffic = self._get_booth_traffic(booth_id, event_id)
+        # 确保批量缓存已加载
+        if not getattr(self, '_booth_data_cache', None):
+            all_booths = self.db.query(Booth).filter(Booth.event_id == event_id).all()
+            if not all_booths:
+                all_booths = self.db.query(Booth).filter(Booth.status == 'active').all()
+            booth_ids = [b.id for b in all_booths]
+            self._batch_load_booth_data(booth_ids, event_id)
         
-        # 2. 获取全场总数据（用于归一化）
-        all_booths = self.db.query(Booth).filter(
-            Booth.event_id == event_id,
-            Booth.status == 'active'
-        ).all()
-        if not all_booths:
-            all_booths = self.db.query(Booth).filter(
-                Booth.status == 'active'
-            ).all()
+        cache = getattr(self, '_booth_data_cache', {})
+        data = cache.get(booth_id, {'revenue': 0, 'profit': 0, 'traffic': 0, 'avg_ticket': 0, 'investor_count': 0, 'growth': 0})
         
-        total_revenue = sum(
-            self._get_booth_revenue(b.id, event_id) 
-            for b in all_booths
-        ) or 1
+        # 计算全场总和（用于归一化）
+        totals = {}
+        for key in SCORE_WEIGHTS:
+            totals[key] = sum(d.get(key, 0) for d in cache.values()) or 1
         
-        total_profit = sum(
-            self._get_booth_profit(b.id, event_id) 
-            for b in all_booths
-        ) or 1
-        
-        total_traffic = sum(
-            self._get_booth_traffic(b.id, event_id) 
-            for b in all_booths
-        ) or 1
-        
-        # 3. 归一化（转为百分比）
-        norm_revenue = revenue / total_revenue if total_revenue > 0 else 0
-        norm_profit = profit / total_profit if total_profit > 0 else 0
-        norm_traffic = traffic / total_traffic if total_traffic > 0 else 0
-        
-        # 4. 加权计算综合分
-        score = (
-            float(SCORE_WEIGHTS['revenue']) * norm_revenue +
-            float(SCORE_WEIGHTS['profit']) * norm_profit +
-            float(SCORE_WEIGHTS['traffic']) * norm_traffic
-        )
+        # 归一化 + 加权
+        score = 0.0
+        for key, weight in SCORE_WEIGHTS.items():
+            norm = data.get(key, 0) / totals[key] if totals[key] > 0 else 0
+            score += float(weight) * norm
         
         return {
-            'revenue': revenue,
-            'profit': profit,
-            'traffic': traffic,
-            'norm_revenue': norm_revenue,
-            'norm_profit': norm_profit,
-            'norm_traffic': norm_traffic,
+            'revenue': data.get('revenue', 0),
+            'profit': data.get('profit', 0),
+            'traffic': data.get('traffic', 0),
+            'avg_ticket': data.get('avg_ticket', 0),
+            'investor_count': data.get('investor_count', 0),
+            'growth': data.get('growth', 0),
             'score': score,
         }
     
@@ -200,8 +186,10 @@ class StockAccountService:
     
     def _batch_load_booth_data(self, booth_ids: List[int], event_id: int):
         """
-        批量加载所有摊位的经营数据（2次SQL代替N×4次）
+        批量加载所有摊位的经营数据（6维度）
         结果缓存到 self._booth_data_cache 供后续方法使用
+        
+        维度：revenue, profit, traffic, avg_ticket, investor_count, growth
         """
         from models.transaction import Transaction
         
@@ -217,15 +205,21 @@ class StockAccountService:
             Transaction.amount > 0
         ).group_by(Transaction.booth_id).all()
         
-        cache: Dict[int, Dict] = {bid: {'revenue': 0.0, 'profit': 0.0, 'traffic': 0} for bid in booth_ids}
+        cache: Dict[int, Dict] = {
+            bid: {
+                'revenue': 0.0, 'profit': 0.0, 'traffic': 0,
+                'avg_ticket': 0.0, 'investor_count': 0, 'growth': 0.0
+            } for bid in booth_ids
+        }
         for row in rows:
-            cache[row[0]] = {
-                'revenue': float(row[1]) if row[1] else 0.0,
-                'profit': 0.0,
-                'traffic': int(row[2]) if row[2] else 0,
-            }
+            revenue = float(row[1]) if row[1] else 0.0
+            traffic = int(row[2]) if row[2] else 0
+            cache[row[0]]['revenue'] = revenue
+            cache[row[0]]['traffic'] = traffic
+            # 客单价 = 总收入 / 订单数
+            cache[row[0]]['avg_ticket'] = revenue / traffic if traffic > 0 else 0.0
         
-        # 一次查询：批量获取成本
+        # 批量获取成本
         cost_map: Dict[int, float] = {}
         try:
             from models.cost_evidence import CostEvidence
@@ -247,6 +241,48 @@ class StockAccountService:
                 cache[bid]['profit'] = max(0.0, revenue - cost_map[bid])
             else:
                 cache[bid]['profit'] = revenue * 0.70
+        
+        # 批量获取投资人数（每个摊位有多少不同的投资者）
+        investor_rows = self.db.query(
+            StockOrder.booth_id,
+            func.count(func.distinct(StockOrder.participant_id))
+        ).filter(
+            StockOrder.event_id == event_id,
+            StockOrder.booth_id.in_(booth_ids),
+            StockOrder.status.in_(['holding', 'sold'])
+        ).group_by(StockOrder.booth_id).all()
+        
+        for row in investor_rows:
+            cache[row[0]]['investor_count'] = int(row[1]) if row[1] else 0
+        
+        # 计算增长率：最近30分钟的交易额 vs 之前的交易额
+        from core.timezone import CST
+        now = datetime.now(CST)
+        recent_cutoff = now - timedelta(minutes=30)
+        
+        recent_rows = self.db.query(
+            Transaction.booth_id,
+            func.sum(Transaction.amount).label('recent_revenue')
+        ).filter(
+            Transaction.event_id == event_id,
+            Transaction.booth_id.in_(booth_ids),
+            Transaction.type.in_(['payment', 'cash_payment']),
+            Transaction.amount > 0,
+            Transaction.created_at >= recent_cutoff
+        ).group_by(Transaction.booth_id).all()
+        
+        for row in recent_rows:
+            bid = row[0]
+            recent_rev = float(row[1]) if row[1] else 0.0
+            total_rev = cache[bid]['revenue']
+            older_rev = total_rev - recent_rev
+            # 增长率 = 近期收入 / 历史收入（>1表示加速增长）
+            if older_rev > 0:
+                cache[bid]['growth'] = recent_rev / older_rev
+            elif recent_rev > 0:
+                cache[bid]['growth'] = 2.0  # 从0到有收入，视为高增长
+            else:
+                cache[bid]['growth'] = 0.0
         
         self._booth_data_cache = cache
     
@@ -362,17 +398,17 @@ class StockAccountService:
     
     def _calculate_pari_mutuel_prices(self, event_id: int) -> Dict[int, float]:
         """
-        核心：Pari-mutuel 彩池定价引擎（公平版）
+        核心：Pari-mutuel 彩池定价引擎（6维度版）
         
         设计原则：
-        - 固定买入价 P₀ = 5元/股，所有人公平入场
-        - 实时股价 = 预估结算价（基于当前经营数据）
+        - 浮动买入价 = 当前动态股价
+        - 6维度综合评分：营业额、利润、人流、客单价、投资人数、增长率
         - 零和博弈：学生赚的钱来自其他学生亏的钱
         - 官方稳赚5%手续费
         
         四步法：
-        1. 全局资金池 Pool = (Σ Q_i × P₀) × (1 - F)
-        2. 摊位综合分 S_i = 0.3×R_norm + 0.4×P_norm + 0.3×T_norm
+        1. 全局资金池 Pool = Σ(实际买入金额) × (1 - F)
+        2. 摊位综合分 S_i = 6维度归一化加权
         3. 分红占比 Ratio_i = S_i / ΣS_j
         4. 最终股价 Price_i = (Pool × Ratio_i) / Q_i
         """
@@ -402,38 +438,32 @@ class StockAccountService:
             if o.booth_id in booth_shares:
                 booth_shares[o.booth_id] += o.shares
         
-        # 第一步：全局资金池（固定买入价 × 总股数）
+        # 第一步：全局资金池（实际投入金额）
         total_shares_all = sum(booth_shares.values())
         if total_shares_all == 0:
             # 没有任何交易，全部返回初始价
             return {bid: float(INITIAL_STOCK_PRICE) for bid in booth_ids}
         
-        # Pool = Σ(Q_i × P₀) × (1 - F)
-        pool = float(INITIAL_STOCK_PRICE) * total_shares_all * (1 - float(OFFICIAL_FEE_RATE))
+        # Pool = Σ(实际买入金额) × (1 - F)
+        total_investment = sum(float(o.total_amount) for o in orders)
+        pool = total_investment * (1 - float(OFFICIAL_FEE_RATE))
         
-        # 第二步：批量加载所有摊位经营数据（2次SQL代替N×4次）
+        # 第二步：批量加载所有摊位经营数据（6维度）
         self._batch_load_booth_data(booth_ids, event_id)
         
         booth_raw_data: Dict[int, Dict] = {}
-        total_revenue = 0.0
-        total_profit = 0.0
-        total_traffic = 0
+        totals = {'revenue': 0.0, 'profit': 0.0, 'traffic': 0, 'avg_ticket': 0.0, 'investor_count': 0, 'growth': 0.0}
         
         for booth in all_booths:
-            revenue = self._get_booth_revenue(booth.id, event_id)
-            profit = self._get_booth_profit(booth.id, event_id)
-            traffic = self._get_booth_traffic(booth.id, event_id)
-            
-            booth_raw_data[booth.id] = {
-                'revenue': revenue,
-                'profit': profit,
-                'traffic': traffic,
-            }
-            total_revenue += revenue
-            total_profit += profit
-            total_traffic += traffic
+            data = getattr(self, '_booth_data_cache', {}).get(booth.id, {
+                'revenue': 0.0, 'profit': 0.0, 'traffic': 0,
+                'avg_ticket': 0.0, 'investor_count': 0, 'growth': 0.0
+            })
+            booth_raw_data[booth.id] = data
+            for key in totals:
+                totals[key] += data.get(key, 0)
         
-        # 第三步：归一化 + 加权计算综合分
+        # 第三步：归一化 + 加权计算综合分（6维度）
         booth_scores: Dict[int, float] = {}
         total_score = 0.0
         
@@ -441,15 +471,21 @@ class StockAccountService:
             data = booth_raw_data[booth.id]
             
             # 归一化（各项除以全场总和，转为百分比）
-            norm_r = data['revenue'] / total_revenue if total_revenue > 0 else 0
-            norm_p = data['profit'] / total_profit if total_profit > 0 else 0
-            norm_t = data['traffic'] / total_traffic if total_traffic > 0 else 0
+            norm_r = data['revenue'] / totals['revenue'] if totals['revenue'] > 0 else 0
+            norm_p = data['profit'] / totals['profit'] if totals['profit'] > 0 else 0
+            norm_t = data['traffic'] / totals['traffic'] if totals['traffic'] > 0 else 0
+            norm_a = data['avg_ticket'] / totals['avg_ticket'] if totals['avg_ticket'] > 0 else 0
+            norm_i = data['investor_count'] / totals['investor_count'] if totals['investor_count'] > 0 else 0
+            norm_g = data['growth'] / totals['growth'] if totals['growth'] > 0 else 0
             
-            # 加权综合分
+            # 6维度加权综合分
             score = (
                 float(SCORE_WEIGHTS['revenue']) * norm_r +
                 float(SCORE_WEIGHTS['profit']) * norm_p +
-                float(SCORE_WEIGHTS['traffic']) * norm_t
+                float(SCORE_WEIGHTS['traffic']) * norm_t +
+                float(SCORE_WEIGHTS['avg_ticket']) * norm_a +
+                float(SCORE_WEIGHTS['investor_count']) * norm_i +
+                float(SCORE_WEIGHTS['growth']) * norm_g
             )
             
             # 保底分（防止完全没经营数据的摊位分为0）
@@ -560,8 +596,8 @@ class StockAccountService:
                     f"账户不存在: participant_id={participant.id}, event_id={event_id}"
                 )
             
-            # 4. 计算金额（固定发行价，公平入场）
-            buy_price = INITIAL_STOCK_PRICE
+            # 4. 计算金额（浮动买入价 = 当前动态股价）
+            buy_price = Decimal(str(self.get_dynamic_price(booth_id, event_id)))
             total_amount = buy_price * shares
             
             # 5. 检查余额
