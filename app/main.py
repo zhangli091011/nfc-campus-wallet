@@ -68,6 +68,14 @@ def create_app() -> FastAPI:
         logger.error(f"Failed to initialize database: {e}")
         raise
     
+    # Ensure all ORM model tables exist (creates missing tables)
+    try:
+        import models  # noqa: F401 - ensure all models are registered with Base
+        from core.database import create_tables
+        create_tables()
+    except Exception as e:
+        logger.warning(f"Auto-create tables warning: {e}")
+    
     # Create FastAPI app
     app = FastAPI(
         title="NFC Campus E-Wallet System",

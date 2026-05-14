@@ -522,20 +522,25 @@ async def process_booth_payment(
         # 处理摊位支付
         transaction_service = TransactionService(db)
         
-        # 计算随机立减
-        from services.random_discount_service import RandomDiscountService
-        discount_service = RandomDiscountService(db)
+        # 计算随机立减（如果表不存在则跳过）
+        from services.random_discount_service import RandomDiscountService, DiscountResult
+        discount_result = DiscountResult(applied=False, original_amount=payment_request.amount, actual_amount=payment_request.amount)
+        participant = None
         
-        # 先获取参与者ID用于立减计算
-        from services.participant_service import ParticipantService
-        participant_service_inst = ParticipantService(db)
-        participant = participant_service_inst.get_participant_by_card(payment_request.card_uid)
-        
-        discount_result = discount_service.calculate_discount(
-            event_id=event_id,
-            participant_id=participant.id,
-            payment_amount=payment_request.amount
-        )
+        try:
+            from services.participant_service import ParticipantService
+            discount_service = RandomDiscountService(db)
+            participant_service_inst = ParticipantService(db)
+            participant = participant_service_inst.get_participant_by_card(payment_request.card_uid)
+            
+            discount_result = discount_service.calculate_discount(
+                event_id=event_id,
+                participant_id=participant.id,
+                payment_amount=payment_request.amount
+            )
+        except Exception as e:
+            logger.warning(f"Random discount calculation skipped: {e}")
+            discount_result = DiscountResult(applied=False, original_amount=payment_request.amount, actual_amount=payment_request.amount)
         
         # 使用立减后的实际金额进行支付
         actual_payment_amount = discount_result.actual_amount if discount_result.applied else payment_request.amount
@@ -551,14 +556,17 @@ async def process_booth_payment(
         )
         
         # 如果立减生效，记录立减信息
-        if discount_result.applied:
-            discount_service.apply_discount(
-                event_id=event_id,
-                participant_id=participant.id,
-                transaction_id=result.transaction_id,
-                discount_result=discount_result,
-                booth_id=booth_id
-            )
+        if discount_result.applied and participant:
+            try:
+                discount_service.apply_discount(
+                    event_id=event_id,
+                    participant_id=participant.id,
+                    transaction_id=result.transaction_id,
+                    discount_result=discount_result,
+                    booth_id=booth_id
+                )
+            except Exception as e:
+                logger.warning(f"Failed to record discount: {e}")
         
         logger.info(
             f"Booth payment successful: booth_id={booth_id}, event_id={event_id}, "
