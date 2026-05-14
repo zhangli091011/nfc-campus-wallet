@@ -109,10 +109,11 @@ fun InvestmentScreen(
     onSubmitVerification: (String, String) -> Unit = { _, _ -> },
     getCurrentPrice: (Int) -> Double = { 5.0 },
 ) {
-    val pricePerShare = state.selectedBooth?.let { getCurrentPrice(it.id) } ?: 5.0
-    val totalAmount = state.sharesInput.toIntOrNull()?.let { it * pricePerShare } ?: 0.0
-    // 卖出使用所选持仓的当前动态股价
-    val sellPricePerShare = state.selectedHolding?.let { getCurrentPrice(it.boothId) } ?: pricePerShare
+    // 买入固定发行价 5元/股
+    val buyPricePerShare = 5.0
+    val totalAmount = state.sharesInput.toIntOrNull()?.let { it * buyPricePerShare } ?: 0.0
+    // 卖出使用所选持仓的当前动态股价（预估结算价）
+    val sellPricePerShare = state.selectedHolding?.let { getCurrentPrice(it.boothId) } ?: 5.0
     val sellTotal = state.sellSharesInput.toIntOrNull()?.let { it * sellPricePerShare } ?: 0.0
 
     Scaffold(
@@ -169,7 +170,7 @@ fun InvestmentScreen(
                     booths = state.booths,
                     selectedBooth = state.selectedBooth,
                     sharesInput = state.sharesInput,
-                    pricePerShare = pricePerShare,
+                    pricePerShare = buyPricePerShare,
                     totalAmount = totalAmount,
                     onBoothSelected = onBoothSelected,
                     onSharesChanged = onSharesChanged,
