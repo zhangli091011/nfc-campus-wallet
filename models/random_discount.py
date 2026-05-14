@@ -44,7 +44,9 @@ class RandomDiscountSetting(Base):
     event = relationship("Event", backref="random_discount_setting")
     records = relationship("RandomDiscountRecord", back_populates="setting",
                           foreign_keys="RandomDiscountRecord.event_id",
-                          primaryjoin="RandomDiscountSetting.event_id==RandomDiscountRecord.event_id")
+                          primaryjoin="RandomDiscountSetting.event_id==RandomDiscountRecord.event_id",
+                          overlaps="event,random_discount_setting",
+                          viewonly=True)
 
 
 class RandomDiscountRecord(Base):
@@ -66,11 +68,12 @@ class RandomDiscountRecord(Base):
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
-    event = relationship("Event")
+    event = relationship("Event", overlaps="random_discount_setting,records")
     participant = relationship("Participant")
     transaction = relationship("Transaction")
     booth = relationship("Booth")
     setting = relationship("RandomDiscountSetting",
                           foreign_keys=[event_id],
                           primaryjoin="RandomDiscountRecord.event_id==RandomDiscountSetting.event_id",
-                          viewonly=True)
+                          viewonly=True,
+                          overlaps="event,records,random_discount_setting")
