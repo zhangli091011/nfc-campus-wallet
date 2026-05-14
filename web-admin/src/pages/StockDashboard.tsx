@@ -89,12 +89,14 @@ interface MarketStats {
   total_sold_amount?: number;
 }
 
-// 一组好看的颜色用于多摊位折线
+// （多色折线已不再使用，保留以备扩展）
+// 多色调色板（保留供其他图表使用）
 const LINE_COLORS = [
   '#FFD700', '#4A90E2', '#50C878', '#FF6B35', '#9370DB',
   '#FF4D4F', '#13C2C2', '#FAAD14', '#722ED1', '#52C41A',
   '#EB2F96', '#1890FF', '#FA8C16', '#A0D911', '#F5222D',
 ];
+void LINE_COLORS;
 
 const StockDashboard: React.FC = () => {
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -169,194 +171,137 @@ const StockDashboard: React.FC = () => {
 
   // 更新K线图表
   const updateChart = useCallback(() => {
-    if (!chartInstance.current || klineData.length === 0) return;
+    if (!chartInstance.current) return;
 
-    if (selectedBooth) {
-      // 单摊位K线
-      const boothKline = klineData.find(k => k.booth_id === selectedBooth);
-      if (!boothKline || boothKline.kline.length === 0) {
-        chartInstance.current.clear();
-        return;
-      }
+    // 只在选中单个摊位时绘制K线，未选中时清空（中央改为滚动股价大屏）
+    if (!selectedBooth) {
+      chartInstance.current.clear();
+      return;
+    }
 
-      const times = boothKline.kline.map(k => k.time);
-      // ECharts 蜡烛图数据格式: [open, close, low, high]
-      const ohlc = boothKline.kline.map(k => [k.open, k.close, k.low, k.high]);
-      const volumes = boothKline.kline.map(k => k.volume);
-      const closes = boothKline.kline.map(k => k.close);
+    if (klineData.length === 0) return;
 
-      const option: echarts.EChartsOption = {
-        backgroundColor: 'transparent',
-        animation: false,
-        title: {
-          text: `${boothKline.booth_name} - K线走势`,
-          left: 'center',
-          textStyle: { color: '#FFD700', fontSize: 16, fontWeight: 'bold' },
-        },
-        tooltip: {
-          trigger: 'axis',
-          axisPointer: { type: 'cross' },
-          backgroundColor: 'rgba(10, 20, 40, 0.95)',
-          borderColor: '#2A4A7C',
-          textStyle: { color: '#C0C0C0' },
-        },
-        legend: {
-          data: ['K线', 'MA5', '成交量'],
-          top: 30,
-          textStyle: { color: '#8B9DC3' },
-        },
-        grid: [
-          { left: '10%', right: '5%', top: '15%', height: '55%' },
-          { left: '10%', right: '5%', top: '75%', height: '15%' },
-        ],
-        xAxis: [
-          {
-            type: 'category',
-            data: times,
-            boundaryGap: true,
-            axisLine: { lineStyle: { color: '#2A4A7C' } },
-            axisLabel: { color: '#8B9DC3', fontSize: 11 },
-            splitLine: { show: false },
-          },
-          {
-            type: 'category',
-            gridIndex: 1,
-            data: times,
-            axisLine: { lineStyle: { color: '#2A4A7C' } },
-            axisLabel: { show: false },
-            splitLine: { show: false },
-          },
-        ],
-        yAxis: [
-          {
-            type: 'value',
-            scale: true,
-            axisLine: { lineStyle: { color: '#2A4A7C' } },
-            axisLabel: {
-              color: '#8B9DC3',
-              formatter: (val: number) => `¥${val.toFixed(2)}`,
-            },
-            splitLine: { lineStyle: { color: '#1A2F4F', type: 'dashed' } },
-          },
-          {
-            type: 'value',
-            gridIndex: 1,
-            scale: true,
-            axisLine: { lineStyle: { color: '#2A4A7C' } },
-            axisLabel: { color: '#8B9DC3', fontSize: 10 },
-            splitLine: { show: false },
-          },
-        ],
-        dataZoom: [
-          {
-            type: 'inside',
-            xAxisIndex: [0, 1],
-            start: Math.max(0, 100 - (50 / Math.max(times.length, 1)) * 100),
-            end: 100,
-          },
-        ],
-        series: [
-          {
-            name: 'K线',
-            type: 'candlestick',
-            data: ohlc,
-            itemStyle: {
-              color: '#EF5350',       // 涨：红
-              color0: '#26A69A',      // 跌：绿
-              borderColor: '#EF5350',
-              borderColor0: '#26A69A',
-            },
-          },
-          {
-            name: 'MA5',
-            type: 'line',
-            data: calcMA(closes, 5),
-            smooth: true,
-            symbol: 'none',
-            lineStyle: { width: 1.5, color: '#FFD700' },
-          },
-          {
-            name: '成交量',
-            type: 'bar',
-            xAxisIndex: 1,
-            yAxisIndex: 1,
-            data: volumes,
-            itemStyle: {
-              color: (params: any) => {
-                const idx = params.dataIndex;
-                const k = boothKline.kline[idx];
-                return k.close >= k.open ? 'rgba(239, 83, 80, 0.7)' : 'rgba(38, 166, 154, 0.7)';
-              },
-            },
-          },
-        ],
-      };
+    // 单摊位K线
+    const boothKline = klineData.find(k => k.booth_id === selectedBooth);
+    if (!boothKline || boothKline.kline.length === 0) {
+      chartInstance.current.clear();
+      return;
+    }
 
-      chartInstance.current.setOption(option, true);
-    } else {
-      // 全市场对比折线
-      // 找到最长的时间序列作为统一X轴
-      const longestKline = klineData.reduce((longest, curr) =>
-        curr.kline.length > longest.kline.length ? curr : longest
-      );
-      const allTimes = longestKline.kline.map(k => k.time);
+    const times = boothKline.kline.map(k => k.time);
+    // ECharts 蜡烛图数据格式: [open, close, low, high]
+    const ohlc = boothKline.kline.map(k => [k.open, k.close, k.low, k.high]);
+    const volumes = boothKline.kline.map(k => k.volume);
+    const closes = boothKline.kline.map(k => k.close);
 
-      const series = klineData.slice(0, 15).map((booth, index) => ({
-        name: booth.booth_name,
-        type: 'line' as const,
-        data: booth.kline.map(k => k.close),
-        smooth: true,
-        symbol: 'none',
-        lineStyle: { width: 2 },
-        emphasis: { focus: 'series' as const },
-        itemStyle: { color: LINE_COLORS[index % LINE_COLORS.length] },
-      }));
-
-      const option: echarts.EChartsOption = {
-        backgroundColor: 'transparent',
-        animation: false,
-        title: {
-          text: '全市场股价走势',
-          left: 'center',
-          textStyle: { color: '#FFD700', fontSize: 16, fontWeight: 'bold' },
-        },
-        tooltip: {
-          trigger: 'axis',
-          backgroundColor: 'rgba(10, 20, 40, 0.95)',
-          borderColor: '#2A4A7C',
-          textStyle: { color: '#C0C0C0' },
-          axisPointer: { type: 'cross' },
-        },
-        legend: {
-          bottom: 0,
-          textStyle: { color: '#8B9DC3', fontSize: 11 },
-          type: 'scroll',
-          pageTextStyle: { color: '#8B9DC3' },
-        },
-        grid: { left: '8%', right: '5%', top: '15%', bottom: '15%' },
-        xAxis: {
+    const option: echarts.EChartsOption = {
+      backgroundColor: 'transparent',
+      animation: false,
+      title: {
+        text: `${boothKline.booth_name} - K线走势`,
+        left: 'center',
+        textStyle: { color: '#FFD700', fontSize: 16, fontWeight: 'bold' },
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' },
+        backgroundColor: 'rgba(10, 20, 40, 0.95)',
+        borderColor: '#2A4A7C',
+        textStyle: { color: '#C0C0C0' },
+      },
+      legend: {
+        data: ['K线', 'MA5', '成交量'],
+        top: 30,
+        textStyle: { color: '#8B9DC3' },
+      },
+      grid: [
+        { left: '10%', right: '5%', top: '15%', height: '55%' },
+        { left: '10%', right: '5%', top: '75%', height: '15%' },
+      ],
+      xAxis: [
+        {
           type: 'category',
-          data: allTimes,
-          boundaryGap: false,
+          data: times,
+          boundaryGap: true,
           axisLine: { lineStyle: { color: '#2A4A7C' } },
           axisLabel: { color: '#8B9DC3', fontSize: 11 },
           splitLine: { show: false },
         },
-        yAxis: {
+        {
+          type: 'category',
+          gridIndex: 1,
+          data: times,
+          axisLine: { lineStyle: { color: '#2A4A7C' } },
+          axisLabel: { show: false },
+          splitLine: { show: false },
+        },
+      ],
+      yAxis: [
+        {
           type: 'value',
           scale: true,
           axisLine: { lineStyle: { color: '#2A4A7C' } },
           axisLabel: {
             color: '#8B9DC3',
-            formatter: (val: number) => `¥${val.toFixed(1)}`,
+            formatter: (val: number) => `¥${val.toFixed(2)}`,
           },
           splitLine: { lineStyle: { color: '#1A2F4F', type: 'dashed' } },
         },
-        series,
-      };
+        {
+          type: 'value',
+          gridIndex: 1,
+          scale: true,
+          axisLine: { lineStyle: { color: '#2A4A7C' } },
+          axisLabel: { color: '#8B9DC3', fontSize: 10 },
+          splitLine: { show: false },
+        },
+      ],
+      dataZoom: [
+        {
+          type: 'inside',
+          xAxisIndex: [0, 1],
+          start: Math.max(0, 100 - (50 / Math.max(times.length, 1)) * 100),
+          end: 100,
+        },
+      ],
+      series: [
+        {
+          name: 'K线',
+          type: 'candlestick',
+          data: ohlc,
+          itemStyle: {
+            color: '#EF5350',       // 涨：红
+            color0: '#26A69A',      // 跌：绿
+            borderColor: '#EF5350',
+            borderColor0: '#26A69A',
+          },
+        },
+        {
+          name: 'MA5',
+          type: 'line',
+          data: calcMA(closes, 5),
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { width: 1.5, color: '#FFD700' },
+        },
+        {
+          name: '成交量',
+          type: 'bar',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          data: volumes,
+          itemStyle: {
+            color: (params: any) => {
+              const idx = params.dataIndex;
+              const k = boothKline.kline[idx];
+              return k.close >= k.open ? 'rgba(239, 83, 80, 0.7)' : 'rgba(38, 166, 154, 0.7)';
+            },
+          },
+        },
+      ],
+    };
 
-      chartInstance.current.setOption(option, true);
-    }
+    chartInstance.current.setOption(option, true);
   }, [klineData, selectedBooth]);
 
   // 更新时钟
@@ -628,7 +573,7 @@ const StockDashboard: React.FC = () => {
             </Card>
           </div>
 
-          {/* 中央面板 - K线图 */}
+          {/* 中央面板 - K线图 / 滚动股价大屏 */}
           <div className="center-panel">
             <Card className="data-card chart-card" variant="borderless">
               <div className="card-header">
@@ -636,7 +581,7 @@ const StockDashboard: React.FC = () => {
                 <span>
                   {selectedBooth
                     ? `${klineData.find(k => k.booth_id === selectedBooth)?.booth_name || ''} K线走势`
-                    : '全市场股价走势'}
+                    : '实时股价滚动大屏'}
                 </span>
                 {selectedBooth && (
                   <Tag
@@ -644,15 +589,48 @@ const StockDashboard: React.FC = () => {
                     style={{ marginLeft: 12, cursor: 'pointer' }}
                     onClick={() => setSelectedBooth(null)}
                   >
-                    查看全部 ×
+                    返回滚动大屏 ×
                   </Tag>
                 )}
               </div>
-              {klineData.length > 0 ? (
-                <div ref={chartRef} className="chart-container" />
+              {selectedBooth ? (
+                klineData.length > 0 ? (
+                  <div ref={chartRef} className="chart-container" />
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '500px' }}>
+                    <Empty description="暂无K线数据" />
+                  </div>
+                )
+              ) : tickerData.length > 0 ? (
+                <div className="big-ticker-board">
+                  <div className="big-ticker-track">
+                    {[...tickerData, ...tickerData].map((item, idx) => {
+                      const isUp = item.change_percent > 0;
+                      const isFlat = item.change_percent === 0;
+                      return (
+                        <div
+                          key={`big-${item.booth_id}-${idx}`}
+                          className="big-ticker-item"
+                          onClick={() => setSelectedBooth(item.booth_id)}
+                        >
+                          <div className="big-ticker-name">{item.booth_name}</div>
+                          <div className="big-ticker-class">{item.class_name}</div>
+                          <div className="big-ticker-price">¥{item.current_price.toFixed(2)}</div>
+                          <div className={`big-ticker-change ${isFlat ? 'flat' : isUp ? 'up' : 'down'}`}>
+                            <span className="big-ticker-arrow">
+                              {isFlat ? '—' : isUp ? '▲' : '▼'}
+                            </span>
+                            {isUp ? '+' : ''}
+                            {item.change_percent.toFixed(2)}%
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '500px' }}>
-                  <Empty description="暂无股票交易数据" />
+                  <Empty description="暂无股价数据" />
                 </div>
               )}
             </Card>
