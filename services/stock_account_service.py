@@ -151,20 +151,25 @@ class StockAccountService:
         }
     
     def _get_booth_revenue(self, booth_id: int, event_id: int) -> float:
-        """获取摊位总收入"""
+        """获取摊位总收入（优先使用批量缓存）"""
+        cache = getattr(self, '_booth_data_cache', None)
+        if cache and booth_id in cache:
+            return cache[booth_id]['revenue']
         from models.transaction import Transaction
-        transactions = self.db.query(Transaction).filter(
+        result = self.db.query(func.sum(Transaction.amount)).filter(
             Transaction.event_id == event_id,
             Transaction.booth_id == booth_id,
-            Transaction.type.in_(['payment', 'recharge'])
-        ).all()
-        return sum(float(t.amount) for t in transactions if t.amount > 0)
+            Transaction.type.in_(['payment', 'recharge']),
+            Transaction.amount > 0
+        ).scalar()
+        return float(result) if result else 0.0
     
     def _get_booth_profit(self, booth_id: int, event_id: int) -> float:
-        """获取摊位利润（收入 - 成本，无成本数据时按70%毛利估算）"""
+        """获取摊位利润（优先使用批量缓存）"""
+        cache = getattr(self, '_booth_data_cache', None)
+        if cache and booth_id in cache:
+            return cache[booth_id]['profit']
         revenue = self._get_booth_revenue(booth_id, event_id)
-        
-        # 尝试从成本凭据获取实际成本
         try:
             from models.cost_evidence import CostEvidence
             cost_records = self.db.query(CostEvidence).filter(
@@ -176,18 +181,71 @@ class StockAccountService:
                 return max(0, revenue - total_cost)
         except Exception:
             pass
-        
-        # 无成本数据时，假设毛利率70%
         return revenue * 0.70
     
     def _get_booth_traffic(self, booth_id: int, event_id: int) -> int:
-        """获取摊位人流（订单数，含NFC支付和现金支付）"""
+        """获取摊位人流（优先使用批量缓存）"""
+        cache = getattr(self, '_booth_data_cache', None)
+        if cache and booth_id in cache:
+            return cache[booth_id]['traffic']
         from models.transaction import Transaction
         return self.db.query(Transaction).filter(
             Transaction.event_id == event_id,
             Transaction.booth_id == booth_id,
             Transaction.type.in_(['payment', 'cash_payment'])
         ).count()
+    
+    def _batch_load_booth_data(self, booth_ids: List[int], event_id: int):
+        """
+        批量加载所有摊位的经营数据（2次SQL代替N×4次）
+        结果缓存到 self._booth_data_cache 供后续方法使用
+        """
+        from models.transaction import Transaction
+        
+        # 一次查询：按摊位聚合收入和人流
+        rows = self.db.query(
+            Transaction.booth_id,
+            func.sum(Transaction.amount).label('revenue'),
+            func.count(Transaction.id).label('traffic')
+        ).filter(
+            Transaction.event_id == event_id,
+            Transaction.booth_id.in_(booth_ids),
+            Transaction.type.in_(['payment', 'cash_payment', 'recharge']),
+            Transaction.amount > 0
+        ).group_by(Transaction.booth_id).all()
+        
+        cache: Dict[int, Dict] = {bid: {'revenue': 0.0, 'profit': 0.0, 'traffic': 0} for bid in booth_ids}
+        for row in rows:
+            cache[row[0]] = {
+                'revenue': float(row[1]) if row[1] else 0.0,
+                'profit': 0.0,
+                'traffic': int(row[2]) if row[2] else 0,
+            }
+        
+        # 一次查询：批量获取成本
+        cost_map: Dict[int, float] = {}
+        try:
+            from models.cost_evidence import CostEvidence
+            cost_rows = self.db.query(
+                CostEvidence.booth_id,
+                func.sum(CostEvidence.amount)
+            ).filter(
+                CostEvidence.booth_id.in_(booth_ids),
+                CostEvidence.status == 'approved'
+            ).group_by(CostEvidence.booth_id).all()
+            cost_map = {r[0]: float(r[1]) for r in cost_rows if r[1]}
+        except Exception:
+            pass
+        
+        # 计算利润
+        for bid in booth_ids:
+            revenue = cache[bid]['revenue']
+            if bid in cost_map:
+                cache[bid]['profit'] = max(0.0, revenue - cost_map[bid])
+            else:
+                cache[bid]['profit'] = revenue * 0.70
+        
+        self._booth_data_cache = cache
     
     # ==================== 全局彩池定价 ====================
     
@@ -269,15 +327,10 @@ class StockAccountService:
     def get_dynamic_price(self, booth_id: int, event_id: int) -> float:
         """
         获取单个摊位的实时动态股价（Pari-mutuel 模型）
-        
-        公式：Final Price_i = (Pool × Ratio_i) / Q_i
-        - Pool = (Σ Q_j × P_0) × (1 - F)
-        - Ratio_i = S_i / ΣS_j
-        
-        如果没有任何交易数据，返回初始发行价。
+        内部调用 get_all_dynamic_prices 利用缓存。
         """
         try:
-            prices = self._calculate_pari_mutuel_prices(event_id)
+            prices = self.get_all_dynamic_prices(event_id)
             return prices.get(booth_id, float(INITIAL_STOCK_PRICE))
         except Exception as e:
             logger.warning(f"动态股价计算失败(booth={booth_id}): {e}")
@@ -286,12 +339,20 @@ class StockAccountService:
     def get_all_dynamic_prices(self, event_id: int) -> Dict[int, float]:
         """
         获取所有摊位的实时动态股价（Pari-mutuel 模型）
+        结果缓存在实例上，同一请求内不重复计算。
         
         Returns:
             Dict[booth_id, price]: 摊位ID → 当前股价
         """
+        # 同一实例内缓存
+        cache_key = '_price_cache'
+        if hasattr(self, cache_key):
+            return getattr(self, cache_key)
+        
         try:
-            return self._calculate_pari_mutuel_prices(event_id)
+            prices = self._calculate_pari_mutuel_prices(event_id)
+            setattr(self, cache_key, prices)
+            return prices
         except Exception as e:
             logger.warning(f"批量动态股价计算失败: {e}")
             return {}
@@ -342,7 +403,9 @@ class StockAccountService:
         total_investment = sum(float(o.total_amount) for o in orders)
         pool = total_investment * (1 - float(OFFICIAL_FEE_RATE))
         
-        # 第二步：计算每个摊位的经营数据（原始值）
+        # 第二步：批量加载所有摊位经营数据（2次SQL代替N×4次）
+        self._batch_load_booth_data(booth_ids, event_id)
+        
         booth_raw_data: Dict[int, Dict] = {}
         total_revenue = 0.0
         total_profit = 0.0
@@ -1090,6 +1153,9 @@ class StockAccountService:
             booth_orders[o.booth_id].append(o)
         
         results = []
+        # 批量获取动态股价（避免N次重复计算）
+        all_prices = self.get_all_dynamic_prices(event_id)
+        
         for booth in all_booths:
             orders_list = booth_orders.get(booth.id, [])
             
@@ -1107,7 +1173,7 @@ class StockAccountService:
                 'total_investment': total_investment,
                 'total_investment_yuan': total_investment,
                 'investor_count': investor_count,
-                'current_price': self.get_dynamic_price(booth.id, event_id),
+                'current_price': all_prices.get(booth.id, float(INITIAL_STOCK_PRICE)),
                 'is_settled': is_settled,
                 'final_price': None,
                 'final_price_yuan': None
