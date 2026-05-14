@@ -482,3 +482,105 @@
 .ant-table-empty .ant-empty-description {
   color: #8B9DC3 !important;
 }
+
+
+/* ========== 实时股价滚动跑马灯 ========== */
+.stock-ticker {
+  background: linear-gradient(90deg, rgba(10, 14, 39, 0.95) 0%, rgba(26, 47, 79, 0.95) 100%);
+  border-top: 1px solid rgba(255, 215, 0, 0.3);
+  border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+  padding: 12px 0;
+  overflow: hidden;
+  position: relative;
+  white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.stock-ticker::before,
+.stock-ticker::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 100px;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.stock-ticker::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(10, 14, 39, 1) 0%, rgba(10, 14, 39, 0) 100%);
+}
+
+.stock-ticker::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(10, 14, 39, 1) 0%, rgba(10, 14, 39, 0) 100%);
+}
+
+.ticker-track {
+  display: inline-flex;
+  gap: 0;
+  animation: ticker-scroll 60s linear infinite;
+}
+
+.stock-ticker:hover .ticker-track {
+  animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 32px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.ticker-item:hover {
+  background: rgba(255, 215, 0, 0.05);
+}
+
+.ticker-name {
+  color: #C0C0C0;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.ticker-price {
+  color: #FFD700;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.ticker-change {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.ticker-change.up {
+  color: #FF4D4F;
+}
+
+.ticker-change.down {
+  color: #52C41A;
+}
+
+.ticker-change.flat {
+  color: #8B9DC3;
+}
+
+.ticker-arrow {
+  font-size: 12px;
+}
