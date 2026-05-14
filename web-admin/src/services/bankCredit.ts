@@ -88,7 +88,7 @@ export interface CreditConfig {
 
 /** 获取央行风控看板数据 */
 export const getCreditDashboard = (eventId: number) =>
-  request.get<any, CreditDashboardStats>(`/api/bank-credit/dashboard/${eventId}`)
+  request.get<any, CreditDashboardStats>(`/bank-credit/dashboard/${eventId}`)
 
 /** 获取贷款列表 */
 export const getLoans = (eventId: number, params?: {
@@ -97,15 +97,14 @@ export const getLoans = (eventId: number, params?: {
   limit?: number
   offset?: number
 }) =>
-  request.get<any, LoanRecord[]>(`/api/bank-credit/loans/${eventId}`, { params })
+  request.get<any, LoanRecord[]>(`/bank-credit/loans/${eventId}`, { params })
 
 /** 获取信贷配置 */
 export const getCreditConfig = (eventId: number) =>
-  request.get<any, CreditConfig>(`/api/bank-credit/config/${eventId}`)
+  request.get<any, CreditConfig>(`/bank-credit/config/${eventId}`)
 
 /** 导出对账单 CSV */
 export const exportLoansCSV = (eventId: number) => {
   const token = localStorage.getItem('token')
-  // Use relative URL - Vite proxy handles routing to backend
   window.open(`/api/bank-credit/export/${eventId}?token=${token}`, '_blank')
 }

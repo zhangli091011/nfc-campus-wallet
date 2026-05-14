@@ -97,20 +97,20 @@ export interface SettlementResponse {
 
 /** 获取活动的股市统计 */
 export const getMarketStats = (eventId: number) =>
-  request.get<any, MarketStats>(`/api/stock/stats/${eventId}`)
+  request.get<any, MarketStats>(`/stock/stats/${eventId}`)
 
 /** 获取摊位股票统计 */
 export const getBoothStockStats = (boothId: number, eventId: number) =>
-  request.get<any, BoothStockStats>(`/api/stock/booth-stats/${boothId}`, {
+  request.get<any, BoothStockStats>(`/stock/booth-stats/${boothId}`, {
     params: { event_id: eventId },
   })
 
 /** 查询参与者股票订单 */
 export const getParticipantOrders = (participantId: number, eventId?: number) =>
-  request.get<any, StockOrder[]>(`/api/stock/orders/${participantId}`, {
+  request.get<any, StockOrder[]>(`/stock/orders/${participantId}`, {
     params: eventId ? { event_id: eventId } : undefined,
   })
 
 /** 执行期末结算 */
 export const settleStockMarket = (data: SettlementRequest) =>
-  request.post<any, SettlementResponse>(`/api/stock/settle`, data)
+  request.post<any, SettlementResponse>(`/stock/settle`, data)
