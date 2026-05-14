@@ -32,7 +32,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CreditScore
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Refresh
@@ -129,11 +128,10 @@ fun CardReturnScreen(
     onRepayAmountChange: (String) -> Unit,
     onReset: () -> Unit,
     onDismissError: () -> Unit,
-    onLogout: () -> Unit,
 ) {
     Scaffold(
         containerColor = CardReturnColors.DeepBg,
-        topBar = { TopBar(onLogout = onLogout) },
+        topBar = { TopBar() },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -281,7 +279,7 @@ fun CardReturnScreen(
 // ============================================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopBar(onLogout: () -> Unit) {
+private fun TopBar() {
     TopAppBar(
         title = {
             Column {
@@ -300,15 +298,7 @@ private fun TopBar(onLogout: () -> Unit) {
                 )
             }
         },
-        actions = {
-            IconButton(onClick = onLogout) {
-                Icon(
-                    Icons.Default.ExitToApp,
-                    contentDescription = "退出",
-                    tint = CardReturnColors.AccentDim,
-                )
-            }
-        },
+        actions = {},
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = CardReturnColors.DeepBg,
         ),

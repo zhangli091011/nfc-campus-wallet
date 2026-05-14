@@ -67,7 +67,6 @@ public class CashierActivity extends AppCompatActivity {
     private TextView eventNameText;
     private TextView boothNameText;
     private TextView cashierNameText;
-    private Button logoutButton;
     
     // UI Components - Card Info
     private View cardInfoSection;
@@ -159,7 +158,7 @@ public class CashierActivity extends AppCompatActivity {
         eventNameText = findViewById(R.id.eventNameText);
         boothNameText = findViewById(R.id.boothNameText);
         cashierNameText = findViewById(R.id.cashierNameText);
-        logoutButton = findViewById(R.id.logoutButton);
+
         
         // Card Info
         cardInfoSection = findViewById(R.id.cardInfoSection);
@@ -207,7 +206,7 @@ public class CashierActivity extends AppCompatActivity {
         cashPayButton.setOnClickListener(v -> processCashPayment());
         rechargeButton.setOnClickListener(v -> processRecharge());
         clearButton.setOnClickListener(v -> clearCard());
-        logoutButton.setOnClickListener(v -> performLogout());
+
         refundButton.setOnClickListener(v -> openRefundManager());
         viewCardDetailButton.setOnClickListener(v -> viewCardDetail());
         
@@ -1310,24 +1309,4 @@ public class CashierActivity extends AppCompatActivity {
         startActivity(intent);
     }
     
-    /**
-     * Perform logout.
-     */
-    private void performLogout() {
-        new AlertDialog.Builder(this)
-            .setTitle("退出登录")
-            .setMessage("确定要退出登录吗？")
-            .setPositiveButton("确定", (dialog, which) -> {
-                // Clear session
-                sessionManager.clearSession();
-                
-                // Navigate to login activity
-                Intent intent = new Intent(this, LoginActivity.class);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                startActivity(intent);
-                finish();
-            })
-            .setNegativeButton("取消", null)
-            .show();
-    }
 }

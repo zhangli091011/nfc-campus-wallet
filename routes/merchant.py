@@ -171,6 +171,73 @@ async def merchant_login(
 
 
 # ============================================================================
+# 找回密码
+# ============================================================================
+
+from pydantic import BaseModel as PydanticBaseModel
+
+
+class MerchantRecoverPasswordRequest(PydanticBaseModel):
+    """商户找回密码请求"""
+    username: str
+    booth_name: str
+    new_password: str
+
+
+@router.post("/recover-password")
+async def merchant_recover_password(
+    request: MerchantRecoverPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    商户找回密码。
+    
+    通过用户名 + 商铺名称验证身份，验证通过后重置密码。
+    
+    Request Body:
+        - username: 用户名
+        - booth_name: 商铺名称（注册时填写的）
+        - new_password: 新密码（6-100字符）
+    
+    Returns:
+        成功消息
+        
+    Error Responses:
+        400: 验证失败（用户名或商铺名称不匹配）
+        500: 内部服务器错误
+    
+    Example:
+        POST /merchant/recover-password
+        {
+            "username": "merchant_01",
+            "booth_name": "美食小铺",
+            "new_password": "newpassword123"
+        }
+    """
+    try:
+        merchant_service = MerchantService(db)
+        result = merchant_service.recover_password(
+            username=request.username,
+            booth_name=request.booth_name,
+            new_password=request.new_password
+        )
+        return result
+    
+    except MerchantAuthError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error_code": e.error_code, "message": e.message}
+        )
+    
+    except Exception as e:
+        logger.error(f"Merchant recover password error: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error_code": "INTERNAL_ERROR", "message": "密码重置失败，请稍后重试"}
+        )
+
+
+# ============================================================================
 # 商铺信息管理
 # ============================================================================
 

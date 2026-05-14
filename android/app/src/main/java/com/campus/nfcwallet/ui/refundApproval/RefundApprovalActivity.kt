@@ -72,7 +72,6 @@ class RefundApprovalActivity : ComponentActivity() {
                     onFilterChange = viewModel::setFilter,
                     onRefresh = viewModel::loadRequests,
                     onDismissMessage = viewModel::dismissMessage,
-                    onLogout = { logout() },
                 )
             }
         }
@@ -102,11 +101,6 @@ class RefundApprovalActivity : ComponentActivity() {
             .setAutoCancel(true)
             .build()
         manager.notify(notificationId++, notification)
-    }
-
-    private fun logout() {
-        sessionManager.clearSession()
-        navigateToLogin()
     }
 
     private fun navigateToLogin() {

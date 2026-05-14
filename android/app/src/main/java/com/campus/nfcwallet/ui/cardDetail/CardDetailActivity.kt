@@ -75,7 +75,6 @@ class CardDetailActivity : ComponentActivity() {
                     state = viewModel.uiState,
                     onReset = viewModel::onReset,
                     onDismissError = viewModel::onDismissError,
-                    onLogout = { logout() },
                 )
             }
         }
@@ -143,11 +142,6 @@ class CardDetailActivity : ComponentActivity() {
                 }
             }
         } catch (_: Exception) {}
-    }
-
-    private fun logout() {
-        sessionManager.clearSession()
-        navigateToLogin()
     }
 
     private fun navigateToLogin() {

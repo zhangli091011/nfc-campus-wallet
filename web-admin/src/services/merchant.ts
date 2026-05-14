@@ -108,6 +108,17 @@ export const merchantLogin = (data: MerchantLoginRequest) => {
   return request.post<any, MerchantLoginResponse>('/merchant/login', data)
 }
 
+// 商户找回密码
+export interface MerchantRecoverPasswordRequest {
+  username: string
+  booth_name: string
+  new_password: string
+}
+
+export const merchantRecoverPassword = (data: MerchantRecoverPasswordRequest) => {
+  return request.post<any, { success: boolean; message: string }>('/merchant/recover-password', data)
+}
+
 // 获取商铺信息
 export const getMerchantBooth = () => {
   return request.get<any, MerchantBoothInfo>('/merchant/booth')

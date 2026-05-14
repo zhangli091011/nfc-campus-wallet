@@ -99,7 +99,6 @@ fun BankTellerScreen(
     onConfirmIssuance: () -> Unit,
     onReset: () -> Unit,
     onDismissError: () -> Unit,
-    onLogout: () -> Unit = {},
     onDismissVerification: () -> Unit = {},
     onSubmitVerification: (String, String) -> Unit = { _, _ -> },
     onDismissRegistration: () -> Unit = {},
@@ -109,7 +108,7 @@ fun BankTellerScreen(
     Scaffold(
         containerColor = BankColors.NavyDeep,
         topBar = {
-            BankTopBar(onLogout = onLogout)
+            BankTopBar()
         },
     ) { padding ->
         Column(
@@ -243,7 +242,7 @@ fun BankTellerScreen(
 // ============================================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BankTopBar(onLogout: () -> Unit) {
+private fun BankTopBar() {
     TopAppBar(
         title = {
             Column {
@@ -262,15 +261,7 @@ private fun BankTopBar(onLogout: () -> Unit) {
                 )
             }
         },
-        actions = {
-            IconButton(onClick = onLogout) {
-                Icon(
-                    Icons.Default.ExitToApp,
-                    contentDescription = "退出",
-                    tint = BankColors.PlatinumDim,
-                )
-            }
-        },
+        actions = {},
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = BankColors.NavyDeep,
         ),

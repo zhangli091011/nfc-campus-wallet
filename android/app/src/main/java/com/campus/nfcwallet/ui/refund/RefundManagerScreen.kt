@@ -74,12 +74,11 @@ fun RefundManagerScreen(
     onClearSelection: () -> Unit,
     onDismissError: () -> Unit,
     onDismissSuccess: () -> Unit,
-    onLogout: () -> Unit = {},
 ) {
     Scaffold(
         containerColor = RefundColors.Background,
         topBar = {
-            RefundTopBar(onLogout = onLogout)
+            RefundTopBar()
         },
     ) { padding ->
         Box(
@@ -180,7 +179,7 @@ fun RefundManagerScreen(
 // ============================================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RefundTopBar(onLogout: () -> Unit) {
+private fun RefundTopBar() {
     TopAppBar(
         title = {
             Column {
@@ -209,15 +208,7 @@ private fun RefundTopBar(onLogout: () -> Unit) {
                     .size(24.dp),
             )
         },
-        actions = {
-            IconButton(onClick = onLogout) {
-                Icon(
-                    imageVector = Icons.Filled.Logout,
-                    contentDescription = "退出",
-                    tint = RefundColors.TextSecondary,
-                )
-            }
-        },
+        actions = {},
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = RefundColors.SurfaceDark,
         ),
