@@ -1,8 +1,9 @@
 """
 Stock Market Service - Business logic for stock trading.
 
-全局奖金池动态定价模型（Pari-mutuel 6维度版）：
+全局奖金池动态定价模型（Pari-mutuel 6维度版 + 做市商卖出机制 + 虚拟流动性）：
 - 浮动买入价 = 当前动态股价（实时变化）
+- 做市商卖出价 = 当前动态股价 × 折扣系数（默认0.9，即90%）
 - 所有学生买股票的钱汇总成全局资金池
 - 官方扣除手续费（5%）
 - 摊位根据6维度经营表现计算综合分：
@@ -13,9 +14,17 @@ Stock Market Service - Business logic for stock trading.
   · 投资人数 10% — 市场信心指标
   · 增长率 15% — 近期vs历史表现趋势
 - 摊位分到的资金 = 池子 × (摊位分 / 总分)
-- 最终股价 = 摊位分到的资金 / 该摊位总股数
+- 最终股价 = (摊位真实资金 + 虚拟资金) / (当前持仓股数 + 虚拟股数)
 
-零和博弈：学生赚的钱来自其他学生亏的钱，官方稳赚手续费。
+关键设计：
+- 虚拟流动性（Virtual Liquidity）：每个摊位有50股虚拟底仓 + 对应初始价资金
+  · 降低单笔交易对价格的冲击（买入不会暴跌，卖出不会暴涨）
+  · 无交易时价格自然回归初始价
+  · 交易量越大，真实资金池主导越强，虚拟部分影响越弱
+- 卖出（抛售）使用做市商折扣机制，卖出价 = 动态股价 × 0.9
+- sold 订单从股数分母中移除，卖出行为不影响剩余持仓者的股价
+- 资金池分子仍包含所有历史买入金额（holding + sold），保证池子不缩水
+- 零和博弈：学生赚的钱来自其他学生亏的钱，官方稳赚手续费 + 做市商价差
 """
 
 from sqlalchemy.orm import Session
@@ -51,6 +60,12 @@ OFFICIAL_FEE_RATE = Decimal('0.05')
 # 做市商卖出折扣系数（卖出价 = 当前动态股价 × SELL_DISCOUNT_FACTOR）
 # 0.9 表示卖出价为买入价的90%，10%为做市商价差（防止频繁套利）
 SELL_DISCOUNT_FACTOR = Decimal('0.90')
+
+# 虚拟流动性股数（每个摊位的虚拟底仓）
+# 作用：稀释单笔交易对股价的冲击，值越大价格越稳定
+# 相当于做市商为每个摊位预先提供的流动性
+# 设为 50 表示：即使只有 1 人买了 1 股，分母也是 51 而非 1，避免极端波动
+VIRTUAL_LIQUIDITY_SHARES = 50
 
 # 综合分权重配置（6维度评分）
 SCORE_WEIGHTS = {
@@ -402,19 +417,27 @@ class StockAccountService:
     
     def _calculate_pari_mutuel_prices(self, event_id: int) -> Dict[int, float]:
         """
-        核心：Pari-mutuel 彩池定价引擎（6维度版）
+        核心：Pari-mutuel 彩池定价引擎（6维度版 + 虚拟流动性）
         
         设计原则：
         - 浮动买入价 = 当前动态股价
+        - 做市商卖出价 = 动态股价 × 折扣系数
         - 6维度综合评分：营业额、利润、人流、客单价、投资人数、增长率
+        - 虚拟流动性：每个摊位有虚拟底仓，降低单笔交易对价格的冲击
         - 零和博弈：学生赚的钱来自其他学生亏的钱
-        - 官方稳赚5%手续费
+        - 官方稳赚5%手续费 + 10%做市商价差
         
-        四步法：
-        1. 全局资金池 Pool = Σ(实际买入金额) × (1 - F)
+        五步法：
+        1. 全局资金池 Pool = Σ(历史买入金额) × (1 - F)
         2. 摊位综合分 S_i = 6维度归一化加权
         3. 分红占比 Ratio_i = S_i / ΣS_j
-        4. 最终股价 Price_i = (Pool × Ratio_i) / Q_i
+        4. 摊位真实资金 = Pool × Ratio_i
+        5. 最终股价 = (真实资金 + 虚拟资金) / (真实持仓 + 虚拟股数)
+        
+        虚拟流动性效果：
+        - 无交易时：价格 = 虚拟资金/虚拟股数 = 初始价
+        - 少量交易：价格 ≈ 初始价（微幅波动）
+        - 大量交易：真实资金池主导，虚拟部分影响减弱
         """
         # 获取所有活跃摊位
         all_booths = self.db.query(Booth).filter(
@@ -449,14 +472,13 @@ class StockAccountService:
                 booth_shares[o.booth_id] += o.shares
         
         # 第一步：全局资金池（基于所有历史买入金额）
-        total_shares_all = sum(booth_shares.values())
-        if total_shares_all == 0:
-            # 没有任何持仓，全部返回初始价
+        total_investment = sum(float(o.total_amount) for o in all_orders)
+        if total_investment == 0:
+            # 没有任何交易历史，全部返回初始价
             return {bid: float(INITIAL_STOCK_PRICE) for bid in booth_ids}
         
         # Pool = Σ(所有历史买入金额) × (1 - F)
         # 注意：sold 订单的买入金额仍计入池子，保证池子不因卖出而缩水
-        total_investment = sum(float(o.total_amount) for o in all_orders)
         pool = total_investment * (1 - float(OFFICIAL_FEE_RATE))
         
         # 第二步：批量加载所有摊位经营数据（6维度）
@@ -508,7 +530,12 @@ class StockAccountService:
         if total_score == 0:
             total_score = 1.0
         
-        # 第四步：计算最终股价
+        # 第四步：计算最终股价（含虚拟流动性缓冲）
+        # 虚拟流动性：每个摊位的分母加上虚拟底仓股数，降低单笔交易对价格的冲击
+        # 同时在分子端为虚拟股数注入对应的初始价资金，保证无交易时股价 = 初始价
+        virtual_shares = VIRTUAL_LIQUIDITY_SHARES
+        virtual_pool_per_booth = float(INITIAL_STOCK_PRICE) * virtual_shares  # 虚拟注入资金
+        
         prices: Dict[int, float] = {}
         for booth in all_booths:
             shares = booth_shares.get(booth.id, 0)
@@ -517,17 +544,16 @@ class StockAccountService:
             # 分红占比
             ratio = score / total_score
             
-            # 摊位分到的资金
+            # 摊位从真实资金池分到的资金
             booth_pool = pool * ratio
             
-            if shares > 0:
-                # 最终股价 = 摊位分到的资金 / 该摊位总股数
-                price = booth_pool / shares
-            else:
-                # 没人买的摊位：用初始价，但根据经营分给一个预期涨跌
-                # 预期价 = 初始价 × (ratio × 摊位数)，模拟"如果有人买会怎样"
-                expected_multiplier = ratio * len(all_booths)
-                price = float(INITIAL_STOCK_PRICE) * max(0.5, min(2.0, expected_multiplier))
+            # 加入虚拟流动性：分子加虚拟资金，分母加虚拟股数
+            # 效果：当真实交易量小时，价格趋近初始价；交易量大时，真实资金池主导价格
+            effective_pool = booth_pool + virtual_pool_per_booth
+            effective_shares = shares + virtual_shares
+            
+            # 最终股价 = (真实资金池分配 + 虚拟资金) / (真实持仓 + 虚拟股数)
+            price = effective_pool / effective_shares
             
             # 股价下限保护（不低于0.5元）
             price = max(0.50, price)
@@ -647,24 +673,28 @@ class StockAccountService:
         if total_score == 0:
             total_score = 1.0
         
-        # 计算最终股价与分红占比
+        # 计算最终股价与分红占比（含虚拟流动性）
+        virtual_shares = VIRTUAL_LIQUIDITY_SHARES
+        virtual_pool_per_booth = float(INITIAL_STOCK_PRICE) * virtual_shares
+        
         for item in booth_breakdown:
             score = item['score']
             shares = item['shares']
             ratio = score / total_score
             booth_pool = pool * ratio
             
-            if shares > 0:
-                price = booth_pool / shares
-            else:
-                expected_multiplier = ratio * len(all_booths)
-                price = float(INITIAL_STOCK_PRICE) * max(0.5, min(2.0, expected_multiplier))
+            # 虚拟流动性缓冲
+            effective_pool = booth_pool + virtual_pool_per_booth
+            effective_shares = shares + virtual_shares
+            price = effective_pool / effective_shares
             
             price = max(0.50, price)
             base_price = float(INITIAL_STOCK_PRICE)
             
             item['ratio'] = round(ratio, 6)
             item['booth_pool'] = round(booth_pool, 2)
+            item['virtual_pool'] = round(virtual_pool_per_booth, 2)
+            item['effective_shares'] = effective_shares
             item['current_price'] = round(price, 2)
             item['base_price'] = base_price
             item['change_percent'] = round((price - base_price) / base_price * 100, 2)
@@ -681,6 +711,7 @@ class StockAccountService:
                 'net_pool': round(pool, 2),
                 'fee_rate': float(OFFICIAL_FEE_RATE),
                 'sell_discount_factor': float(SELL_DISCOUNT_FACTOR),
+                'virtual_liquidity_shares': VIRTUAL_LIQUIDITY_SHARES,
                 'order_count': len(all_orders),
                 'holding_count': len(holding_orders),
                 'investor_count': len(set(o.participant_id for o in all_orders)),
@@ -1059,6 +1090,9 @@ class StockAccountService:
         for bh in booth_holdings.values():
             bh['total_cost'] = float(bh['total_cost'])
             bh['market_value'] = bh['shares'] * bh['current_price']
+            # 做市商卖出价 = 当前股价 × 折扣系数
+            bh['sell_price'] = round(max(0.50, bh['current_price'] * float(SELL_DISCOUNT_FACTOR)), 2)
+            bh['sell_value'] = bh['shares'] * bh['sell_price']
             result.append(bh)
         
         return result
@@ -1457,7 +1491,7 @@ class StockAccountService:
                 'total_investment': total_investment,
                 'fee_collected': fee,
                 'net_pool': net_pool,
-                'order_count': len(holding_orders),
+                'order_count': len(unsettled_orders),
                 'participant_count': returned_count,
                 'total_returned': float(total_returned),
                 'booth_final_prices': booth_final_prices,

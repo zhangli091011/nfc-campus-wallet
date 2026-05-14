@@ -26,7 +26,7 @@ from core.exceptions import (
     BusinessLogicError
 )
 from models.user import User
-from services.stock_account_service import StockAccountService, INITIAL_STOCK_PRICE
+from services.stock_account_service import StockAccountService, INITIAL_STOCK_PRICE, SELL_DISCOUNT_FACTOR
 from schemas.stock_account import (
     AccountTransferResponse,
     StockBuyRequest,
@@ -592,17 +592,22 @@ async def get_dynamic_prices(
         # 获取6维度经营数据（复用缓存）
         booth_data_cache = getattr(service, '_booth_data_cache', {})
         
+        sell_discount = float(SELL_DISCOUNT_FACTOR)
+        
         result = []
         for booth_id, price in prices.items():
             booth = booth_map.get(booth_id)
             if booth:
                 base_price = float(INITIAL_STOCK_PRICE)
                 data = booth_data_cache.get(booth_id, {})
+                sell_price = round(max(0.50, price * sell_discount), 2)
                 result.append({
                     "booth_id": booth_id,
                     "booth_name": booth.name,
                     "class_name": booth.class_name or "",
                     "current_price": price,
+                    "sell_price": sell_price,
+                    "sell_discount": sell_discount,
                     "base_price": base_price,
                     "change_percent": round((price - base_price) / base_price * 100, 2),
                     # 6维度经营数据
