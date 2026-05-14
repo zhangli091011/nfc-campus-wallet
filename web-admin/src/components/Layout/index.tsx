@@ -84,6 +84,11 @@ const Layout = () => {
       label: '交易流水',
     },
     {
+      key: '/booth-transactions',
+      icon: <ShopOutlined />,
+      label: '商铺流水',
+    },
+    {
       key: '/refunds',
       icon: <CheckCircleOutlined />,
       label: '退款审批',

@@ -2,8 +2,8 @@ import request from '@/utils/request'
 
 export interface Transaction {
   id: number
-  type: 'recharge' | 'pay' | 'refund' | 'correction'
-  amount: number // 单位：分
+  type: 'recharge' | 'pay' | 'refund' | 'correction' | 'cash_payment' | 'stock_buy' | 'stock_sell' | 'loan_issue' | 'loan_fee' | string
+  amount: number
   balance_before: number
   balance_after: number
   participant_id: number
