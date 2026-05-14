@@ -529,6 +529,150 @@ class StockAccountService:
         """兼容旧接口，内部调用 get_dynamic_price"""
         return self.get_dynamic_price(booth_id, event_id)
     
+    # ==================== 公示：股价计算明细 ====================
+    
+    def get_price_breakdown(self, event_id: int) -> Dict:
+        """
+        获取所有摊位股价的详细计算过程（公示用）。
+        
+        返回内容包括：
+        - 资金池信息（总投入、手续费、净池）
+        - 权重配置
+        - 各摊位的6维度原始数据、归一化值、加权得分
+        - 最终股价、分红占比、持股数
+        - 全场总和与排名
+        """
+        # 获取所有活跃摊位（同 _calculate_pari_mutuel_prices 逻辑）
+        all_booths = self.db.query(Booth).filter(
+            Booth.event_id == event_id
+        ).all()
+        if not all_booths:
+            all_booths = self.db.query(Booth).filter(
+                Booth.status == 'active'
+            ).all()
+        
+        if not all_booths:
+            return {
+                'pool_info': {'total_investment': 0, 'fee': 0, 'net_pool': 0, 'fee_rate': float(OFFICIAL_FEE_RATE)},
+                'weights': {k: float(v) for k, v in SCORE_WEIGHTS.items()},
+                'totals': {},
+                'booths': [],
+                'initial_price': float(INITIAL_STOCK_PRICE),
+            }
+        
+        booth_ids = [b.id for b in all_booths]
+        
+        # 持仓订单
+        orders = self.db.query(StockOrder).filter(
+            StockOrder.event_id == event_id,
+            StockOrder.status.in_(['holding', 'sold'])
+        ).all()
+        
+        booth_shares: Dict[int, int] = {bid: 0 for bid in booth_ids}
+        for o in orders:
+            if o.booth_id in booth_shares:
+                booth_shares[o.booth_id] += o.shares
+        
+        total_investment = sum(float(o.total_amount) for o in orders)
+        fee = total_investment * float(OFFICIAL_FEE_RATE)
+        pool = total_investment - fee
+        
+        # 加载6维度数据
+        self._batch_load_booth_data(booth_ids, event_id)
+        booth_raw_data: Dict[int, Dict] = {}
+        totals = {'revenue': 0.0, 'profit': 0.0, 'traffic': 0, 'avg_ticket': 0.0, 'investor_count': 0, 'growth': 0.0}
+        
+        for booth in all_booths:
+            data = getattr(self, '_booth_data_cache', {}).get(booth.id, {
+                'revenue': 0.0, 'profit': 0.0, 'traffic': 0,
+                'avg_ticket': 0.0, 'investor_count': 0, 'growth': 0.0
+            })
+            booth_raw_data[booth.id] = data
+            for key in totals:
+                totals[key] += data.get(key, 0)
+        
+        # 计算各摊位归一化值与综合分
+        booth_breakdown: List[Dict] = []
+        booth_scores: Dict[int, float] = {}
+        total_score = 0.0
+        
+        for booth in all_booths:
+            data = booth_raw_data[booth.id]
+            
+            norms = {
+                'revenue': data['revenue'] / totals['revenue'] if totals['revenue'] > 0 else 0,
+                'profit': data['profit'] / totals['profit'] if totals['profit'] > 0 else 0,
+                'traffic': data['traffic'] / totals['traffic'] if totals['traffic'] > 0 else 0,
+                'avg_ticket': data['avg_ticket'] / totals['avg_ticket'] if totals['avg_ticket'] > 0 else 0,
+                'investor_count': data['investor_count'] / totals['investor_count'] if totals['investor_count'] > 0 else 0,
+                'growth': data['growth'] / totals['growth'] if totals['growth'] > 0 else 0,
+            }
+            
+            # 加权综合分
+            weighted = {k: float(SCORE_WEIGHTS[k]) * v for k, v in norms.items()}
+            score = sum(weighted.values())
+            score = max(score, 0.001)  # 保底分
+            
+            booth_scores[booth.id] = score
+            total_score += score
+            
+            booth_breakdown.append({
+                'booth_id': booth.id,
+                'booth_name': booth.name,
+                'class_name': booth.class_name or '',
+                'shares': booth_shares.get(booth.id, 0),
+                'raw': {k: round(v, 4) for k, v in data.items()},
+                'normalized': {k: round(v, 6) for k, v in norms.items()},
+                'weighted': {k: round(v, 6) for k, v in weighted.items()},
+                'score': round(score, 6),
+            })
+        
+        if total_score == 0:
+            total_score = 1.0
+        
+        # 计算最终股价与分红占比
+        for item in booth_breakdown:
+            score = item['score']
+            shares = item['shares']
+            ratio = score / total_score
+            booth_pool = pool * ratio
+            
+            if shares > 0:
+                price = booth_pool / shares
+            else:
+                expected_multiplier = ratio * len(all_booths)
+                price = float(INITIAL_STOCK_PRICE) * max(0.5, min(2.0, expected_multiplier))
+            
+            price = max(0.50, price)
+            base_price = float(INITIAL_STOCK_PRICE)
+            
+            item['ratio'] = round(ratio, 6)
+            item['booth_pool'] = round(booth_pool, 2)
+            item['current_price'] = round(price, 2)
+            item['base_price'] = base_price
+            item['change_percent'] = round((price - base_price) / base_price * 100, 2)
+        
+        # 按综合分降序
+        booth_breakdown.sort(key=lambda x: x['score'], reverse=True)
+        for idx, item in enumerate(booth_breakdown, 1):
+            item['rank'] = idx
+        
+        return {
+            'pool_info': {
+                'total_investment': round(total_investment, 2),
+                'fee': round(fee, 2),
+                'net_pool': round(pool, 2),
+                'fee_rate': float(OFFICIAL_FEE_RATE),
+                'order_count': len(orders),
+                'investor_count': len(set(o.participant_id for o in orders)),
+            },
+            'weights': {k: float(v) for k, v in SCORE_WEIGHTS.items()},
+            'totals': {k: round(v, 4) for k, v in totals.items()},
+            'total_score': round(total_score, 6),
+            'initial_price': float(INITIAL_STOCK_PRICE),
+            'booths': booth_breakdown,
+        }
+    
     # ============ Stock Buy (with Pessimistic Lock) ============
     
     def buy_stock(

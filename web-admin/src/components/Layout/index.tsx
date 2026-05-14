@@ -151,6 +151,11 @@ const Layout = () => {
       label: '股市大屏',
     },
     {
+      key: '/stock-breakdown',
+      icon: <StockOutlined />,
+      label: '股价计算公示',
+    },
+    {
       key: 'bank-credit-dashboard',
       icon: <BankOutlined />,
       label: '央行风控大屏',

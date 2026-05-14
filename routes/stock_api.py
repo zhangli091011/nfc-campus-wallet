@@ -12,7 +12,8 @@ Stock API Routes - 股票交易API
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from sqlalchemy import func
+from typing import List, Optional, Dict
 import logging
 
 from core.database import get_db
@@ -545,6 +546,47 @@ async def get_dynamic_prices(
         )
 
 
+# ============ Price Breakdown (公示) ============
+
+@router.get(
+    "/price-breakdown/{event_id}",
+    summary="获取股价计算明细（公示用）"
+)
+async def get_price_breakdown(
+    event_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    获取所有摊位股价的详细计算过程，用于公示透明化。
+    
+    返回内容：
+    - pool_info: 资金池信息（总投入、手续费、净池）
+    - weights: 6维度权重配置
+    - totals: 全场各维度总和（用于归一化）
+    - total_score: 全场综合分总和
+    - booths: 每个摊位的详细计算过程
+        - raw: 6维度原始数据
+        - normalized: 归一化值（占全场比例）
+        - weighted: 加权后的6维度得分
+        - score: 综合分
+        - ratio: 分红占比
+        - booth_pool: 摊位分到的资金池
+        - shares: 总持股数
+        - current_price: 最终股价
+        - rank: 综合分排名
+    """
+    try:
+        service = StockAccountService(db)
+        breakdown = service.get_price_breakdown(event_id)
+        return breakdown
+    except Exception as e:
+        logger.error(f"获取股价计算明细失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error_code": "INTERNAL_ERROR", "message": "查询失败"}
+        )
+
+
 # ============ K-Line Data ============
 
 @router.get(
@@ -557,41 +599,72 @@ async def get_kline_data(
     db: Session = Depends(get_db)
 ):
     """
-    获取活动下所有摊位的K线数据。
+    获取活动下所有摊位的K线数据（基于Pari-mutuel模型）。
     
-    基于股票订单的时间序列，按指定时间间隔聚合生成K线数据。
-    每根K线包含：开盘价、收盘价、最高价、最低价、成交量。
+    在每个时间窗口结束时快照：
+    - 累计订单（决定每摊位股数）
+    - 累计交易（决定每摊位经营数据）
+    - 应用 Pari-mutuel 公式计算当时的股价
     
-    由于是固定股价模型，K线的价格变化基于累计投资额的变化来模拟。
+    返回每个摊位的完整K线序列。
     """
     from models.stock_account import StockOrder
     from models.booth import Booth
-    from sqlalchemy import func
-    from datetime import datetime, timezone, timedelta
-    from decimal import Decimal
+    from models.transaction import Transaction
+    from datetime import datetime, timedelta
+    from core.timezone import CST
+    from services.stock_account_service import (
+        INITIAL_STOCK_PRICE, OFFICIAL_FEE_RATE, SCORE_WEIGHTS
+    )
     
     try:
         # 获取活动下所有摊位
         booths = db.query(Booth).filter(Booth.event_id == event_id).all()
         if not booths:
+            booths = db.query(Booth).filter(Booth.status == 'active').all()
+        if not booths:
             return []
         
-        booth_map = {b.id: b for b in booths}
+        booth_ids = [b.id for b in booths]
+        base_price = float(INITIAL_STOCK_PRICE)
+        fee_rate = float(OFFICIAL_FEE_RATE)
         
-        # 获取所有订单，按时间排序
+        # 一次性加载所有订单（按时间排序）
         orders = db.query(StockOrder).filter(
-            StockOrder.event_id == event_id
+            StockOrder.event_id == event_id,
+            StockOrder.status.in_(['holding', 'sold', 'settled'])
         ).order_by(StockOrder.created_at.asc()).all()
         
-        if not orders:
-            # 没有订单时，为每个摊位返回一个初始K线点
-            base_price = float(INITIAL_STOCK_PRICE)
+        # 一次性加载所有交易（按时间排序）
+        transactions = db.query(Transaction).filter(
+            Transaction.event_id == event_id,
+            Transaction.booth_id.in_(booth_ids),
+            Transaction.type.in_(['payment', 'cash_payment', 'recharge']),
+            Transaction.amount > 0
+        ).order_by(Transaction.created_at.asc()).all()
+        
+        # 加载成本数据（不随时间变化，一次加载）
+        try:
+            from models.cost_evidence import CostEvidence
+            cost_rows = db.query(
+                CostEvidence.booth_id,
+                func.sum(CostEvidence.amount)
+            ).filter(
+                CostEvidence.booth_id.in_(booth_ids),
+                CostEvidence.status == 'approved'
+            ).group_by(CostEvidence.booth_id).all()
+            cost_map = {r[0]: float(r[1]) for r in cost_rows if r[1]}
+        except Exception:
+            cost_map = {}
+        
+        if not orders and not transactions:
+            now = datetime.now(CST)
             return [{
                 "booth_id": b.id,
                 "booth_name": b.name,
                 "class_name": b.class_name or "",
                 "kline": [{
-                    "time": datetime.now(timezone.utc).strftime("%H:%M"),
+                    "time": now.strftime("%H:%M"),
                     "open": base_price,
                     "close": base_price,
                     "high": base_price,
@@ -601,100 +674,195 @@ async def get_kline_data(
             } for b in booths]
         
         # 确定时间范围
-        first_time = orders[0].created_at
-        last_time = orders[-1].created_at
+        all_times = [o.created_at for o in orders] + [t.created_at for t in transactions]
+        first_time = min(all_times)
+        last_time = max(all_times)
+        # 确保时间范围带时区信息
+        if first_time.tzinfo is None:
+            first_time = first_time.replace(tzinfo=CST)
+        if last_time.tzinfo is None:
+            last_time = last_time.replace(tzinfo=CST)
         
-        # 按摊位分组订单
-        booth_orders = {}
-        for o in orders:
-            if o.booth_id not in booth_orders:
-                booth_orders[o.booth_id] = []
-            booth_orders[o.booth_id].append(o)
+        # 对齐到时间窗口边界
+        first_time = first_time.replace(second=0, microsecond=0)
+        first_time = first_time - timedelta(minutes=first_time.minute % interval)
         
-        base_price = float(INITIAL_STOCK_PRICE)
         interval_delta = timedelta(minutes=interval)
         
+        # 计算窗口边界
+        windows = []
+        current = first_time
+        end_time = last_time + interval_delta
+        while current <= end_time:
+            windows.append(current)
+            current += interval_delta
+        
+        # 为每个时间窗口计算 Pari-mutuel 股价
+        # 用累积索引避免重复扫描
+        order_idx = 0
+        txn_idx = 0
+        
+        # 累积状态
+        cum_shares: Dict[int, int] = {bid: 0 for bid in booth_ids}
+        cum_invest: Dict[int, float] = {bid: 0.0 for bid in booth_ids}
+        cum_revenue: Dict[int, float] = {bid: 0.0 for bid in booth_ids}
+        cum_traffic: Dict[int, int] = {bid: 0 for bid in booth_ids}
+        # 增长率：上一窗口的收入快照
+        prev_revenue: Dict[int, float] = {bid: 0.0 for bid in booth_ids}
+        
+        # 每个摊位的K线序列
+        booth_klines: Dict[int, list] = {bid: [] for bid in booth_ids}
+        prev_prices: Dict[int, float] = {bid: base_price for bid in booth_ids}
+        window_volumes: Dict[int, int] = {bid: 0 for bid in booth_ids}
+        
+        def compute_prices_now(growth_factor: Dict[int, float]) -> Dict[int, float]:
+            """根据当前累积状态计算各摊位股价"""
+            total_shares = sum(cum_shares.values())
+            if total_shares == 0:
+                return {bid: base_price for bid in booth_ids}
+            
+            total_investment = sum(cum_invest.values())
+            pool = total_investment * (1 - fee_rate)
+            
+            # 计算各维度总和（归一化用）
+            totals_rev = sum(cum_revenue.values()) or 1
+            totals_traf = sum(cum_traffic.values()) or 1
+            totals_profit = sum(
+                (cum_revenue[b] - cost_map.get(b, cum_revenue[b] * 0.3))
+                for b in booth_ids
+            ) or 1
+            totals_avg = sum(
+                (cum_revenue[b] / cum_traffic[b]) if cum_traffic[b] > 0 else 0
+                for b in booth_ids
+            ) or 1
+            totals_growth = sum(growth_factor.values()) or 1
+            
+            # 简化：使用 4 个维度（投资人数维度暂略）
+            scores = {}
+            total_score = 0.0
+            for bid in booth_ids:
+                rev = cum_revenue[bid]
+                profit = max(0, rev - cost_map.get(bid, rev * 0.3))
+                avg_ticket = (rev / cum_traffic[bid]) if cum_traffic[bid] > 0 else 0
+                growth = growth_factor.get(bid, 0)
+                
+                norm_r = rev / totals_rev if totals_rev > 0 else 0
+                norm_p = profit / totals_profit if totals_profit > 0 else 0
+                norm_t = cum_traffic[bid] / totals_traf if totals_traf > 0 else 0
+                norm_a = avg_ticket / totals_avg if totals_avg > 0 else 0
+                norm_g = growth / totals_growth if totals_growth > 0 else 0
+                
+                # 简化权重（K线展示用）：4维度
+                score = 0.25 * norm_r + 0.30 * norm_p + 0.20 * norm_t + 0.15 * norm_a + 0.10 * norm_g
+                score = max(score, 0.001)
+                scores[bid] = score
+                total_score += score
+            
+            if total_score == 0:
+                total_score = 1.0
+            
+            prices = {}
+            for bid in booth_ids:
+                shares = cum_shares[bid]
+                if shares > 0:
+                    booth_pool = pool * scores[bid] / total_score
+                    prices[bid] = max(0.5, round(booth_pool / shares, 2))
+                else:
+                    prices[bid] = base_price
+            return prices
+        
+        for window_idx, window_start in enumerate(windows):
+            window_end = window_start + interval_delta
+            
+            # 重置每窗口成交量
+            window_volumes = {bid: 0 for bid in booth_ids}
+            
+            # 推进订单游标到本窗口末尾
+            while order_idx < len(orders):
+                o_time = orders[order_idx].created_at
+                if o_time.tzinfo is None:
+                    o_time = o_time.replace(tzinfo=CST)
+                if o_time >= window_end:
+                    break
+                if orders[order_idx].booth_id in cum_shares:
+                    bid = orders[order_idx].booth_id
+                    cum_shares[bid] += orders[order_idx].shares
+                    cum_invest[bid] += float(orders[order_idx].total_amount)
+                    window_volumes[bid] += orders[order_idx].shares
+                order_idx += 1
+            
+            # 推进交易游标到本窗口末尾
+            while txn_idx < len(transactions):
+                t_time = transactions[txn_idx].created_at
+                if t_time.tzinfo is None:
+                    t_time = t_time.replace(tzinfo=CST)
+                if t_time >= window_end:
+                    break
+                if transactions[txn_idx].booth_id in cum_revenue:
+                    bid = transactions[txn_idx].booth_id
+                    cum_revenue[bid] += float(transactions[txn_idx].amount)
+                    cum_traffic[bid] += 1
+                txn_idx += 1
+            
+            # 计算增长率：本窗口收入 / 历史累积收入
+            growth_factor = {}
+            for bid in booth_ids:
+                delta_rev = cum_revenue[bid] - prev_revenue[bid]
+                older_rev = prev_revenue[bid]
+                if older_rev > 0:
+                    growth_factor[bid] = delta_rev / older_rev
+                elif delta_rev > 0:
+                    growth_factor[bid] = 1.0
+                else:
+                    growth_factor[bid] = 0.0
+            
+            # 计算本窗口结束时的股价
+            current_prices = compute_prices_now(growth_factor)
+            
+            # 写入K线
+            time_str = window_start.strftime("%H:%M")
+            for bid in booth_ids:
+                open_p = prev_prices[bid]
+                close_p = current_prices[bid]
+                # 高低价：在窗口有交易时，假设波动幅度，否则等于开收盘
+                if window_volumes[bid] > 0:
+                    high_p = max(open_p, close_p) * 1.01
+                    low_p = min(open_p, close_p) * 0.99
+                else:
+                    high_p = max(open_p, close_p)
+                    low_p = min(open_p, close_p)
+                
+                booth_klines[bid].append({
+                    "time": time_str,
+                    "open": round(open_p, 2),
+                    "close": round(close_p, 2),
+                    "high": round(high_p, 2),
+                    "low": round(low_p, 2),
+                    "volume": window_volumes[bid],
+                })
+                prev_prices[bid] = close_p
+            
+            # 更新增长率基线
+            prev_revenue = dict(cum_revenue)
+        
+        # 构建结果
         result = []
         for booth in booths:
-            orders_list = booth_orders.get(booth.id, [])
-            
-            if not orders_list:
-                # 没有订单的摊位，生成平线
-                result.append({
-                    "booth_id": booth.id,
-                    "booth_name": booth.name,
-                    "class_name": booth.class_name or "",
-                    "kline": [{
-                        "time": first_time.strftime("%H:%M"),
-                        "open": base_price,
-                        "close": base_price,
-                        "high": base_price,
-                        "low": base_price,
-                        "volume": 0,
-                    }]
-                })
-                continue
-            
-            # 生成K线数据
-            # 模拟股价：基于累计投资额的增长来计算价格变化
-            # price = base_price * (1 + cumulative_shares / 100)
-            kline_data = []
-            current_start = first_time
-            cumulative_shares = 0
-            prev_close = base_price
-            
-            while current_start <= last_time + interval_delta:
-                current_end = current_start + interval_delta
-                
-                # 找到这个时间窗口内的订单
-                window_orders = [
-                    o for o in orders_list 
-                    if current_start <= o.created_at < current_end
-                ]
-                
-                if window_orders:
-                    window_shares = sum(o.shares for o in window_orders)
-                    
-                    # 计算这个窗口内的价格变化
-                    open_price = prev_close
-                    prices_in_window = []
-                    
-                    for o in window_orders:
-                        cumulative_shares += o.shares
-                        price = base_price * (1 + cumulative_shares / 100.0)
-                        prices_in_window.append(price)
-                    
-                    close_price = prices_in_window[-1]
-                    high_price = max(open_price, max(prices_in_window))
-                    low_price = min(open_price, min(prices_in_window))
-                    
-                    kline_data.append({
-                        "time": current_start.strftime("%H:%M"),
-                        "open": round(open_price, 2),
-                        "close": round(close_price, 2),
-                        "high": round(high_price, 2),
-                        "low": round(low_price, 2),
-                        "volume": window_shares,
-                    })
-                    prev_close = close_price
-                else:
-                    # 没有交易的时间段，价格不变
-                    kline_data.append({
-                        "time": current_start.strftime("%H:%M"),
-                        "open": round(prev_close, 2),
-                        "close": round(prev_close, 2),
-                        "high": round(prev_close, 2),
-                        "low": round(prev_close, 2),
-                        "volume": 0,
-                    })
-                
-                current_start = current_end
-            
+            kline = booth_klines[booth.id]
+            if not kline:
+                kline = [{
+                    "time": datetime.now(CST).strftime("%H:%M"),
+                    "open": base_price,
+                    "close": base_price,
+                    "high": base_price,
+                    "low": base_price,
+                    "volume": 0,
+                }]
             result.append({
                 "booth_id": booth.id,
                 "booth_name": booth.name,
                 "class_name": booth.class_name or "",
-                "kline": kline_data,
+                "kline": kline,
             })
         
         # 按最新收盘价降序

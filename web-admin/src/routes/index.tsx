@@ -16,6 +16,7 @@ import RefundMonitor from '@/pages/RefundMonitor'
 import UserManagement from '@/pages/UserManagement'
 import CostEvidenceReview from '@/pages/CostEvidenceReview'
 import StockDashboard from '@/pages/StockDashboard'
+import StockBreakdown from '@/pages/StockBreakdown'
 import InvestmentManagement from '@/pages/Investment'
 import {
   ReportsDashboard,
@@ -112,6 +113,9 @@ const AppRoutes = () => {
         
         {/* 投资管理 */}
         <Route path="investment" element={<InvestmentManagement />} />
+        
+        {/* 股价计算公示 */}
+        <Route path="stock-breakdown" element={<StockBreakdown />} />
         
         {/* 应用版本管理 */}
         <Route path="app-update" element={<AppUpdate />} />
