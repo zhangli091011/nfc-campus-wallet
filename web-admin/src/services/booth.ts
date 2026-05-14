@@ -6,6 +6,7 @@ export interface Booth {
   name: string
   class_name: string
   status: 'active' | 'inactive' | 'closed'
+  stock_enabled?: boolean
   created_at: string
 }
 
@@ -90,4 +91,15 @@ export const assignCashierToBooth = (boothId: number, userId: number) => {
 // 删除摊位
 export const deleteBooth = (id: number) => {
   return request.delete(`/booths/${id}`)
+}
+
+// 设置摊位是否允许参与股票市场
+export const updateBoothStockEnabled = (boothId: number, stockEnabled: boolean) => {
+  return request.patch<any, {
+    id: number
+    name: string
+    class_name: string
+    stock_enabled: boolean
+    message: string
+  }>(`/booths/${boothId}/stock-enabled`, { stock_enabled: stockEnabled })
 }

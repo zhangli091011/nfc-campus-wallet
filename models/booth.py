@@ -49,6 +49,12 @@ class Booth(Base):
         index=True
     )
     status = Column(String(20), nullable=False, default='active')
+    stock_enabled = Column(
+        Integer,
+        nullable=False,
+        default=1,
+        comment='是否允许参与股票市场: 1=允许, 0=不允许'
+    )
     created_at = Column(
         DateTime,
         nullable=False,

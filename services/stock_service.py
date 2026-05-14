@@ -65,6 +65,10 @@ class StockService:
         if not booth:
             raise ResourceNotFoundError(f"摊位不存在: {booth_id}")
         
+        # 验证摊位是否允许参与股票市场
+        if not getattr(booth, 'stock_enabled', 1):
+            raise ValidationError(f"摊位「{booth.name}」未开启股票参与权限")
+        
         # 验证活动存在
         event = self.db.query(Event).filter(Event.id == event_id).first()
         if not event:

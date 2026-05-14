@@ -390,6 +390,60 @@ async def delete_booth(
     return None
 
 
+class BoothStockEnabledRequest(BaseModel):
+    """请求体：设置摊位是否允许参与股票市场"""
+    stock_enabled: bool = Field(..., description="是否允许参与股票市场")
+
+
+@router.patch("/booths/{booth_id}/stock-enabled")
+async def update_booth_stock_enabled(
+    booth_id: int,
+    request: BoothStockEnabledRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    设置摊位是否允许参与股票市场。
+    
+    仅 super_admin 和 event_admin 可执行此操作。
+    
+    Path Parameters:
+        - booth_id: 摊位ID
+    
+    Request Body:
+        - stock_enabled: 是否允许参与股票市场
+    
+    Returns:
+        更新后的摊位信息
+    """
+    from models.booth import Booth
+
+    booth = db.query(Booth).filter(Booth.id == booth_id).first()
+    if booth is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"摊位 {booth_id} 不存在"
+        )
+
+    booth.stock_enabled = 1 if request.stock_enabled else 0
+    db.commit()
+    db.refresh(booth)
+
+    logger.info(
+        f"Booth stock_enabled updated: id={booth_id}, name={booth.name}, "
+        f"stock_enabled={request.stock_enabled}, operator={current_user.username}"
+    )
+
+    return {
+        "id": booth.id,
+        "name": booth.name,
+        "class_name": booth.class_name,
+        "stock_enabled": bool(booth.stock_enabled),
+        "message": f"摊位「{booth.name}」{'已开启' if request.stock_enabled else '已关闭'}股票参与权限"
+    }
+
+
 @router.post("/booths/{booth_id}/pay", response_model=TransactionResponse)
 async def process_booth_payment(
     booth_id: int,

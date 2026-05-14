@@ -13,6 +13,7 @@ import {
   Typography,
   Divider,
   List,
+  Switch,
 } from 'antd'
 import {
   PlusOutlined,
@@ -30,6 +31,7 @@ import {
   generateBoothCredentials,
   getBoothCashiers,
   assignCashierToBooth,
+  updateBoothStockEnabled,
   type Booth,
   type CreateBoothRequest,
   type UpdateBoothRequest,
@@ -237,6 +239,17 @@ const BoothManagement = () => {
     }
   }
 
+  // ========== 股票参与控制 ==========
+  const handleToggleStockEnabled = async (booth: Booth, enabled: boolean) => {
+    try {
+      const res = await updateBoothStockEnabled(booth.id, enabled)
+      message.success(res.message || (enabled ? '已开启股票权限' : '已关闭股票权限'))
+      loadBooths()
+    } catch (error) {
+      message.error('操作失败')
+    }
+  }
+
   const columns = [
     {
       title: 'ID',
@@ -271,6 +284,19 @@ const BoothManagement = () => {
         }
         return <Tag color={colorMap[status]}>{textMap[status]}</Tag>
       },
+    },
+    {
+      title: '股票',
+      dataIndex: 'stock_enabled',
+      key: 'stock_enabled',
+      width: 80,
+      render: (stockEnabled: boolean, record: Booth) => (
+        <Switch
+          checked={stockEnabled !== false}
+          size="small"
+          onChange={(checked) => handleToggleStockEnabled(record, checked)}
+        />
+      ),
     },
     {
       title: '创建时间',

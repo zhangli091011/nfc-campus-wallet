@@ -56,6 +56,7 @@ class BoothResponse(BaseModel):
     name: str
     class_name: str
     status: str
+    stock_enabled: bool = True
     created_at: datetime
     
     class Config:
@@ -67,6 +68,7 @@ class BoothResponse(BaseModel):
                 "name": "美食摊",
                 "class_name": "高一(1)班",
                 "status": "active",
+                "stock_enabled": True,
                 "created_at": "2024-03-01T08:00:00Z"
             }
         }
