@@ -253,7 +253,7 @@ class StockAccountService:
         event_id: int,
         booth_id: int,
         shares: int
-    ) -> Tuple[int, Account]:
+    ) -> Tuple[int, Account, float]:
         """
         抛售股票（以当前股价结算，资金返回主账户）
         
@@ -264,7 +264,7 @@ class StockAccountService:
             shares: 抛售股数
             
         Returns:
-            Tuple[int, Account]: 实际卖出股数、主账户
+            Tuple[int, Account, float]: 实际卖出股数、主账户、卖出单价
             
         Raises:
             ResourceNotFoundError: 参与者、摊位或账户不存在
@@ -328,8 +328,8 @@ class StockAccountService:
                     f"账户不存在: participant_id={participant.id}, event_id={event_id}"
                 )
             
-            # 5. 以当前股价卖出
-            sell_price = DEFAULT_STOCK_PRICE
+            # 5. 以当前动态股价卖出
+            sell_price = Decimal(str(self.get_dynamic_price(booth_id, event_id)))
             total_amount = sell_price * shares
             
             # 6. 按 FIFO 顺序消减持仓订单
@@ -403,7 +403,7 @@ class StockAccountService:
                 f"balance: {balance_before}→{balance_after}元"
             )
             
-            return shares, account
+            return shares, account, float(sell_price)
         
         except (ResourceNotFoundError, ValidationError, BusinessLogicError):
             self.db.rollback()

@@ -97,7 +97,6 @@ const StockDashboard: React.FC = () => {
   const loadData = useCallback(async () => {
     if (!selectedEventId) return;
     try {
-      setLoading(true);
       const [statsRes, boothRes] = await Promise.all([
         request.get(`/stock/stats/${selectedEventId}`).catch(() => null),
         request.get(`/stock/all-booth-stats/${selectedEventId}`).catch(() => []),
@@ -185,20 +184,17 @@ const StockDashboard: React.FC = () => {
     if (selectedEventId) {
       loadData();
       if (refreshTimer.current) clearInterval(refreshTimer.current);
-      refreshTimer.current = setInterval(loadData, 30000);
+      refreshTimer.current = setInterval(loadData, 10000);
     }
     return () => {
       if (refreshTimer.current) clearInterval(refreshTimer.current);
     };
   }, [selectedEventId, loadData]);
 
-  // 初始化/更新图表
+  // 初始化图表
   useEffect(() => {
-    if (chartRef.current && boothData.length > 0) {
-      if (!chartInstance.current) {
-        chartInstance.current = echarts.init(chartRef.current);
-      }
-      updateChart();
+    if (chartRef.current && !chartInstance.current) {
+      chartInstance.current = echarts.init(chartRef.current);
     }
     return () => {
       if (chartInstance.current) {
@@ -206,6 +202,13 @@ const StockDashboard: React.FC = () => {
         chartInstance.current = null;
       }
     };
+  }, []);
+
+  // 更新图表数据
+  useEffect(() => {
+    if (chartInstance.current && boothData.length > 0) {
+      updateChart();
+    }
   }, [boothData, updateChart]);
 
   // 窗口大小变化时重新调整图表
@@ -263,12 +266,10 @@ const StockDashboard: React.FC = () => {
             <div className={index === 0 ? 'text-gold text-lg font-bold' : 'text-white text-lg'}>
               ¥{formatNumber(price)}
             </div>
-            {record.is_settled && (
-              <div className={isUp ? 'text-green-400' : 'text-red-400'}>
-                {isUp ? <RiseOutlined /> : <FallOutlined />}
-                {' '}{isUp ? '+' : ''}{change.toFixed(2)}%
-              </div>
-            )}
+            <div className={isUp ? 'text-green-400' : 'text-red-400'}>
+              {isUp ? <RiseOutlined /> : <FallOutlined />}
+              {' '}{isUp ? '+' : ''}{change.toFixed(2)}%
+            </div>
           </div>
         );
       },

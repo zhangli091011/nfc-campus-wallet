@@ -168,15 +168,13 @@ async def sell_stock(
     """
     try:
         service = StockAccountService(db)
-        shares_sold, account = service.sell_stock(
+        shares_sold, account, sell_price = service.sell_stock(
             card_uid=request.card_uid,
             event_id=request.event_id,
             booth_id=request.booth_id,
             shares=request.shares
         )
         
-        from services.stock_account_service import DEFAULT_STOCK_PRICE
-        sell_price = float(DEFAULT_STOCK_PRICE)
         total_amount = sell_price * shares_sold
         
         # 获取摊位名称
