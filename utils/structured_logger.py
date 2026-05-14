@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from decimal import Decimal
 
+from core.timezone import CST
+
 
 class StructuredLogger:
     """
@@ -39,7 +41,7 @@ class StructuredLogger:
             data: Dictionary of structured data to log
         """
         log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(CST).isoformat(),
             "event_type": event_type,
             **data
         }

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from core.database import Base
+from core.timezone import CST
 
 
 class Stock(Base):
@@ -71,13 +72,13 @@ class Stock(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(CST)
     )
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(CST),
+        onupdate=lambda: datetime.now(CST)
     )
     
     # Relationships
@@ -214,7 +215,7 @@ class StockPurchase(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(CST),
         index=True
     )
     settled_at = Column(
@@ -382,7 +383,7 @@ class BoothSettlement(Base):
     settled_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(CST)
     )
     
     # Relationships

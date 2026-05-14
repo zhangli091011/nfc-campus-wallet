@@ -14,6 +14,7 @@ import logging
 
 from core.database import get_db
 from core.security import get_current_user, RoleChecker
+from core.timezone import CST
 from models.transaction import Transaction
 from models.booth import Booth
 from models.participant import Participant
@@ -215,7 +216,7 @@ async def get_refund_monitor_stats(
         top_refund_booths = booth_ranks[:3]
 
         # ── 3. 异常预警 ──
-        now = datetime.now(timezone.utc)
+        now = datetime.now(CST)
         window_start = now - timedelta(minutes=alert_window_minutes)
 
         recent_refunds_query = db.query(

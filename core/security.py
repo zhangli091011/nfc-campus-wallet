@@ -25,6 +25,7 @@ from core.exceptions import (
     TimestampInvalidError,
     SignatureVerificationError
 )
+from core.timezone import CST
 
 
 def generate_signature(
@@ -109,7 +110,7 @@ def validate_timestamp(timestamp: int, time_window: int = 60) -> Tuple[bool, Opt
         TimestampInvalidError: If timestamp is in the future
     """
     # Get current server time in UTC
-    current_time = datetime.now(timezone.utc).timestamp()
+    current_time = datetime.now(CST).timestamp()
     time_diff = current_time - timestamp
     
     # Check if timestamp is too old (expired)
@@ -280,7 +281,7 @@ def create_access_token(
         - Requirement 4.5: Set JWT token expiration time based on configuration
     """
     # Calculate expiration time
-    now = datetime.now(timezone.utc)
+    now = datetime.now(CST)
     expiration = now + timedelta(minutes=jwt_expiration_minutes)
     
     # Build token payload

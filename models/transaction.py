@@ -12,6 +12,7 @@ from decimal import Decimal
 import enum
 
 from core.database import Base
+from core.timezone import CST
 
 
 class TransactionType(enum.Enum):
@@ -127,7 +128,7 @@ class Transaction(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(CST),
         index=True
     )
     

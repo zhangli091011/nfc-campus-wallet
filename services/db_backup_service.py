@@ -12,6 +12,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.timezone import CST
+
 logger = logging.getLogger(__name__)
 
 # 备份配置
@@ -80,7 +82,7 @@ class DatabaseBackupService:
 
     def _do_backup(self):
         """执行 mysqldump 全量备份"""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(CST)
         timestamp = now.strftime("%Y%m%d_%H%M%S")
         filename = f"nfc_backup_{timestamp}.sql"
         filepath = os.path.join(BACKUP_DIR, filename)

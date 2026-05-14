@@ -14,6 +14,7 @@ import logging
 
 from models.random_discount import RandomDiscountSetting, RandomDiscountRecord
 from core.exceptions import ResourceNotFoundError, ValidationError
+from core.timezone import CST
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +324,7 @@ class RandomDiscountService:
         ).filter(RandomDiscountRecord.event_id == event_id).first()
         
         # 今日统计
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(CST).replace(hour=0, minute=0, second=0, microsecond=0)
         today_stats = self.db.query(
             func.count(RandomDiscountRecord.id).label('count'),
             func.coalesce(func.sum(RandomDiscountRecord.discount_amount), 0).label('total_amount')
@@ -390,7 +391,7 @@ class RandomDiscountService:
     
     def _get_today_discount_count(self, event_id: int, participant_id: int) -> int:
         """获取参与者今日已享受的立减次数"""
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(CST).replace(hour=0, minute=0, second=0, microsecond=0)
         
         count = self.db.query(func.count(RandomDiscountRecord.id)).filter(
             and_(

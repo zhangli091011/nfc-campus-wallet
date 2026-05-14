@@ -9,6 +9,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
 from core.database import Base
+from core.timezone import CST
 
 
 class RandomDiscountSetting(Base):
@@ -36,9 +37,9 @@ class RandomDiscountSetting(Base):
     max_discount_per_transaction = Column(Numeric(12, 2), nullable=True)
     min_payment_amount = Column(Numeric(12, 2), nullable=False, default=1.00)
     daily_limit_per_user = Column(Integer, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc),
-                        onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(CST))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(CST),
+                        onupdate=lambda: datetime.now(CST))
     
     # Relationships
     event = relationship("Event", backref="random_discount_setting")
@@ -65,7 +66,7 @@ class RandomDiscountRecord(Base):
     original_amount = Column(Numeric(12, 2), nullable=False)
     discount_amount = Column(Numeric(12, 2), nullable=False)
     actual_amount = Column(Numeric(12, 2), nullable=False)
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(CST))
     
     # Relationships
     event = relationship("Event", overlaps="random_discount_setting,records")

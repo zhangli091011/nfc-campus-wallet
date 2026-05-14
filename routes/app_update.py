@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 from core.database import get_db
 from core.security import get_current_user, RoleChecker
+from core.timezone import CST
 from models.user import User
 
 logger = logging.getLogger(__name__)
@@ -159,7 +160,7 @@ async def upload_apk(
         "force_update": force_update,
         "filename": filename,
         "file_size": file_size,
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_at": datetime.now(CST).isoformat(),
         "uploaded_by": current_user.username,
     }
     _save_version_info(version_info)

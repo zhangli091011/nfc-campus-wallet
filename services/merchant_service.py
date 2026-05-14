@@ -1,4 +1,4 @@
-﻿"""
+"""
 Merchant service for NFC Campus E-Wallet System.
 
 商户服务：处理商户注册、商铺管理、收入统计、交易记录等业务逻辑。
@@ -11,6 +11,7 @@ from datetime import datetime, timezone, timedelta
 import logging
 
 from models.user import User
+from core.timezone import CST
 from models.booth import Booth
 from models.product import Product
 from models.transaction import Transaction
@@ -581,7 +582,7 @@ class MerchantService:
         ).first()
         
         # 今日收入和今日交易数
-        today_start = datetime.now(timezone.utc).replace(
+        today_start = datetime.now(CST).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         
@@ -639,12 +640,12 @@ class MerchantService:
         
         # 日期过滤
         if start_date:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=CST)
             query = query.filter(Transaction.created_at >= start_dt)
         
         if end_date:
             end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(
-                hour=23, minute=59, second=59, tzinfo=timezone.utc
+                hour=23, minute=59, second=59, tzinfo=CST
             )
             query = query.filter(Transaction.created_at <= end_dt)
         

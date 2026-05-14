@@ -25,6 +25,7 @@ import logging
 
 from core.database import get_db
 from core.security import get_current_user, RoleChecker
+from core.timezone import CST
 from models.account import Account
 from models.participant import Participant
 from models.transaction import Transaction
@@ -474,7 +475,7 @@ async def issue_loan(
             loan_issue_txn_id=txn_loan_issue.id,
             loan_fee_txn_id=txn_loan_fee.id,
             operator_name=current_user.username,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(CST).isoformat(),
             # 兼容安卓端
             disbursed_amount=float(actual_grant),
             new_balance=float(balance_after),

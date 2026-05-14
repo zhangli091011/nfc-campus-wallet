@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Tuple
 import logging
 
 from models.stock import Stock, StockPurchase, BoothSettlement
+from core.timezone import CST
 from models.booth import Booth
 from models.participant import Participant
 from models.account import Account
@@ -524,7 +525,7 @@ class StockService:
                 purchase.settlement_price = final_price
                 purchase.settlement_amount = final_price * purchase.quantity
                 purchase.status = 'settled'
-                purchase.settled_at = datetime.now(timezone.utc)
+                purchase.settled_at = datetime.now(CST)
         
         # 8. 提交事务
         self.db.commit()
@@ -542,7 +543,7 @@ class StockService:
             'fee_rate': fee_rate,
             'booth_count': len(settlements),
             'booths': settlements,
-            'settled_at': datetime.now(timezone.utc)
+            'settled_at': datetime.now(CST)
         }
     
     def get_settlement(self, booth_id: int) -> Optional[BoothSettlement]:

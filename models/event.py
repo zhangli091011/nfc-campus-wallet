@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from core.database import Base
+from core.timezone import CST
 
 
 class Event(Base):
@@ -45,13 +46,13 @@ class Event(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(CST)
     )
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(CST),
+        onupdate=lambda: datetime.now(CST)
     )
     
     # Relationships
@@ -88,7 +89,7 @@ class Event(Base):
     
     def is_active(self) -> bool:
         """Check if event is currently active."""
-        now = datetime.now(timezone.utc).date()
+        now = datetime.now(CST).date()
         
         # Convert to date objects for comparison
         start_date = self.start_date
@@ -115,7 +116,7 @@ class Event(Base):
     
     def is_within_time_range(self) -> bool:
         """Check if current time is within event time range."""
-        now = datetime.now(timezone.utc).date()
+        now = datetime.now(CST).date()
         
         # Convert to date objects for comparison
         start_date = self.start_date

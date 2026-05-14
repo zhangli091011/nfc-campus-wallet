@@ -20,6 +20,7 @@ import logging
 
 from core.database import get_db
 from core.security import get_current_user
+from core.timezone import CST
 from models.account import Account
 from models.transaction import Transaction
 from models.booth import Booth
@@ -278,7 +279,7 @@ async def process_refund(
             booth_name=booth_name,
             reason=req.reason,
             operator_name=current_user.username,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(CST).isoformat(),
             # 兼容安卓端
             refunded_amount=float(refund_amount),
             new_balance=float(balance_after),

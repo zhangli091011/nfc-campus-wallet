@@ -10,6 +10,8 @@ import hmac
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
+from core.timezone import CST
+
 
 class SignatureError(Exception):
     """Base exception for signature-related errors."""
@@ -113,7 +115,7 @@ def validate_timestamp(timestamp: int, time_window: int = 60) -> Tuple[bool, Opt
         TimestampInvalidError: If timestamp is in the future
     """
     # Get current server time in UTC
-    current_time = datetime.now(timezone.utc).timestamp()
+    current_time = datetime.now(CST).timestamp()
     time_diff = current_time - timestamp
     
     # Check if timestamp is too old (expired)

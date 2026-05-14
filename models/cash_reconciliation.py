@@ -9,6 +9,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
 from core.database import Base
+from core.timezone import CST
 
 
 class CashReconciliation(Base):
@@ -75,7 +76,7 @@ class CashReconciliation(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(CST),
         index=True
     )
     

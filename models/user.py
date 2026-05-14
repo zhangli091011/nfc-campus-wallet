@@ -9,6 +9,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
 from core.database import Base
+from core.timezone import CST
 
 
 class User(Base):
@@ -41,13 +42,13 @@ class User(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(CST)
     )
     updated_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(CST),
+        onupdate=lambda: datetime.now(CST)
     )
     
     # Relationships

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from core.database import Base
+from core.timezone import CST
 
 
 class StockOrder(Base):
@@ -86,7 +87,7 @@ class StockOrder(Base):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(CST)
     )
     settled_at = Column(DateTime, nullable=True)
     

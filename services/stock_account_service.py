@@ -19,6 +19,7 @@ from typing import List, Optional, Dict, Tuple
 import logging
 
 from models.stock_account import StockOrder
+from core.timezone import CST
 from models.booth import Booth
 from models.participant import Participant
 from models.account import Account
@@ -719,7 +720,7 @@ class StockAccountService:
                     order.status = 'sold'
                     order.settlement_price = sell_price
                     order.settlement_amount = sell_price * order.shares
-                    order.settled_at = datetime.now(timezone.utc)
+                    order.settled_at = datetime.now(CST)
                 else:
                     # 部分卖出 - 拆单
                     sold_shares = remaining_to_sell
@@ -731,7 +732,7 @@ class StockAccountService:
                     order.status = 'sold'
                     order.settlement_price = sell_price
                     order.settlement_amount = sell_price * sold_shares
-                    order.settled_at = datetime.now(timezone.utc)
+                    order.settled_at = datetime.now(CST)
                     
                     # 创建新订单保留剩余持仓
                     new_order = StockOrder(
@@ -1037,7 +1038,7 @@ class StockAccountService:
                     order.settlement_price = final_price
                     order.settlement_amount = final_price * order.shares
                     order.status = 'settled'
-                    order.settled_at = datetime.now(timezone.utc)
+                    order.settled_at = datetime.now(CST)
                 
                 booth_results.append({
                     'booth_id': booth.id,
@@ -1073,7 +1074,7 @@ class StockAccountService:
                 'total_score': total_score,
                 'booth_count': len(booth_results),
                 'booths': booth_results,
-                'settled_at': datetime.now(timezone.utc)
+                'settled_at': datetime.now(CST)
             }
         
         except Exception as e:

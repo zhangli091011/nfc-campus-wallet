@@ -17,6 +17,7 @@ import shutil
 
 from core.database import get_db
 from core.security import get_current_user, RoleChecker
+from core.timezone import CST
 from models.user import User
 from models.booth import Booth
 from models.cost_evidence import CostEvidence
@@ -836,7 +837,7 @@ async def admin_review_cost_evidence(
         new_status = 'approved' if request.action == 'approve' else 'rejected'
         evidence.status = new_status
         evidence.reviewed_by = current_user.id
-        evidence.reviewed_at = datetime.now(timezone.utc)
+        evidence.reviewed_at = datetime.now(CST)
 
         db.commit()
         db.refresh(evidence)
@@ -905,7 +906,7 @@ async def admin_batch_review_cost_evidences(
             )
 
         new_status = 'approved' if action == 'approve' else 'rejected'
-        now = datetime.now(timezone.utc)
+        now = datetime.now(CST)
 
         updated_count = db.query(CostEvidence).filter(
             CostEvidence.id.in_(ids),
