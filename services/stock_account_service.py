@@ -678,17 +678,24 @@ class StockAccountService:
     
     def get_all_booth_stats(self, event_id: int) -> list:
         """获取活动下所有摊位的股票统计（包括未被购买的摊位）"""
-        # 先获取活动下所有摊位
+        # 获取所有活跃摊位（优先按 event_id 查，如果没有则获取所有活跃摊位）
         all_booths = self.db.query(Booth).filter(
             Booth.event_id == event_id
         ).all()
         
+        # 如果指定活动下没有摊位，尝试获取所有活跃摊位
+        if not all_booths:
+            all_booths = self.db.query(Booth).filter(
+                Booth.status == 'active'
+            ).all()
+        
         if not all_booths:
             return []
         
-        # 获取所有订单
+        # 获取所有订单（不限制 event_id，因为摊位可能跨活动）
+        booth_ids = [b.id for b in all_booths]
         orders = self.db.query(StockOrder).filter(
-            StockOrder.event_id == event_id
+            StockOrder.booth_id.in_(booth_ids)
         ).all()
         
         # 按摊位分组
