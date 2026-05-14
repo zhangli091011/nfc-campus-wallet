@@ -100,6 +100,7 @@ fun InvestmentScreen(
     onSharesChanged: (String) -> Unit,
     onConfirmInvestment: () -> Unit,
     onDismissMessage: () -> Unit,
+    onLogout: () -> Unit = {},
     onTabChanged: (Int) -> Unit = {},
     onHoldingSelected: (HoldingInfo) -> Unit = {},
     onSellSharesChanged: (String) -> Unit = {},
@@ -114,7 +115,7 @@ fun InvestmentScreen(
     Scaffold(
         containerColor = InvestmentColors.Background,
         topBar = {
-            InvestmentTopBar()
+            InvestmentTopBar(onLogout = onLogout)
         },
     ) { padding ->
         Column(
@@ -256,7 +257,7 @@ fun InvestmentScreen(
 // ============================================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun InvestmentTopBar() {
+private fun InvestmentTopBar(onLogout: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -318,6 +319,13 @@ private fun InvestmentTopBar() {
                         fontSize = 12.sp,
                         letterSpacing = 1.sp,
                     ),
+                )
+            }
+            IconButton(onClick = onLogout) {
+                Icon(
+                    imageVector = Icons.Default.Logout,
+                    contentDescription = "退出",
+                    tint = InvestmentColors.GoldSoft,
                 )
             }
         }

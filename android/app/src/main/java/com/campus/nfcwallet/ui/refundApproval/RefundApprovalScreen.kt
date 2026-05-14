@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -44,6 +45,7 @@ fun RefundApprovalScreen(
     onFilterChange: (String) -> Unit,
     onRefresh: () -> Unit,
     onDismissMessage: () -> Unit,
+    onLogout: () -> Unit,
 ) {
     Scaffold(
         containerColor = RefundApprovalColors.Background,
@@ -58,6 +60,9 @@ fun RefundApprovalScreen(
                 actions = {
                     IconButton(onClick = onRefresh) {
                         Icon(Icons.Default.Refresh, "刷新", tint = RefundApprovalColors.AccentBlue)
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.ExitToApp, "退出", tint = RefundApprovalColors.TextDim)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RefundApprovalColors.Background),

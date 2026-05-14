@@ -737,7 +737,7 @@ async def process_cash_payment(
             text("""INSERT INTO transactions 
                     (uid, card_uid, event_id, participant_id, account_id, type, amount, 
                      balance_before, balance_after, merchant_id, remark, operator_id, booth_id, created_at)
-                    VALUES (NULL, NULL, :event_id, 0, NULL, 'cash_payment', :amount,
+                    VALUES (NULL, NULL, :event_id, NULL, NULL, 'cash_payment', :amount,
                      0, 0, NULL, :remark, :operator_id, :booth_id, :created_at)"""),
             {
                 "event_id": event_id,

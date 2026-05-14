@@ -92,6 +92,7 @@ class RefundManagerActivity : ComponentActivity() {
                     onClearSelection = viewModel::clearSelection,
                     onDismissError = viewModel::dismissError,
                     onDismissSuccess = viewModel::dismissSuccess,
+                    onLogout = { logout() },
                 )
             }
         }
@@ -247,6 +248,11 @@ class RefundManagerActivity : ComponentActivity() {
     // -----------------------------------------------------------------
     // 导航
     // -----------------------------------------------------------------
+    private fun logout() {
+        sessionManager.clearSession()
+        navigateToLogin()
+    }
+
     private fun navigateToLogin() {
         startActivity(Intent(this, LoginActivity::class.java))
         finish()

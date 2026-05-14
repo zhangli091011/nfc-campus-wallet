@@ -71,6 +71,7 @@ class InvestmentComposeActivity : ComponentActivity() {
                     onSharesChanged = viewModel::onSharesChanged,
                     onConfirmInvestment = viewModel::onConfirmInvestment,
                     onDismissMessage = viewModel::onDismissMessage,
+                    onLogout = { logout() },
                     onTabChanged = viewModel::onTabChanged,
                     onHoldingSelected = viewModel::onHoldingSelected,
                     onSellSharesChanged = viewModel::onSellSharesChanged,
@@ -120,6 +121,11 @@ class InvestmentComposeActivity : ComponentActivity() {
                 viewModel.onNfcCardDetected(uid)
             }
         }
+    }
+
+    private fun logout() {
+        sessionManager.clearSession()
+        navigateToLogin()
     }
 
     private fun navigateToLogin() {

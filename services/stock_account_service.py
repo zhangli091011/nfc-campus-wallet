@@ -677,7 +677,16 @@ class StockAccountService:
         }
     
     def get_all_booth_stats(self, event_id: int) -> list:
-        """获取活动下所有摊位的股票统计"""
+        """获取活动下所有摊位的股票统计（包括未被购买的摊位）"""
+        # 先获取活动下所有摊位
+        all_booths = self.db.query(Booth).filter(
+            Booth.event_id == event_id
+        ).all()
+        
+        if not all_booths:
+            return []
+        
+        # 获取所有订单
         orders = self.db.query(StockOrder).filter(
             StockOrder.event_id == event_id
         ).all()
@@ -689,28 +698,18 @@ class StockAccountService:
                 booth_orders[o.booth_id] = []
             booth_orders[o.booth_id].append(o)
         
-        if not booth_orders:
-            return []
-        
-        # 获取所有相关摊位信息
-        booth_ids = list(booth_orders.keys())
-        booths = self.db.query(Booth).filter(Booth.id.in_(booth_ids)).all()
-        booth_map = {b.id: b for b in booths}
-        
         results = []
-        for booth_id, orders_list in booth_orders.items():
-            booth = booth_map.get(booth_id)
-            if not booth:
-                continue
+        for booth in all_booths:
+            orders_list = booth_orders.get(booth.id, [])
             
-            buy_orders = [o for o in orders_list if o.status in ('holding', 'settled')]
+            buy_orders = [o for o in orders_list if o.status in ('holding', 'settled', 'sold')]
             sold_shares = sum(o.shares for o in buy_orders)
             total_investment = sum(float(o.total_amount) for o in buy_orders)
             investor_count = len(set(o.participant_id for o in buy_orders))
             is_settled = any(o.status == 'settled' for o in orders_list)
             
             result = {
-                'booth_id': booth_id,
+                'booth_id': booth.id,
                 'booth_name': booth.name,
                 'class_name': booth.class_name,
                 'sold_shares': sold_shares,

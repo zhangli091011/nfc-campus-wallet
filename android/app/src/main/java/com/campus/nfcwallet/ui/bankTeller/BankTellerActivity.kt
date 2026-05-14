@@ -86,6 +86,7 @@ class BankTellerActivity : ComponentActivity() {
                     },
                     onReset = viewModel::onReset,
                     onDismissError = viewModel::onDismissError,
+                    onLogout = { logout() },
                     onDismissVerification = viewModel::onDismissVerificationDialog,
                     onSubmitVerification = viewModel::onSubmitVerification,
                     onDismissRegistration = viewModel::onDismissRegistrationDialog,
@@ -212,6 +213,10 @@ class BankTellerActivity : ComponentActivity() {
     // -----------------------------------------------------------------
     // 导航
     // -----------------------------------------------------------------
+    private fun logout() {
+        sessionManager.clearSession()
+        navigateToLogin()
+    }
 
     private fun navigateToLogin() {
         val intent = Intent(this, LoginActivity::class.java)

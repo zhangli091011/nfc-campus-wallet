@@ -86,6 +86,7 @@ class CardReturnActivity : ComponentActivity() {
                     onRepayAmountChange = viewModel::onRepayAmountChange,
                     onReset = viewModel::onReset,
                     onDismissError = viewModel::onDismissError,
+                    onLogout = { logout() },
                 )
             }
 
@@ -188,6 +189,11 @@ class CardReturnActivity : ComponentActivity() {
         super.onDestroy()
         soundPool?.release()
         soundPool = null
+    }
+
+    private fun logout() {
+        sessionManager.clearSession()
+        navigateToLogin()
     }
 
     private fun navigateToLogin() {

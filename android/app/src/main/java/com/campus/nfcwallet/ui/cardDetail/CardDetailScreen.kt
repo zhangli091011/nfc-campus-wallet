@@ -115,10 +115,11 @@ fun CardDetailScreen(
     state: CardDetailUiState,
     onReset: () -> Unit,
     onDismissError: () -> Unit,
+    onLogout: () -> Unit,
 ) {
     Scaffold(
         containerColor = CardDetailColors.Background,
-        topBar = { TopBar(onReset = onReset, hasData = state.hasData) },
+        topBar = { TopBar(onLogout = onLogout, onReset = onReset, hasData = state.hasData) },
     ) { padding ->
         Box(
             modifier = Modifier
@@ -179,7 +180,7 @@ fun CardDetailScreen(
 // ============================================================================
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopBar(onReset: () -> Unit, hasData: Boolean) {
+private fun TopBar(onLogout: () -> Unit, onReset: () -> Unit, hasData: Boolean) {
     TopAppBar(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -224,6 +225,13 @@ private fun TopBar(onReset: () -> Unit, hasData: Boolean) {
                         tint = CardDetailColors.AccentBlue,
                     )
                 }
+            }
+            IconButton(onClick = onLogout) {
+                Icon(
+                    Icons.Default.Logout,
+                    contentDescription = "退出",
+                    tint = CardDetailColors.TextSecondary,
+                )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
