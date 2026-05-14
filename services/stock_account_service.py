@@ -148,7 +148,7 @@ class StockAccountService:
         result = self.db.query(func.sum(Transaction.amount)).filter(
             Transaction.event_id == event_id,
             Transaction.booth_id == booth_id,
-            Transaction.type.in_(['payment', 'recharge']),
+            Transaction.type.in_(['pay', 'cash_payment']),
             Transaction.amount > 0
         ).scalar()
         return float(result) if result else 0.0
@@ -181,7 +181,7 @@ class StockAccountService:
         return self.db.query(Transaction).filter(
             Transaction.event_id == event_id,
             Transaction.booth_id == booth_id,
-            Transaction.type.in_(['payment', 'cash_payment'])
+            Transaction.type.in_(['pay', 'cash_payment'])
         ).count()
     
     def _batch_load_booth_data(self, booth_ids: List[int], event_id: int):
@@ -201,7 +201,7 @@ class StockAccountService:
         ).filter(
             Transaction.event_id == event_id,
             Transaction.booth_id.in_(booth_ids),
-            Transaction.type.in_(['payment', 'cash_payment', 'recharge']),
+            Transaction.type.in_(['pay', 'cash_payment']),
             Transaction.amount > 0
         ).group_by(Transaction.booth_id).all()
         
@@ -266,7 +266,7 @@ class StockAccountService:
         ).filter(
             Transaction.event_id == event_id,
             Transaction.booth_id.in_(booth_ids),
-            Transaction.type.in_(['payment', 'cash_payment']),
+            Transaction.type.in_(['pay', 'cash_payment']),
             Transaction.amount > 0,
             Transaction.created_at >= recent_cutoff
         ).group_by(Transaction.booth_id).all()
