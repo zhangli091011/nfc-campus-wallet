@@ -276,19 +276,7 @@ class MerchantService:
     ) -> Dict[str, Any]:
         """
         商户找回密码：通过用户名 + 商铺名称验证身份后重置密码。
-        
-        Args:
-            username: 用户名
-            booth_name: 商铺名称（用于验证身份）
-            new_password: 新密码
-            
-        Returns:
-            成功消息
-            
-        Raises:
-            MerchantAuthError: 验证失败
         """
-        # 查找商户用户
         user = self.db.query(User).filter(
             User.username == username,
             User.role == 'merchant'
@@ -297,16 +285,13 @@ class MerchantService:
         if user is None:
             raise MerchantAuthError("用户名或商铺名称不匹配")
         
-        # 验证商铺名称
         booth = self.db.query(Booth).filter(Booth.id == user.booth_id).first()
         if booth is None or booth.name != booth_name:
             raise MerchantAuthError("用户名或商铺名称不匹配")
         
-        # 验证新密码长度
         if len(new_password) < 6:
             raise MerchantAuthError("新密码长度不能少于6位")
         
-        # 重置密码
         user.password_hash = hash_password(new_password)
         self.db.commit()
         
@@ -315,6 +300,47 @@ class MerchantService:
         return {
             "success": True,
             "message": "密码重置成功，请使用新密码登录"
+        }
+
+    def recover_password_by_booth(
+        self,
+        booth_id: int,
+        new_password: str
+    ) -> Dict[str, Any]:
+        """
+        通过摊位ID重置商户密码。
+        
+        Args:
+            booth_id: 摊位ID
+            new_password: 新密码
+            
+        Returns:
+            成功消息
+            
+        Raises:
+            MerchantAuthError: 找不到对应商户
+        """
+        # 查找摊位关联的商户用户
+        user = self.db.query(User).filter(
+            User.booth_id == booth_id,
+            User.role == 'merchant'
+        ).first()
+        
+        if user is None:
+            raise MerchantAuthError("该摊位没有关联的商户账号")
+        
+        if len(new_password) < 6:
+            raise MerchantAuthError("新密码长度不能少于6位")
+        
+        user.password_hash = hash_password(new_password)
+        self.db.commit()
+        
+        logger.info(f"Merchant password reset by booth: booth_id={booth_id}, user_id={user.id}, username='{user.username}'")
+        
+        return {
+            "success": True,
+            "message": "密码重置成功，请使用新密码登录",
+            "username": user.username
         }
 
     def get_booth_info(self, user: User) -> Dict[str, Any]:

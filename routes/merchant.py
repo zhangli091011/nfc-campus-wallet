@@ -179,9 +179,43 @@ from pydantic import BaseModel as PydanticBaseModel
 
 class MerchantRecoverPasswordRequest(PydanticBaseModel):
     """商户找回密码请求"""
-    username: str
-    booth_name: str
+    booth_id: int
     new_password: str
+
+
+@router.get("/booths-public")
+async def get_merchant_booths_public(
+    db: Session = Depends(get_db)
+):
+    """
+    获取所有商户摊位列表（公开接口，用于找回密码时选择摊位）。
+    
+    无需认证。返回摊位ID、名称、班级、关联用户名。
+    
+    Returns:
+        摊位列表
+    """
+    from models.booth import Booth
+    from models.user import User as UserModel
+    
+    booths = db.query(Booth).filter(Booth.status == 'active').order_by(Booth.id).all()
+    
+    result = []
+    for booth in booths:
+        # 查找关联的商户用户
+        merchant_user = db.query(UserModel).filter(
+            UserModel.booth_id == booth.id,
+            UserModel.role == 'merchant'
+        ).first()
+        
+        result.append({
+            "booth_id": booth.id,
+            "booth_name": booth.name,
+            "class_name": booth.class_name or "",
+            "username": merchant_user.username if merchant_user else None,
+        })
+    
+    return {"booths": result, "total": len(result)}
 
 
 @router.post("/recover-password")
@@ -192,33 +226,23 @@ async def merchant_recover_password(
     """
     商户找回密码。
     
-    通过用户名 + 商铺名称验证身份，验证通过后重置密码。
+    通过摊位ID定位商户，直接重置密码。
     
     Request Body:
-        - username: 用户名
-        - booth_name: 商铺名称（注册时填写的）
+        - booth_id: 摊位ID
         - new_password: 新密码（6-100字符）
     
     Returns:
         成功消息
         
     Error Responses:
-        400: 验证失败（用户名或商铺名称不匹配）
+        400: 验证失败
         500: 内部服务器错误
-    
-    Example:
-        POST /merchant/recover-password
-        {
-            "username": "merchant_01",
-            "booth_name": "美食小铺",
-            "new_password": "newpassword123"
-        }
     """
     try:
         merchant_service = MerchantService(db)
-        result = merchant_service.recover_password(
-            username=request.username,
-            booth_name=request.booth_name,
+        result = merchant_service.recover_password_by_booth(
+            booth_id=request.booth_id,
             new_password=request.new_password
         )
         return result

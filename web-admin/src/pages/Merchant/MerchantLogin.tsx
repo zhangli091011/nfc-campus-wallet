@@ -1,8 +1,13 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Form, Input, Button, Card, message, Modal } from 'antd'
+import { Form, Input, Button, Card, message, Modal, List } from 'antd'
 import { UserOutlined, LockOutlined, ShopOutlined } from '@ant-design/icons'
-import { merchantLogin, merchantRecoverPassword } from '@/services/merchant'
+import {
+  merchantLogin,
+  merchantRecoverPassword,
+  getMerchantBoothsPublic,
+  type MerchantBoothPublic,
+} from '@/services/merchant'
 import { setToken } from '@/utils/auth'
 import './merchant-mobile.css'
 
@@ -34,8 +39,12 @@ export const isMerchantAuthenticated = () => {
 const MerchantLogin = () => {
   const [loading, setLoading] = useState(false)
   const [recoverVisible, setRecoverVisible] = useState(false)
+  const [resetVisible, setResetVisible] = useState(false)
   const [recoverLoading, setRecoverLoading] = useState(false)
-  const [recoverForm] = Form.useForm()
+  const [booths, setBooths] = useState<MerchantBoothPublic[]>([])
+  const [boothsLoading, setBoothsLoading] = useState(false)
+  const [selectedBooth, setSelectedBooth] = useState<MerchantBoothPublic | null>(null)
+  const [resetForm] = Form.useForm()
   const navigate = useNavigate()
 
   const onFinish = async (values: { username: string; password: string }) => {
@@ -55,22 +64,43 @@ const MerchantLogin = () => {
     }
   }
 
-  const handleRecover = async () => {
+  const handleOpenRecover = async () => {
+    setRecoverVisible(true)
+    setBoothsLoading(true)
     try {
-      const values = await recoverForm.validateFields()
+      const data = await getMerchantBoothsPublic()
+      setBooths(data?.booths || [])
+    } catch {
+      message.error('获取摊位列表失败')
+    } finally {
+      setBoothsLoading(false)
+    }
+  }
+
+  const handleSelectBooth = (booth: MerchantBoothPublic) => {
+    setSelectedBooth(booth)
+    setRecoverVisible(false)
+    setResetVisible(true)
+    resetForm.resetFields()
+  }
+
+  const handleResetPassword = async () => {
+    if (!selectedBooth) return
+    try {
+      const values = await resetForm.validateFields()
       if (values.new_password !== values.confirm_password) {
         message.error('两次输入的密码不一致')
         return
       }
       setRecoverLoading(true)
-      await merchantRecoverPassword({
-        username: values.username,
-        booth_name: values.booth_name,
+      const result = await merchantRecoverPassword({
+        booth_id: selectedBooth.booth_id,
         new_password: values.new_password,
       })
-      message.success('密码重置成功，请使用新密码登录')
-      setRecoverVisible(false)
-      recoverForm.resetFields()
+      message.success(`密码重置成功！用户名: ${result.username || selectedBooth.username}`)
+      setResetVisible(false)
+      setSelectedBooth(null)
+      resetForm.resetFields()
     } catch (error: any) {
       if (error?.response?.data?.message) {
         message.error(error.response.data.message)
@@ -116,38 +146,71 @@ const MerchantLogin = () => {
               还没有账号？<Link to="/merchant/register">立即注册</Link>
             </span>
             <span style={{ margin: '0 12px', color: '#ddd' }}>|</span>
-            <a onClick={() => setRecoverVisible(true)}>忘记密码？</a>
+            <a onClick={handleOpenRecover}>忘记密码？</a>
           </div>
         </Form>
       </Card>
 
+      {/* 摊位列表弹窗 */}
       <Modal
-        title="找回密码"
+        title="选择你的摊位"
         open={recoverVisible}
         onCancel={() => setRecoverVisible(false)}
-        onOk={handleRecover}
+        footer={null}
+        width={400}
+      >
+        <p style={{ marginBottom: 12, color: '#666' }}>
+          请点击你的摊位来重置密码
+        </p>
+        <List
+          loading={boothsLoading}
+          dataSource={booths}
+          locale={{ emptyText: '暂无摊位' }}
+          renderItem={(booth) => (
+            <List.Item
+              style={{ cursor: 'pointer', padding: '12px 16px' }}
+              onClick={() => handleSelectBooth(booth)}
+            >
+              <List.Item.Meta
+                avatar={<ShopOutlined style={{ fontSize: 24, color: '#1890ff' }} />}
+                title={booth.booth_name}
+                description={
+                  <span>
+                    {booth.class_name && <span>{booth.class_name}</span>}
+                    {booth.username && (
+                      <span style={{ marginLeft: 8, color: '#999' }}>
+                        账号: {booth.username}
+                      </span>
+                    )}
+                  </span>
+                }
+              />
+            </List.Item>
+          )}
+        />
+      </Modal>
+
+      {/* 重置密码弹窗 */}
+      <Modal
+        title={`重置密码 - ${selectedBooth?.booth_name || ''}`}
+        open={resetVisible}
+        onCancel={() => {
+          setResetVisible(false)
+          setSelectedBooth(null)
+        }}
+        onOk={handleResetPassword}
         confirmLoading={recoverLoading}
-        okText="重置密码"
+        okText="确认重置"
         cancelText="取消"
       >
-        <p style={{ marginBottom: 16, color: '#666' }}>
-          请输入注册时的用户名和商铺名称来验证身份
-        </p>
-        <Form form={recoverForm} layout="vertical">
-          <Form.Item
-            name="username"
-            label="用户名"
-            rules={[{ required: true, message: '请输入用户名' }]}
-          >
-            <Input prefix={<UserOutlined />} placeholder="注册时的用户名" />
-          </Form.Item>
-          <Form.Item
-            name="booth_name"
-            label="商铺名称"
-            rules={[{ required: true, message: '请输入商铺名称' }]}
-          >
-            <Input prefix={<ShopOutlined />} placeholder="注册时填写的商铺名称" />
-          </Form.Item>
+        {selectedBooth && (
+          <div style={{ marginBottom: 16, padding: '8px 12px', background: '#f5f5f5', borderRadius: 6 }}>
+            <div><strong>摊位：</strong>{selectedBooth.booth_name}</div>
+            {selectedBooth.class_name && <div><strong>班级：</strong>{selectedBooth.class_name}</div>}
+            {selectedBooth.username && <div><strong>用户名：</strong>{selectedBooth.username}</div>}
+          </div>
+        )}
+        <Form form={resetForm} layout="vertical">
           <Form.Item
             name="new_password"
             label="新密码"

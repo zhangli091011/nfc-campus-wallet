@@ -110,13 +110,24 @@ export const merchantLogin = (data: MerchantLoginRequest) => {
 
 // 商户找回密码
 export interface MerchantRecoverPasswordRequest {
-  username: string
-  booth_name: string
+  booth_id: number
   new_password: string
 }
 
 export const merchantRecoverPassword = (data: MerchantRecoverPasswordRequest) => {
-  return request.post<any, { success: boolean; message: string }>('/merchant/recover-password', data)
+  return request.post<any, { success: boolean; message: string; username?: string }>('/merchant/recover-password', data)
+}
+
+// 获取所有商户摊位（公开接口，用于找回密码）
+export interface MerchantBoothPublic {
+  booth_id: number
+  booth_name: string
+  class_name: string
+  username: string | null
+}
+
+export const getMerchantBoothsPublic = () => {
+  return request.get<any, { booths: MerchantBoothPublic[]; total: number }>('/merchant/booths-public')
 }
 
 // 获取商铺信息
