@@ -711,6 +711,224 @@ async def repay_loan(
 
 
 # ============================================================================
+# Mark Repaid (Admin): POST /bank/mark_repaid
+# ============================================================================
+
+class MarkRepaidRequest(BaseModel):
+    """登记还款请求（不扣余额，仅标记状态）"""
+    loan_id: int = Field(..., description="贷款记录ID")
+    remark: Optional[str] = Field(None, max_length=255, description="备注（如：现金还款）")
+
+
+class MarkRepaidResponse(BaseModel):
+    """登记还款响应"""
+    success: bool
+    message: str
+    loan_id: int
+    participant_name: str
+    principal_amount_yuan: float
+
+
+@router.post("/mark_repaid", response_model=MarkRepaidResponse)
+async def mark_loan_repaid(
+    req: MarkRepaidRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员直接登记还款（不扣除余额）。
+    
+    用于学生线下现金还款等场景，管理员手动标记贷款为已还。
+    """
+    if current_user.role not in ("super_admin", "event_admin", "bank_clerk"):
+        raise HTTPException(status_code=403, detail="权限不足")
+
+    try:
+        # 查找贷款记录
+        loan_row = db.execute(
+            text("SELECT * FROM bank_loans WHERE id = :lid"),
+            {"lid": req.loan_id}
+        ).mappings().first()
+
+        if not loan_row:
+            raise HTTPException(status_code=404, detail=f"贷款记录 ID={req.loan_id} 不存在")
+
+        if loan_row["status"] != "active":
+            raise HTTPException(status_code=400, detail=f"该贷款状态为 '{loan_row['status']}'，无法标记还款")
+
+        # 获取参与者信息
+        participant = db.query(Participant).filter(Participant.id == loan_row["participant_id"]).first()
+        participant_name = participant.name if participant else "未知"
+
+        # 更新贷款状态
+        db.execute(
+            text("UPDATE bank_loans SET status = 'repaid', repaid_at = NOW() WHERE id = :lid"),
+            {"lid": req.loan_id}
+        )
+
+        # 更新账户 credit_borrowed
+        principal_yuan = float(loan_row["principal_amount"])
+        account = db.query(Account).filter(
+            Account.participant_id == loan_row["participant_id"],
+            Account.event_id == loan_row["event_id"]
+        ).first()
+        if account:
+            account.credit_borrowed = max(0, float(account.credit_borrowed or 0) - principal_yuan)
+
+        # 写入审计日志
+        _write_audit_log(
+            db=db,
+            event_id=loan_row["event_id"],
+            operator_id=current_user.id,
+            action="mark_loan_repaid",
+            detail=f"管理员登记还款: loan_id={req.loan_id}, participant={participant_name}, "
+                   f"principal={principal_yuan:.2f}元, remark={req.remark or '无'}, "
+                   f"operator={current_user.username}"
+        )
+
+        db.commit()
+
+        logger.info(
+            f"[LOAN_MARK_REPAID] loan_id={req.loan_id}, participant={participant_name}, "
+            f"principal={principal_yuan:.2f}, operator={current_user.username}"
+        )
+
+        return MarkRepaidResponse(
+            success=True,
+            message=f"已登记 {participant_name} 的贷款（¥{principal_yuan:.2f}）为已还款",
+            loan_id=req.loan_id,
+            participant_name=participant_name,
+            principal_amount_yuan=principal_yuan,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Mark repaid failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Batch Mark Repaid by Class: POST /bank/batch_mark_repaid
+# ============================================================================
+
+class BatchMarkRepaidRequest(BaseModel):
+    """按班级批量登记还款"""
+    event_id: int = Field(..., description="活动ID")
+    class_name: str = Field(..., min_length=1, description="班级名称")
+    remark: Optional[str] = Field(None, max_length=255, description="备注")
+
+
+class BatchMarkRepaidResponse(BaseModel):
+    """批量登记还款响应"""
+    success: bool
+    message: str
+    class_name: str
+    total_loans_cleared: int
+    total_amount_yuan: float
+    affected_students: int
+
+
+@router.post("/batch_mark_repaid", response_model=BatchMarkRepaidResponse)
+async def batch_mark_repaid(
+    req: BatchMarkRepaidRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    按班级批量登记还款（不扣除余额）。
+    
+    将指定班级下所有 active 状态的贷款标记为 repaid。
+    用于整个班级统一线下还款的场景。
+    """
+    if current_user.role not in ("super_admin", "event_admin"):
+        raise HTTPException(status_code=403, detail="仅超级管理员或活动管理员可执行批量操作")
+
+    try:
+        # 查找该班级下所有 active 贷款
+        active_loans = db.execute(
+            text("""
+                SELECT bl.id, bl.principal_amount, bl.participant_id, p.name as participant_name
+                FROM bank_loans bl
+                JOIN participants p ON p.id = bl.participant_id
+                WHERE bl.event_id = :eid
+                  AND bl.status = 'active'
+                  AND p.class_name = :class_name
+            """),
+            {"eid": req.event_id, "class_name": req.class_name}
+        ).mappings().all()
+
+        if not active_loans:
+            raise HTTPException(
+                status_code=400,
+                detail=f"班级 '{req.class_name}' 没有未还贷款"
+            )
+
+        # 批量更新贷款状态
+        loan_ids = [loan["id"] for loan in active_loans]
+        # 使用逐条更新确保兼容性
+        for lid in loan_ids:
+            db.execute(
+                text("UPDATE bank_loans SET status = 'repaid', repaid_at = NOW() WHERE id = :lid"),
+                {"lid": lid}
+            )
+
+        # 更新每个参与者的 credit_borrowed
+        participant_totals = {}
+        for loan in active_loans:
+            pid = loan["participant_id"]
+            amount = float(loan["principal_amount"])
+            participant_totals[pid] = participant_totals.get(pid, 0) + amount
+
+        for pid, total in participant_totals.items():
+            account = db.query(Account).filter(
+                Account.participant_id == pid,
+                Account.event_id == req.event_id
+            ).first()
+            if account:
+                account.credit_borrowed = max(0, float(account.credit_borrowed or 0) - total)
+
+        total_amount = sum(float(loan["principal_amount"]) for loan in active_loans)
+        affected_students = len(participant_totals)
+
+        # 写入审计日志
+        _write_audit_log(
+            db=db,
+            event_id=req.event_id,
+            operator_id=current_user.id,
+            action="batch_mark_repaid",
+            detail=f"批量登记还款: class={req.class_name}, loans={len(loan_ids)}, "
+                   f"total={total_amount:.2f}元, students={affected_students}, "
+                   f"remark={req.remark or '无'}, operator={current_user.username}"
+        )
+
+        db.commit()
+
+        logger.info(
+            f"[BATCH_MARK_REPAID] class={req.class_name}, event={req.event_id}, "
+            f"loans={len(loan_ids)}, total={total_amount:.2f}, "
+            f"students={affected_students}, operator={current_user.username}"
+        )
+
+        return BatchMarkRepaidResponse(
+            success=True,
+            message=f"已将 {req.class_name} 的 {len(loan_ids)} 笔贷款（共 ¥{total_amount:.2f}）标记为已还款",
+            class_name=req.class_name,
+            total_loans_cleared=len(loan_ids),
+            total_amount_yuan=total_amount,
+            affected_students=affected_students,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Batch mark repaid failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # Return Card: POST /bank/return_card
 # ============================================================================
 

@@ -108,3 +108,29 @@ export const exportLoansCSV = (eventId: number) => {
   const token = localStorage.getItem('token')
   window.open(`/api/bank-credit/export/${eventId}?token=${token}`, '_blank')
 }
+
+/** 管理员登记单笔还款（不扣余额） */
+export const markLoanRepaid = (data: {
+  loan_id: number
+  remark?: string
+}) => request.post<any, {
+  success: boolean
+  message: string
+  loan_id: number
+  participant_name: string
+  principal_amount_yuan: number
+}>('/bank/mark_repaid', data)
+
+/** 按班级批量登记还款（不扣余额） */
+export const batchMarkRepaid = (data: {
+  event_id: number
+  class_name: string
+  remark?: string
+}) => request.post<any, {
+  success: boolean
+  message: string
+  class_name: string
+  total_loans_cleared: number
+  total_amount_yuan: number
+  affected_students: number
+}>('/bank/batch_mark_repaid', data)

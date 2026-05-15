@@ -218,3 +218,23 @@ export const downloadExcel = (blob: Blob, filename: string) => {
   document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
 };
+
+/** 按商铺导出账目明细 */
+export const exportBoothTransactions = async (params: {
+  booth_id: number;
+  start_date?: string;
+  end_date?: string;
+  has_product?: boolean;
+}): Promise<Blob> => {
+  const token = getToken();
+
+  const response = await axios.get('/api/export/booth-transactions', {
+    params,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    responseType: 'blob',
+  });
+
+  return response.data;
+};

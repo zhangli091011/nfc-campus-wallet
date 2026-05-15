@@ -29,7 +29,12 @@ router = APIRouter()
 async def get_transactions(
     event_id: Optional[int] = Query(None, description="Filter by event ID"),
     booth_id: Optional[int] = Query(None, description="Filter by booth ID"),
+    participant_id: Optional[int] = Query(None, description="Filter by participant ID"),
+    card_uid: Optional[str] = Query(None, description="Filter by card UID"),
+    participant_name: Optional[str] = Query(None, description="Filter by participant name (exact or fuzzy match)"),
+    class_name: Optional[str] = Query(None, description="Filter by class name (used with participant_name)"),
     product_id: Optional[int] = Query(None, description="Filter by product ID"),
+    has_product: Optional[bool] = Query(None, description="Filter by product association (true=with product, false=without product)"),
     type: Optional[str] = Query(None, description="Filter by transaction type(s), comma-separated"),
     remark: Optional[str] = Query(None, description="Filter by remark keyword (fuzzy match)"),
     start_date: Optional[str] = Query(None, description="Start date filter (ISO format: YYYY-MM-DD)"),
@@ -97,6 +102,45 @@ async def get_transactions(
     try:
         transaction_service = TransactionService(db)
         
+        # 如果提供了 card_uid，解析为 participant_id
+        if card_uid and not participant_id:
+            from models.participant import Participant
+            participant = db.query(Participant).filter(Participant.card_uid == card_uid).first()
+            if participant:
+                participant_id = participant.id
+            else:
+                # card_uid 不存在，返回空结果
+                return {"transactions": [], "total_count": 0}
+        
+        # 如果提供了 participant_name，按姓名+班级查找参与者
+        if participant_name and not participant_id:
+            from models.participant import Participant
+            query = db.query(Participant).filter(Participant.name == participant_name)
+            if class_name:
+                query = query.filter(Participant.class_name == class_name)
+            participants = query.all()
+            if len(participants) == 1:
+                participant_id = participants[0].id
+            elif len(participants) > 1:
+                # 多个匹配，返回匹配列表让前端选择
+                return {
+                    "transactions": [],
+                    "total_count": 0,
+                    "multiple_matches": [
+                        {
+                            "id": p.id,
+                            "name": p.name,
+                            "card_uid": p.card_uid,
+                            "class_name": p.class_name,
+                            "student_no": p.student_no,
+                        }
+                        for p in participants
+                    ]
+                }
+            else:
+                # 没有匹配
+                return {"transactions": [], "total_count": 0}
+        
         # 解析交易类型过滤
         transaction_types = None
         if type:
@@ -110,6 +154,19 @@ async def get_transactions(
                 result = transaction_service.get_booth_transactions(
                     booth_id=booth_id,
                     product_id=product_id,
+                    has_product=has_product,
+                    remark=remark,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=limit,
+                    offset=offset
+                )
+            # 如果指定了 participant_id（通过 card_uid 或直接传入），按参与者查询
+            elif participant_id is not None:
+                result = transaction_service.get_participant_transactions(
+                    participant_id=participant_id,
+                    event_id=event_id,
+                    transaction_types=transaction_types,
                     remark=remark,
                     start_date=start_date,
                     end_date=end_date,
@@ -122,6 +179,7 @@ async def get_transactions(
                     event_id=event_id,
                     participant_id=None,
                     transaction_types=transaction_types,
+                    remark=remark,
                     start_date=start_date,
                     end_date=end_date,
                     limit=limit,
@@ -129,15 +187,15 @@ async def get_transactions(
                 )
             else:
                 # 查询所有交易（需要实现通用查询方法）
-                # 暂时返回错误，要求指定 event_id 或 booth_id
+                # 暂时返回错误，要求指定过滤条件
                 logger.warning(
-                    f"Transaction query without event_id or booth_id by {current_user.username}"
+                    f"Transaction query without filter by {current_user.username}"
                 )
                 return JSONResponse(
                     status_code=400,
                     content={
                         "error_code": "MISSING_FILTER",
-                        "message": "Please specify either event_id or booth_id to filter transactions"
+                        "message": "Please specify event_id, booth_id, or card_uid/participant_id to filter transactions"
                     }
                 )
         
@@ -158,6 +216,7 @@ async def get_transactions(
             result = transaction_service.get_booth_transactions(
                 booth_id=current_user.booth_id,
                 product_id=product_id,
+                has_product=has_product,
                 remark=remark,
                 start_date=start_date,
                 end_date=end_date,
@@ -172,6 +231,19 @@ async def get_transactions(
                 result = transaction_service.get_booth_transactions(
                     booth_id=booth_id,
                     product_id=product_id,
+                    has_product=has_product,
+                    remark=remark,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=limit,
+                    offset=offset
+                )
+            # 如果指定了 participant_id，按参与者查询
+            elif participant_id is not None:
+                result = transaction_service.get_participant_transactions(
+                    participant_id=participant_id,
+                    event_id=event_id,
+                    transaction_types=transaction_types,
                     remark=remark,
                     start_date=start_date,
                     end_date=end_date,
@@ -184,21 +256,22 @@ async def get_transactions(
                     event_id=event_id,
                     participant_id=None,
                     transaction_types=transaction_types,
+                    remark=remark,
                     start_date=start_date,
                     end_date=end_date,
                     limit=limit,
                     offset=offset
                 )
             else:
-                # 要求指定 event_id 或 booth_id
+                # 要求指定过滤条件
                 logger.warning(
-                    f"Transaction query without event_id or booth_id by issuer {current_user.username}"
+                    f"Transaction query without filter by issuer {current_user.username}"
                 )
                 return JSONResponse(
                     status_code=400,
                     content={
                         "error_code": "MISSING_FILTER",
-                        "message": "Please specify either event_id or booth_id to filter transactions"
+                        "message": "Please specify event_id, booth_id, or card_uid/participant_id to filter transactions"
                     }
                 )
         

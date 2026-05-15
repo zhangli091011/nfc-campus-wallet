@@ -23,12 +23,15 @@ import {
   TeamOutlined,
   DollarOutlined,
   FileTextOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons'
 import { getEvents, type Event } from '@/services/event'
 import {
   getLoans,
   getCreditDashboard,
   exportLoansCSV,
+  markLoanRepaid,
+  batchMarkRepaid,
   type LoanRecord,
   type CreditDashboardStats,
 } from '@/services/bankCredit'
@@ -61,6 +64,12 @@ const BankLoanManagement = () => {
   const [detailLoan, setDetailLoan] = useState<LoanRecord | null>(null)
   const [detailTransactions, setDetailTransactions] = useState<TransactionRecord[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
+
+  // 批量还款状态
+  const [batchRepayVisible, setBatchRepayVisible] = useState(false)
+  const [batchRepayClass, setBatchRepayClass] = useState<string>('')
+  const [batchRepayRemark, setBatchRepayRemark] = useState('')
+  const [batchRepayLoading, setBatchRepayLoading] = useState(false)
 
   useEffect(() => {
     loadEvents()
@@ -131,6 +140,61 @@ const BankLoanManagement = () => {
     if (!selectedEventId) return
     const token = localStorage.getItem('nfc_wallet_token')
     window.open(`/api/bank-credit/export/${selectedEventId}?token=${token}`, '_blank')
+  }
+
+  // 单笔登记还款
+  const handleMarkRepaid = (record: LoanRecord) => {
+    Modal.confirm({
+      title: '确认登记还款',
+      content: (
+        <div>
+          <p>确认将以下贷款标记为已还款？</p>
+          <p><strong>姓名：</strong>{record.participant_name}</p>
+          <p><strong>班级：</strong>{record.class_name || '-'}</p>
+          <p><strong>借款金额：</strong>¥{record.principal_amount_yuan?.toFixed(2)}</p>
+          <p style={{ color: '#fa8c16', marginTop: 8 }}>注意：此操作仅标记状态，不会扣除学生余额。</p>
+        </div>
+      ),
+      okText: '确认还款',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const res = await markLoanRepaid({
+            loan_id: record.id,
+            remark: '管理员后台登记还款',
+          })
+          message.success(res.message)
+          loadData()
+        } catch (error: any) {
+          message.error(error?.response?.data?.detail || '操作失败')
+        }
+      },
+    })
+  }
+
+  // 批量按班级登记还款
+  const handleBatchRepay = async () => {
+    if (!selectedEventId || !batchRepayClass) {
+      message.warning('请选择班级')
+      return
+    }
+    setBatchRepayLoading(true)
+    try {
+      const res = await batchMarkRepaid({
+        event_id: selectedEventId,
+        class_name: batchRepayClass,
+        remark: batchRepayRemark || '管理员批量登记还款',
+      })
+      message.success(res.message)
+      setBatchRepayVisible(false)
+      setBatchRepayClass('')
+      setBatchRepayRemark('')
+      loadData()
+    } catch (error: any) {
+      message.error(error?.response?.data?.detail || '批量操作失败')
+    } finally {
+      setBatchRepayLoading(false)
+    }
   }
 
   // 过滤后的数据
@@ -227,12 +291,19 @@ const BankLoanManagement = () => {
     {
       title: '操作',
       key: 'action',
-      width: 80,
+      width: 140,
       fixed: 'right',
       render: (_: any, record: LoanRecord) => (
-        <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => handleViewDetail(record)}>
-          详情
-        </Button>
+        <Space size="small">
+          <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => handleViewDetail(record)}>
+            详情
+          </Button>
+          {record.status === 'active' && (
+            <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#52c41a' }} onClick={() => handleMarkRepaid(record)}>
+              还款
+            </Button>
+          )}
+        </Space>
       ),
     },
   ]
@@ -388,6 +459,15 @@ const BankLoanManagement = () => {
         <Button icon={<ExportOutlined />} onClick={handleExport}>
           导出 CSV
         </Button>
+        <Button
+          type="primary"
+          icon={<CheckCircleOutlined />}
+          onClick={() => setBatchRepayVisible(true)}
+          disabled={!selectedEventId}
+          style={{ background: '#52c41a', borderColor: '#52c41a' }}
+        >
+          按班级批量还款
+        </Button>
       </Space>
 
       {/* 数据表格 */}
@@ -449,6 +529,64 @@ const BankLoanManagement = () => {
             />
           </>
         )}
+      </Modal>
+      {/* 批量还款弹窗 */}
+      <Modal
+        title={
+          <span>
+            <CheckCircleOutlined style={{ marginRight: 8, color: '#52c41a' }} />
+            按班级批量登记还款
+          </span>
+        }
+        open={batchRepayVisible}
+        onOk={handleBatchRepay}
+        onCancel={() => { setBatchRepayVisible(false); setBatchRepayClass(''); setBatchRepayRemark('') }}
+        confirmLoading={batchRepayLoading}
+        okText="确认批量还款"
+        cancelText="取消"
+      >
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ color: '#fa8c16' }}>
+            此操作将把选定班级下所有「未还」状态的贷款标记为「已还」。
+            <br />仅标记状态，不会扣除学生余额。适用于学生线下统一还款的场景。
+          </p>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>选择班级：</label>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="选择要批量还款的班级"
+            value={batchRepayClass || undefined}
+            onChange={setBatchRepayClass}
+            options={classNames.map((c) => ({ label: c, value: c }))}
+          />
+        </div>
+        {batchRepayClass && (
+          <div style={{ marginBottom: 12, padding: 8, background: '#f6ffed', borderRadius: 4 }}>
+            <Text>
+              该班级未还贷款：
+              <Text strong style={{ color: '#cf1322' }}>
+                {loans.filter((l) => l.class_name === batchRepayClass && l.status === 'active').length} 笔
+              </Text>
+              ，合计金额：
+              <Text strong style={{ color: '#cf1322' }}>
+                ¥{loans
+                  .filter((l) => l.class_name === batchRepayClass && l.status === 'active')
+                  .reduce((sum, l) => sum + (l.principal_amount_yuan || 0), 0)
+                  .toFixed(2)}
+              </Text>
+            </Text>
+          </div>
+        )}
+        <div>
+          <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold' }}>备注（可选）：</label>
+          <Input.TextArea
+            rows={2}
+            placeholder="如：全班统一现金还款"
+            value={batchRepayRemark}
+            onChange={(e) => setBatchRepayRemark(e.target.value)}
+          />
+        </div>
       </Modal>
     </div>
   )

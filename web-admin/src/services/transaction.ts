@@ -9,7 +9,9 @@ export interface Transaction {
   participant_id: number
   card_uid: string
   booth_id?: number | null
+  booth_name?: string | null
   product_id?: number | null
+  product_name?: string | null
   operator_id?: number | null
   merchant_id?: string | null
   related_txn_id?: number | null
@@ -20,13 +22,32 @@ export interface Transaction {
 export interface TransactionListResponse {
   transactions: Transaction[]
   total_count: number
+  participant?: {
+    id: number
+    name: string
+    card_uid: string
+    class_name?: string
+    student_no?: string
+  }
+  multiple_matches?: Array<{
+    id: number
+    name: string
+    card_uid: string
+    class_name?: string
+    student_no?: string
+  }>
 }
 
 // 获取交易列表
 export const getTransactions = (params: {
   event_id?: number
   booth_id?: number
+  participant_id?: number
+  card_uid?: string
+  participant_name?: string
+  class_name?: string
   product_id?: number
+  has_product?: boolean
   type?: string
   remark?: string
   start_date?: string

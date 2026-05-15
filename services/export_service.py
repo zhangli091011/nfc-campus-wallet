@@ -20,6 +20,8 @@ except ImportError:
 
 from services.report_service import ReportService
 from models.transaction import Transaction
+from models.booth import Booth
+from models.product import Product
 
 logger = logging.getLogger(__name__)
 
@@ -460,6 +462,143 @@ class ExportService:
         # 调整列宽
         for col_idx in range(1, 7):
             ws.column_dimensions[get_column_letter(col_idx)].width = 18
+        
+        # 保存到内存
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        return output.getvalue()
+
+    def export_booth_transactions(
+        self,
+        booth_id: int,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        has_product: Optional[bool] = None
+    ) -> bytes:
+        """
+        导出指定商铺的账目明细。
+        
+        Args:
+            booth_id: 摊位ID
+            start_date: 开始日期（可选，ISO格式）
+            end_date: 结束日期（可选，ISO格式）
+            has_product: 是否关联商品（可选）
+        
+        Returns:
+            bytes: Excel 文件内容
+        """
+        if not OPENPYXL_AVAILABLE:
+            raise ValueError("openpyxl is not installed. Please install it to use Excel export.")
+        
+        # 获取摊位信息
+        booth = self.db.query(Booth).filter(Booth.id == booth_id).first()
+        if not booth:
+            raise ValueError(f"Booth with id {booth_id} not found")
+        
+        # 构建查询
+        query = self.db.query(Transaction).filter(Transaction.booth_id == booth_id)
+        
+        # 应用日期过滤
+        if start_date:
+            from datetime import datetime
+            start_datetime = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            query = query.filter(Transaction.created_at >= start_datetime)
+        
+        if end_date:
+            from datetime import datetime
+            end_datetime = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            query = query.filter(Transaction.created_at <= end_datetime)
+        
+        # 应用商品关联过滤
+        if has_product is not None:
+            if has_product:
+                query = query.filter(Transaction.product_id.isnot(None))
+            else:
+                query = query.filter(Transaction.product_id.is_(None))
+        
+        transactions = query.order_by(Transaction.created_at.desc()).all()
+        
+        # 预加载商品名称
+        product_ids = set(txn.product_id for txn in transactions if txn.product_id)
+        product_name_map = {}
+        if product_ids:
+            products = self.db.query(Product).filter(Product.id.in_(product_ids)).all()
+            product_name_map = {p.id: p.name for p in products}
+        
+        # 创建 Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "商铺账目明细"
+        
+        # 设置样式
+        title_font = Font(bold=True, size=14)
+        header_font = Font(bold=True)
+        header_fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+        
+        # 写入标题
+        booth_title = f"商铺账目明细 - {booth.name}"
+        if hasattr(booth, 'class_name') and booth.class_name:
+            booth_title += f" ({booth.class_name})"
+        ws['A1'] = booth_title
+        ws['A1'].font = title_font
+        ws.merge_cells('A1:J1')
+        
+        # 写入汇总信息
+        total_income = sum(
+            float(txn.amount) for txn in transactions
+            if txn.type in ('pay', 'cash_payment')
+        )
+        total_refund = sum(
+            float(txn.amount) for txn in transactions
+            if txn.type == 'refund'
+        )
+        ws['A2'] = f"总笔数: {len(transactions)}  |  收入合计: ¥{total_income:.2f}  |  退款合计: ¥{total_refund:.2f}  |  净收入: ¥{total_income - total_refund:.2f}"
+        ws.merge_cells('A2:J2')
+        
+        # 写入表头
+        headers = [
+            "交易ID", "交易类型", "金额（元）", "交易前余额（元）", "交易后余额（元）",
+            "卡号", "商品名称", "操作员ID", "备注", "交易时间"
+        ]
+        
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=4, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+        
+        # 交易类型映射
+        type_map = {
+            'pay': '支付',
+            'refund': '退款',
+            'recharge': '充值',
+            'cash_payment': '现金收款',
+            'correction': '更正',
+            'stock_buy': '股票买入',
+            'stock_sell': '股票卖出',
+            'loan_issue': '垫资发放',
+            'loan_fee': '手续费',
+        }
+        
+        # 写入数据
+        for row_idx, txn in enumerate(transactions, start=5):
+            ws.cell(row=row_idx, column=1, value=txn.id)
+            ws.cell(row=row_idx, column=2, value=type_map.get(txn.type, txn.type))
+            ws.cell(row=row_idx, column=3, value=float(txn.amount))
+            ws.cell(row=row_idx, column=4, value=float(txn.balance_before))
+            ws.cell(row=row_idx, column=5, value=float(txn.balance_after))
+            ws.cell(row=row_idx, column=6, value=txn.card_uid)
+            ws.cell(row=row_idx, column=7, value=product_name_map.get(txn.product_id, '非商品收款') if txn.product_id is None or txn.product_id not in product_name_map else product_name_map[txn.product_id])
+            ws.cell(row=row_idx, column=8, value=txn.operator_id)
+            ws.cell(row=row_idx, column=9, value=txn.remark)
+            ws.cell(row=row_idx, column=10, value=txn.created_at.strftime("%Y-%m-%d %H:%M:%S") if txn.created_at else '')
+        
+        # 调整列宽
+        col_widths = [10, 12, 14, 16, 16, 14, 18, 10, 24, 20]
+        for col_idx, width in enumerate(col_widths, start=1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = width
         
         # 保存到内存
         output = io.BytesIO()

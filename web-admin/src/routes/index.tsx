@@ -11,6 +11,7 @@ import ParticipantBalances from '@/pages/ParticipantBalances'
 import ClassSearch from '@/pages/ClassSearch'
 import TransactionHistory from '@/pages/TransactionHistory'
 import BoothTransactions from '@/pages/BoothTransactions'
+import ParticipantTransactions from '@/pages/ParticipantTransactions'
 import RefundApproval from '@/pages/RefundApproval'
 import RefundMonitor from '@/pages/RefundMonitor'
 import UserManagement from '@/pages/UserManagement'
@@ -106,6 +107,7 @@ const AppRoutes = () => {
         <Route path="class-search" element={<ClassSearch />} />
         <Route path="transactions" element={<TransactionHistory />} />
         <Route path="booth-transactions" element={<BoothTransactions />} />
+        <Route path="participant-transactions" element={<ParticipantTransactions />} />
         <Route path="refunds" element={<RefundApproval />} />
         <Route path="refund-monitor" element={<RefundMonitor />} />
         <Route path="cost-evidence-review" element={<CostEvidenceReview />} />

@@ -7,6 +7,7 @@ import {
   DollarOutlined,
   TransactionOutlined,
   SwapOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons'
 import {
   getTransactions,
@@ -17,6 +18,7 @@ import {
 } from '@/services/transaction'
 import { getEvents, type Event } from '@/services/event'
 import { getBooths, type Booth } from '@/services/booth'
+import { exportBoothTransactions, downloadExcel } from '@/services/report'
 import dayjs, { Dayjs } from 'dayjs'
 
 const { RangePicker } = DatePicker
@@ -30,6 +32,7 @@ const BoothTransactions = () => {
   const [selectedEventId, setSelectedEventId] = useState<number>()
   const [selectedBoothId, setSelectedBoothId] = useState<number>()
   const [selectedType, setSelectedType] = useState<string>()
+  const [productFilter, setProductFilter] = useState<string>()
   const [remarkKeyword, setRemarkKeyword] = useState<string>('')
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [pagination, setPagination] = useState({ current: 1, pageSize: 50 })
@@ -48,6 +51,9 @@ const BoothTransactions = () => {
   const [batchTransferReason, setBatchTransferReason] = useState('')
   const [batchTransferLoading, setBatchTransferLoading] = useState(false)
 
+  // 导出状态
+  const [exportLoading, setExportLoading] = useState(false)
+
   useEffect(() => {
     loadEvents()
   }, [])
@@ -62,7 +68,7 @@ const BoothTransactions = () => {
     if (selectedEventId && selectedBoothId) {
       loadTransactions()
     }
-  }, [selectedEventId, selectedBoothId, selectedType, dateRange, pagination.current, pagination.pageSize])
+  }, [selectedEventId, selectedBoothId, selectedType, productFilter, dateRange, pagination.current, pagination.pageSize])
 
   const loadEvents = async () => {
     try {
@@ -103,6 +109,12 @@ const BoothTransactions = () => {
         params.type = selectedType
       }
 
+      if (productFilter === 'no_product') {
+        params.has_product = false
+      } else if (productFilter === 'has_product') {
+        params.has_product = true
+      }
+
       if (remarkKeyword.trim()) {
         params.remark = remarkKeyword.trim()
       }
@@ -125,6 +137,7 @@ const BoothTransactions = () => {
 
   const handleReset = () => {
     setSelectedType(undefined)
+    setProductFilter(undefined)
     setRemarkKeyword('')
     setDateRange(null)
     setPagination({ current: 1, pageSize: 50 })
@@ -214,6 +227,36 @@ const BoothTransactions = () => {
     }
   }
 
+  // 导出商铺账目明细
+  const handleExport = async () => {
+    if (!selectedBoothId) {
+      message.warning('请先选择商铺')
+      return
+    }
+    setExportLoading(true)
+    try {
+      const params: any = { booth_id: selectedBoothId }
+      if (dateRange) {
+        params.start_date = dateRange[0].format('YYYY-MM-DD')
+        params.end_date = dateRange[1].format('YYYY-MM-DD')
+      }
+      if (productFilter === 'no_product') {
+        params.has_product = false
+      } else if (productFilter === 'has_product') {
+        params.has_product = true
+      }
+      const blob = await exportBoothTransactions(params)
+      const booth = booths.find((b) => b.id === selectedBoothId)
+      const boothName = booth?.name || `booth_${selectedBoothId}`
+      downloadExcel(blob, `${boothName}_账目明细.xlsx`)
+      message.success('导出成功')
+    } catch (error) {
+      message.error('导出失败')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
   // 统计数据
   const totalIncome = transactions
     .filter((t) => t.type === 'pay' || t.type === 'cash_payment')
@@ -291,11 +334,15 @@ const BoothTransactions = () => {
       render: (uid: string | null) => uid || '-',
     },
     {
-      title: '商品ID',
-      dataIndex: 'product_id',
-      key: 'product_id',
-      width: 90,
-      render: (id: number | null) => id || '-',
+      title: '商品名称',
+      dataIndex: 'product_name',
+      key: 'product_name',
+      width: 130,
+      render: (name: string | null, record: Transaction) => {
+        if (name) return name
+        if (record.product_id) return `商品#${record.product_id}`
+        return <Tag color="orange">非商品收款</Tag>
+      },
     },
     {
       title: '操作员',
@@ -393,6 +440,19 @@ const BoothTransactions = () => {
           <Select.Option value="stock_sell">股票卖出</Select.Option>
           <Select.Option value="recharge">充值</Select.Option>
         </Select>
+        <Select
+          style={{ width: 150 }}
+          placeholder="商品关联"
+          value={productFilter}
+          onChange={(value) => {
+            setProductFilter(value)
+            setPagination({ current: 1, pageSize: 50 })
+          }}
+          allowClear
+        >
+          <Select.Option value="no_product">非商品收款</Select.Option>
+          <Select.Option value="has_product">商品收款</Select.Option>
+        </Select>
         <Input.Search
           style={{ width: 200 }}
           placeholder="搜索备注关键词"
@@ -416,6 +476,14 @@ const BoothTransactions = () => {
         </Button>
         <Button icon={<ReloadOutlined />} onClick={handleReset}>
           重置
+        </Button>
+        <Button
+          icon={<DownloadOutlined />}
+          onClick={handleExport}
+          loading={exportLoading}
+          disabled={!selectedBoothId}
+        >
+          导出明细
         </Button>
         {selectedRowKeys.length > 0 && (
           <Button

@@ -89,6 +89,11 @@ const Layout = () => {
       label: '商铺流水',
     },
     {
+      key: '/participant-transactions',
+      icon: <UserOutlined />,
+      label: '用户流水',
+    },
+    {
       key: '/refunds',
       icon: <CheckCircleOutlined />,
       label: '退款审批',
