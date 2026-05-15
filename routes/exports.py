@@ -195,3 +195,67 @@ async def export_leaderboard(
     except Exception as e:
         logger.error(f"Export failed: {str(e)}", exc_info=True)
         return {"error": str(e)}
+
+
+@router.get("/export/booth-transactions")
+async def export_booth_transactions(
+    booth_id: int = Query(..., description="摊位ID"),
+    start_date: Optional[str] = Query(None, description="开始日期（ISO格式：YYYY-MM-DD）"),
+    end_date: Optional[str] = Query(None, description="结束日期（ISO格式：YYYY-MM-DD）"),
+    has_product: Optional[bool] = Query(None, description="是否关联商品（true=商品收款，false=非商品收款）"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    按商铺导出账目明细。
+    
+    权限要求：super_admin、event_admin 或该商铺的 booth_cashier
+    
+    Query Parameters:
+        - booth_id: 摊位ID（必填）
+        - start_date: 开始日期（可选，ISO格式：YYYY-MM-DD）
+        - end_date: 结束日期（可选，ISO格式：YYYY-MM-DD）
+        - has_product: 是否关联商品（可选，true=仅商品收款，false=仅非商品收款）
+    
+    Returns:
+        Excel 文件流
+    """
+    try:
+        # 权限验证
+        if current_user.role in ('super_admin', 'event_admin'):
+            pass  # 允许
+        elif current_user.role == 'booth_cashier':
+            if current_user.booth_id != booth_id:
+                return {"error": "Permission denied. You can only export your own booth's transactions."}
+        else:
+            return {"error": "Permission denied"}
+        
+        export_service = ExportService(db)
+        excel_data = export_service.export_booth_transactions(
+            booth_id=booth_id,
+            start_date=start_date,
+            end_date=end_date,
+            has_product=has_product
+        )
+        
+        logger.info(
+            f"Booth transactions exported: booth_id={booth_id}, "
+            f"start_date={start_date}, end_date={end_date}, has_product={has_product}, "
+            f"exported_by={current_user.username}"
+        )
+        
+        return StreamingResponse(
+            io.BytesIO(excel_data),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename=booth_transactions_{booth_id}.xlsx"
+            }
+        )
+    
+    except ValueError as e:
+        logger.warning(f"Booth transactions export failed: {str(e)}")
+        return {"error": str(e)}
+    
+    except Exception as e:
+        logger.error(f"Booth transactions export failed: {str(e)}", exc_info=True)
+        return {"error": str(e)}

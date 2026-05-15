@@ -834,6 +834,7 @@ async def process_cash_payment(
 @router.get("/booths/{booth_id}/transactions")
 async def get_booth_transactions(
     booth_id: int,
+    has_product: Optional[bool] = Query(None, description="Filter by product association (true=with product, false=without product)"),
     start_date: Optional[str] = Query(None, description="Start date filter (ISO format: YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (ISO format: YYYY-MM-DD)"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of transactions to return"),
@@ -929,6 +930,7 @@ async def get_booth_transactions(
         
         result = transaction_service.get_booth_transactions(
             booth_id=booth_id,
+            has_product=has_product,
             start_date=start_date,
             end_date=end_date,
             limit=limit,
@@ -1280,4 +1282,256 @@ async def assign_cashier_to_booth(
         return JSONResponse(
             status_code=500,
             content={"error_code": "INTERNAL_ERROR", "message": "An internal error occurred."}
+        )
+
+
+# ============================================================================
+# 后扣款功能 (Post-Payment Deduction)
+# ============================================================================
+
+
+class PostPaymentDeductionRequest(BaseModel):
+    """后扣款请求模型 - 给定卡号、商铺、商品或金额，添加流水并扣款"""
+    card_uid: str = Field(..., description="NFC卡片UID")
+    booth_id: int = Field(..., description="商铺ID")
+    product_id: Optional[int] = Field(None, description="商品ID（可选，若提供则使用商品价格）")
+    amount: Optional[float] = Field(None, description="扣款金额（元，若未指定商品则必填）", gt=0)
+    event_id: Optional[int] = Field(None, description="活动ID（可选，默认使用当前激活的活动）")
+    remark: Optional[str] = Field(None, max_length=255, description="备注（可选）")
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "card_uid": "A1B2C3D4",
+                    "booth_id": 1,
+                    "product_id": 5,
+                    "remark": "后扣款 - 先消费后付款"
+                },
+                {
+                    "card_uid": "A1B2C3D4",
+                    "booth_id": 1,
+                    "amount": 15.00,
+                    "remark": "后扣款 - 手动指定金额"
+                }
+            ]
+        }
+
+
+@router.post("/booths/post-deduction")
+async def post_payment_deduction(
+    request: PostPaymentDeductionRequest,
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(RoleChecker(["super_admin", "event_admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    后扣款：给定卡号、商铺、商品或金额，添加流水并进行扣款。
+
+    适用场景：先消费后付款，管理员事后补录扣款流水。
+
+    逻辑：
+    1. 如果指定了 product_id，使用商品价格作为扣款金额
+    2. 如果未指定 product_id，则必须提供 amount
+    3. 验证卡号、商铺、商品的有效性
+    4. 从卡片对应账户余额中扣款，生成交易流水
+
+    权限：仅 super_admin 和 event_admin 可操作。
+
+    Request Body:
+        - card_uid: NFC卡片UID（必填）
+        - booth_id: 商铺ID（必填）
+        - product_id: 商品ID（可选，若提供则使用商品价格）
+        - amount: 扣款金额（可选，若未指定商品则必填）
+        - event_id: 活动ID（可选，默认使用当前激活的活动）
+        - remark: 备注（可选）
+
+    Returns:
+        JSON: 扣款结果，包含交易ID、扣款金额、余额变化等
+
+    Error Responses:
+        400: 参数错误（金额和商品都未指定、余额不足等）
+        401: 未认证
+        403: 权限不足
+        404: 卡号/商铺/商品不存在
+        500: 内部服务器错误
+    """
+    from models.booth import Booth
+    from models.product import Product
+    from models.transaction import Transaction
+
+    try:
+        # 1. 确定活动ID
+        event_id = request.event_id
+        if event_id is None:
+            from services.event_service import EventService
+            event_service = EventService(db)
+            active_event = event_service.get_active_event()
+            if active_event is None:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "NO_ACTIVE_EVENT",
+                        "message": "没有活跃的活动，请指定 event_id 或激活一个活动"
+                    }
+                )
+            event_id = active_event.id
+
+        # 2. 验证商铺存在且属于该活动
+        booth = db.query(Booth).filter(Booth.id == request.booth_id).first()
+        if booth is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error_code": "BOOTH_NOT_FOUND",
+                    "message": f"商铺 ID {request.booth_id} 不存在"
+                }
+            )
+        if booth.event_id != event_id:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "BOOTH_NOT_IN_EVENT",
+                    "message": f"商铺 {request.booth_id} 不属于活动 {event_id}"
+                }
+            )
+
+        # 3. 确定扣款金额
+        deduction_amount = None
+        product_id = request.product_id
+        product_name = None
+
+        if product_id is not None:
+            # 使用商品价格
+            product = db.query(Product).filter(Product.id == product_id).first()
+            if product is None:
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "error_code": "PRODUCT_NOT_FOUND",
+                        "message": f"商品 ID {product_id} 不存在"
+                    }
+                )
+            if product.booth_id != request.booth_id:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "PRODUCT_NOT_IN_BOOTH",
+                        "message": f"商品 {product_id} 不属于商铺 {request.booth_id}"
+                    }
+                )
+            deduction_amount = float(product.price)
+            product_name = product.name
+        elif request.amount is not None:
+            deduction_amount = request.amount
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "AMOUNT_REQUIRED",
+                    "message": "必须指定 product_id 或 amount 中的至少一个"
+                }
+            )
+
+        if deduction_amount <= 0:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error_code": "INVALID_AMOUNT",
+                    "message": "扣款金额必须大于0"
+                }
+            )
+
+        # 4. 查找参与者
+        from services.participant_service import ParticipantService
+        participant_service = ParticipantService(db)
+        try:
+            participant = participant_service.get_participant_by_card(request.card_uid)
+        except Exception:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error_code": "PARTICIPANT_NOT_FOUND",
+                    "message": f"卡号 {request.card_uid} 对应的参与者不存在"
+                }
+            )
+
+        # 5. 获取或创建账户
+        from services.account_service import AccountService
+        account_service = AccountService(db)
+        account = account_service.get_or_create_account(
+            participant_id=participant.id,
+            event_id=event_id
+        )
+
+        # 6. 构建备注
+        remark = request.remark or "后扣款"
+        if product_name:
+            remark = f"{remark} - {product_name}"
+
+        # 7. 执行扣款（通过 LedgerService）
+        from services.ledger_service import LedgerService
+        ledger_service = LedgerService(db)
+
+        try:
+            ledger_entry = ledger_service.append_debit_from_account(
+                account_id=account.id,
+                amount_yuan=deduction_amount,
+                transaction_type="pay",
+                event_id=event_id,
+                participant_id=participant.id,
+                merchant_id=None,
+                remark=remark,
+                booth_id=request.booth_id,
+                product_id=product_id,
+                operator_id=current_user.id
+            )
+        except Exception as e:
+            from core.exceptions import InsufficientFundsError
+            if isinstance(e, InsufficientFundsError):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error_code": "INSUFFICIENT_FUNDS",
+                        "message": f"余额不足，当前余额 {float(account.balance):.2f} 元，需扣款 {deduction_amount:.2f} 元"
+                    }
+                )
+            raise
+
+        logger.info(
+            f"Post-payment deduction successful: card_uid={request.card_uid}, "
+            f"booth_id={request.booth_id}, product_id={product_id}, "
+            f"amount={deduction_amount:.2f} yuan, txn_id={ledger_entry.transaction_id}, "
+            f"balance: {ledger_entry.balance_before} -> {ledger_entry.balance_after}, "
+            f"operator={current_user.username}"
+        )
+
+        return {
+            "success": True,
+            "transaction_id": ledger_entry.transaction_id,
+            "card_uid": request.card_uid,
+            "participant_name": participant.name,
+            "booth_id": request.booth_id,
+            "booth_name": booth.name,
+            "product_id": product_id,
+            "product_name": product_name,
+            "amount": deduction_amount,
+            "balance_before": float(ledger_entry.balance_before),
+            "balance_after": float(ledger_entry.balance_after),
+            "event_id": event_id,
+            "operator": current_user.username,
+            "remark": remark,
+            "message": f"后扣款成功：从 {participant.name} 扣款 ¥{deduction_amount:.2f}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Post-payment deduction failed: {str(e)}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error_code": "INTERNAL_ERROR",
+                "message": f"后扣款失败：{str(e)}"
+            }
         )

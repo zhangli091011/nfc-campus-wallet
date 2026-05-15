@@ -444,11 +444,136 @@ class TransactionService:
             logger.warning(f"Event payment failed: {str(e)}")
             raise
     
+    def get_participant_transactions(
+        self,
+        participant_id: int,
+        event_id: Optional[int] = None,
+        transaction_types: Optional[List[str]] = None,
+        remark: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Dict:
+        """
+        获取参与者的交易记录。
+        
+        Args:
+            participant_id: 参与者ID
+            event_id: 活动ID（可选，用于过滤特定活动的交易）
+            transaction_types: 交易类型列表（可选）
+            remark: 备注关键词（可选，模糊匹配）
+            start_date: 开始日期（ISO格式，可选）
+            end_date: 结束日期（ISO格式，可选）
+            limit: 返回记录数限制
+            offset: 偏移量
+            
+        Returns:
+            Dict: 包含交易列表和总数
+        """
+        try:
+            from models.participant import Participant
+            from models.booth import Booth
+            
+            # 验证参与者存在
+            participant = self.db.query(Participant).filter(Participant.id == participant_id).first()
+            if participant is None:
+                return {'transactions': [], 'total_count': 0}
+            
+            # 构建查询
+            query = self.db.query(Transaction).filter(Transaction.participant_id == participant_id)
+            
+            # 应用活动过滤
+            if event_id is not None:
+                query = query.filter(Transaction.event_id == event_id)
+            
+            # 应用交易类型过滤
+            if transaction_types:
+                query = query.filter(Transaction.type.in_(transaction_types))
+            
+            # 应用备注关键词过滤
+            if remark:
+                query = query.filter(Transaction.remark.like(f"%{remark}%"))
+            
+            # 应用日期过滤
+            if start_date:
+                from datetime import datetime
+                start_datetime = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                query = query.filter(Transaction.created_at >= start_datetime)
+            
+            if end_date:
+                from datetime import datetime
+                end_datetime = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                query = query.filter(Transaction.created_at <= end_datetime)
+            
+            # 获取总数
+            total_count = query.count()
+            
+            # 排序并分页
+            query = query.order_by(Transaction.created_at.desc(), Transaction.id.desc())
+            query = query.limit(limit).offset(offset)
+            
+            # 执行查询
+            transactions = query.all()
+            
+            # 预加载摊位名称
+            booth_ids = set(txn.booth_id for txn in transactions if txn.booth_id)
+            booth_name_map = {}
+            if booth_ids:
+                booths = self.db.query(Booth).filter(Booth.id.in_(booth_ids)).all()
+                booth_name_map = {b.id: b.name for b in booths}
+            
+            logger.info(
+                f"Participant transaction history retrieved: participant_id={participant_id}, "
+                f"event_id={event_id}, count={len(transactions)}, total={total_count}"
+            )
+            
+            # 转换为字典列表
+            result = []
+            for txn in transactions:
+                result.append({
+                    'id': txn.id,
+                    'type': txn.type,
+                    'amount': txn.amount,
+                    'balance_before': txn.balance_before,
+                    'balance_after': txn.balance_after,
+                    'participant_id': txn.participant_id,
+                    'card_uid': txn.card_uid,
+                    'booth_id': txn.booth_id,
+                    'booth_name': booth_name_map.get(txn.booth_id) if txn.booth_id else None,
+                    'product_id': txn.product_id,
+                    'operator_id': txn.operator_id,
+                    'merchant_id': txn.merchant_id,
+                    'related_txn_id': txn.related_txn_id,
+                    'remark': txn.remark,
+                    'created_at': txn.created_at.isoformat() if txn.created_at else None
+                })
+            
+            return {
+                'transactions': result,
+                'total_count': total_count,
+                'participant': {
+                    'id': participant.id,
+                    'name': participant.name,
+                    'card_uid': participant.card_uid,
+                    'class_name': participant.class_name,
+                    'student_no': participant.student_no,
+                }
+            }
+            
+        except Exception as e:
+            logger.error(
+                f"Failed to retrieve participant transaction history: {str(e)}",
+                exc_info=True
+            )
+            raise
+    
     def get_event_transaction_history(
         self,
         event_id: int,
         participant_id: Optional[int] = None,
         transaction_types: Optional[List[str]] = None,
+        remark: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         limit: int = 100,
@@ -461,6 +586,7 @@ class TransactionService:
             event_id: 活动ID
             participant_id: 参与者ID（可选，用于过滤特定参与者）
             transaction_types: 交易类型列表（可选，用于过滤特定类型）
+            remark: 备注关键词（可选，模糊匹配）
             start_date: 开始日期（ISO格式，可选）
             end_date: 结束日期（ISO格式，可选）
             limit: 返回记录数限制
@@ -496,6 +622,10 @@ class TransactionService:
             # 应用交易类型过滤
             if transaction_types:
                 query = query.filter(Transaction.type.in_(transaction_types))
+            
+            # 应用备注关键词过滤
+            if remark:
+                query = query.filter(Transaction.remark.like(f"%{remark}%"))
             
             # 应用日期过滤
             if start_date:
@@ -780,6 +910,7 @@ class TransactionService:
         self,
         booth_id: int,
         product_id: Optional[int] = None,
+        has_product: Optional[bool] = None,
         remark: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -792,6 +923,8 @@ class TransactionService:
         Args:
             booth_id: 摊位ID
             product_id: 商品ID（可选，用于过滤特定商品的交易）
+            has_product: 是否关联商品（可选，True=仅商品收款，False=仅非商品收款）
+            remark: 备注关键词（可选，模糊匹配）
             start_date: 开始日期（ISO格式，可选）
             end_date: 结束日期（ISO格式，可选）
             limit: 返回记录数限制
@@ -840,6 +973,13 @@ class TransactionService:
             if product_id is not None:
                 query = query.filter(Transaction.product_id == product_id)
             
+            # 应用是否关联商品过滤
+            if has_product is not None:
+                if has_product:
+                    query = query.filter(Transaction.product_id.isnot(None))
+                else:
+                    query = query.filter(Transaction.product_id.is_(None))
+            
             # 应用备注关键词过滤
             if remark:
                 query = query.filter(Transaction.remark.like(f"%{remark}%"))
@@ -867,8 +1007,15 @@ class TransactionService:
             
             logger.info(
                 f"Booth transaction history retrieved: booth_id={booth_id}, "
-                f"product_id={product_id}, count={len(transactions)}, total={total_count}"
+                f"product_id={product_id}, has_product={has_product}, count={len(transactions)}, total={total_count}"
             )
+            
+            # 预加载商品名称（批量查询避免N+1）
+            product_ids = set(txn.product_id for txn in transactions if txn.product_id)
+            product_name_map = {}
+            if product_ids:
+                products = self.db.query(Product).filter(Product.id.in_(product_ids)).all()
+                product_name_map = {p.id: p.name for p in products}
             
             # 转换为字典列表
             result = []
@@ -883,6 +1030,7 @@ class TransactionService:
                     'card_uid': txn.card_uid,
                     'booth_id': txn.booth_id,
                     'product_id': txn.product_id,
+                    'product_name': product_name_map.get(txn.product_id) if txn.product_id else None,
                     'operator_id': txn.operator_id,
                     'merchant_id': txn.merchant_id,
                     'related_txn_id': txn.related_txn_id,
